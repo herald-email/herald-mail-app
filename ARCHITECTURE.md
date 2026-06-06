@@ -169,6 +169,7 @@ The replacement boundary should live in an `internal/agent` package with a small
 Herald Memories is a local-first relationship memory layer behind the backend and agent boundaries. Immutable records live in the configured memory directory, while chat and Compose consume read-only retrieval APIs and Obsidian remains an export/preview adapter rather than the only source of truth.
 
 - [x] `internal/memory` owns memory settings, immutable file storage, deterministic cached-mail extraction, retrieval, reply-prep nudges, and Obsidian generated-section rendering.
+- [x] `internal/memory` validates evidence by source type before append: email and sent replies require stable message refs, Obsidian notes require paths, calendar events require event IDs, attachments require attachment/file pointers, and research requires URLs; snippets are normalized and bounded so memory records stay compact.
 - [x] `internal/config` applies memory defaults for `~/.herald/memories`, source folders, destinations, confidence thresholds, prompt templates, update rules, and Obsidian frontmatter/link/tag modes without invalidating existing configs.
 - [x] `LocalBackend` exposes read-only memory search and reply-prep methods that refresh once from cached Inbox and Sent rows, skip existing immutable records, and fail quiet when memory setup is unavailable.
 - [x] `DemoBackend` serves deterministic job-search memory fixtures without writing to the user's memory directory.

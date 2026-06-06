@@ -271,6 +271,7 @@ Herald Memories turns important email history into local, source-backed tracks t
 - [x] Add Obsidian preview/merge rendering that preserves user-authored note sections and supports minimal YAML, hidden YAML, link, and tag modes
 - [ ] Build local email memories from cached Inbox, Sent, thread headers, contacts, body snippets, classifications, and semantic embeddings
 - [x] Store every memory with evidence pointers to email message refs, folders, dates, snippets, note paths, or research URLs
+- [x] Validate evidence pointers by source type, including email, sent replies, Obsidian notes, calendar events, attachments, and research URLs, while bounding snippets so memory files do not copy full private content
 - [x] Add memory-aware chat tools for contact history, company status, related replies, open loops, and "what should I remember before replying?"
 - [ ] Add Compose Radar actions for open source, dismiss, insert, resolve, save memory, and research person/company
 - [x] Add Contact dossiers that combine local email memories, active tracks, Obsidian links, and source evidence

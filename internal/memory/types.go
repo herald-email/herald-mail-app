@@ -35,11 +35,12 @@ const (
 	FreshnessFresh = "fresh"
 	FreshnessStale = "stale"
 
-	SourceEmail     = "email"
-	SourceSentEmail = "sent_email"
-	SourceObsidian  = "obsidian"
-	SourceResearch  = "research_url"
-	SourceCalendar  = "calendar"
+	SourceEmail      = "email"
+	SourceSentEmail  = "sent_email"
+	SourceObsidian   = "obsidian"
+	SourceResearch   = "research_url"
+	SourceCalendar   = "calendar"
+	SourceAttachment = "attachment"
 
 	PromptVersionHeuristicV1 = "memory-heuristic-v1"
 
@@ -216,10 +217,34 @@ func PrepareMemoryForAppend(m Memory, now time.Time) Memory {
 	m.People = CompactStrings(m.People)
 	m.Tags = CompactStrings(m.Tags)
 	m.Links = CompactStrings(m.Links)
+	m.Evidence = NormalizeEvidenceList(m.Evidence)
 	if strings.TrimSpace(m.ID) == "" {
 		m.ID = DeterministicID(m)
 	}
 	return m
+}
+
+func NormalizeEvidenceList(evidence []Evidence) []Evidence {
+	out := make([]Evidence, 0, len(evidence))
+	for _, item := range evidence {
+		item = NormalizeEvidence(item)
+		out = append(out, item)
+	}
+	return out
+}
+
+func NormalizeEvidence(e Evidence) Evidence {
+	e.SourceType = strings.ToLower(strings.TrimSpace(e.SourceType))
+	e.SourceID = strings.TrimSpace(e.SourceID)
+	e.AccountID = strings.TrimSpace(e.AccountID)
+	e.ID = strings.TrimSpace(e.ID)
+	e.MessageID = strings.TrimSpace(e.MessageID)
+	e.LocalID = strings.TrimSpace(e.LocalID)
+	e.Folder = strings.TrimSpace(e.Folder)
+	e.Snippet = bounded(e.Snippet, 300)
+	e.Path = strings.TrimSpace(e.Path)
+	e.URL = strings.TrimSpace(e.URL)
+	return e
 }
 
 func DeterministicID(m Memory) string {
@@ -408,6 +433,10 @@ func displayEvidenceLabel(e Evidence) string {
 		return strings.TrimSpace(e.Path)
 	case SourceResearch:
 		return strings.TrimSpace(e.URL)
+	case SourceCalendar:
+		return strings.TrimSpace(firstNonEmpty(e.ID, e.SourceID))
+	case SourceAttachment:
+		return strings.TrimSpace(firstNonEmpty(e.ID, e.LocalID, e.Path, e.MessageID))
 	default:
 		return strings.TrimSpace(firstNonEmpty(e.ID, e.MessageID, e.Path, e.URL))
 	}

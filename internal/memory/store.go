@@ -258,11 +258,42 @@ func ValidateMemory(memory Memory) error {
 		return fmt.Errorf("memory evidence is required")
 	}
 	for i, evidence := range memory.Evidence {
-		if strings.TrimSpace(evidence.SourceType) == "" {
-			return fmt.Errorf("memory evidence %d missing source type", i)
+		if err := ValidateEvidence(evidence); err != nil {
+			return fmt.Errorf("memory evidence %d invalid: %w", i, err)
 		}
+	}
+	return nil
+}
+
+func ValidateEvidence(evidence Evidence) error {
+	sourceType := strings.TrimSpace(evidence.SourceType)
+	if sourceType == "" {
+		return fmt.Errorf("missing source type")
+	}
+	switch sourceType {
+	case SourceEmail, SourceSentEmail:
+		if firstNonEmpty(evidence.MessageID, evidence.LocalID, evidence.ID) == "" {
+			return fmt.Errorf("%s evidence requires message_id, local_id, or id", sourceType)
+		}
+	case SourceObsidian:
+		if strings.TrimSpace(evidence.Path) == "" {
+			return fmt.Errorf("%s evidence requires path", sourceType)
+		}
+	case SourceResearch:
+		if strings.TrimSpace(evidence.URL) == "" {
+			return fmt.Errorf("%s evidence requires url", sourceType)
+		}
+	case SourceCalendar:
+		if firstNonEmpty(evidence.ID, evidence.SourceID) == "" {
+			return fmt.Errorf("%s evidence requires id or source_id", sourceType)
+		}
+	case SourceAttachment:
+		if firstNonEmpty(evidence.ID, evidence.LocalID, evidence.Path) == "" {
+			return fmt.Errorf("%s evidence requires id, local_id, or path", sourceType)
+		}
+	default:
 		if displayEvidenceLabel(evidence) == "" {
-			return fmt.Errorf("memory evidence %d missing stable source pointer", i)
+			return fmt.Errorf("%s evidence requires a stable source pointer", sourceType)
 		}
 	}
 	return nil

@@ -160,6 +160,65 @@ func TestFileStoreStatsCountsStaleAndReviewNeededMemories(t *testing.T) {
 	}
 }
 
+func TestValidateMemoryAcceptsSupportedEvidenceTypesAndBoundsSnippets(t *testing.T) {
+	store, err := NewFileStoreWithClock(t.TempDir(), testTime)
+	if err != nil {
+		t.Fatalf("NewFileStoreWithClock: %v", err)
+	}
+	longSnippet := strings.Repeat("private body detail ", 80)
+	memories := []Memory{
+		memoryWithEvidence("email evidence", Evidence{SourceType: SourceEmail, MessageID: "msg-in", Snippet: longSnippet}),
+		memoryWithEvidence("sent evidence", Evidence{SourceType: SourceSentEmail, MessageID: "msg-sent", Snippet: longSnippet}),
+		memoryWithEvidence("note evidence", Evidence{SourceType: SourceObsidian, Path: "People/Sergey.md", Snippet: longSnippet}),
+		memoryWithEvidence("calendar evidence", Evidence{SourceType: SourceCalendar, ID: "event-123", Snippet: longSnippet}),
+		memoryWithEvidence("attachment evidence", Evidence{SourceType: SourceAttachment, ID: "att-123", MessageID: "msg-attach", Snippet: longSnippet}),
+		memoryWithEvidence("research evidence", Evidence{SourceType: SourceResearch, URL: "https://example.com/profile", Snippet: longSnippet}),
+	}
+
+	for _, candidate := range memories {
+		if _, _, err := store.Append(context.Background(), candidate); err != nil {
+			t.Fatalf("Append(%s): %v", candidate.Claim, err)
+		}
+	}
+	listed, err := store.List(context.Background())
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(listed) != len(memories) {
+		t.Fatalf("listed = %d, want %d", len(listed), len(memories))
+	}
+	for _, memory := range listed {
+		if len(memory.Evidence) != 1 {
+			t.Fatalf("memory evidence = %#v", memory.Evidence)
+		}
+		if got := len([]rune(memory.Evidence[0].Snippet)); got > 303 {
+			t.Fatalf("snippet for %s has %d runes, want bounded <=303", memory.Claim, got)
+		}
+		if err := ValidateEvidence(memory.Evidence[0]); err != nil {
+			t.Fatalf("ValidateEvidence(%s): %v", memory.Claim, err)
+		}
+	}
+}
+
+func TestValidateMemoryRejectsEvidenceWithoutStablePointer(t *testing.T) {
+	cases := []Evidence{
+		{SourceType: SourceEmail},
+		{SourceType: SourceSentEmail},
+		{SourceType: SourceObsidian},
+		{SourceType: SourceCalendar},
+		{SourceType: SourceAttachment, MessageID: "msg-only-is-not-an-attachment-pointer"},
+		{SourceType: SourceResearch},
+	}
+	for _, evidence := range cases {
+		t.Run(evidence.SourceType, func(t *testing.T) {
+			memory := memoryWithEvidence("invalid "+evidence.SourceType, evidence)
+			if err := ValidateMemory(PrepareMemoryForAppend(memory, testTime())); err == nil {
+				t.Fatalf("ValidateMemory accepted invalid %s evidence", evidence.SourceType)
+			}
+		})
+	}
+}
+
 func TestStoreStatsForSettingsTreatsMissingRecordsAsEmptyStore(t *testing.T) {
 	settings := DefaultSettings()
 	settings.Directory = t.TempDir()
@@ -421,6 +480,22 @@ func testMemoryWithKind(claim, kind string, confidence float64) Memory {
 			Snippet:    claim,
 		}},
 	}, testTime())
+}
+
+func memoryWithEvidence(claim string, evidence Evidence) Memory {
+	return Memory{
+		Kind:           KindRelationshipContext,
+		Claim:          claim,
+		Summary:        claim,
+		Topic:          "Evidence",
+		People:         []string{"sergey@example.com"},
+		Company:        "Example",
+		Domain:         "example.com",
+		Status:         StatusActive,
+		Confidence:     0.90,
+		LastActivityAt: testTime(),
+		Evidence:       []Evidence{evidence},
+	}
 }
 
 func lifecycleMemory(topic, kind, status string, activity time.Time, target string) Memory {

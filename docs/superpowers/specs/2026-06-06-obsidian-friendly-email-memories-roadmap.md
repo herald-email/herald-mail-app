@@ -5,9 +5,9 @@
 Herald should turn important email history into local, source-backed memory that helps the user understand people, companies, threads, and open loops. The product promise is Obsidian-friendly email memories: useful inside Herald chat and Compose, but durable as editable Markdown outside the app.
 
 - [x] Give users a trustworthy answer to "what should I remember before I reply?"
-- [ ] Make Sent mail a first-class source because user replies reveal commitments, decisions, tone, and resolved loops.
+- [x] Make Sent mail a first-class source because user replies reveal commitments, decisions, tone, and resolved loops.
 - [ ] Produce memory artifacts that can sync to an Obsidian vault without becoming a separate closed database.
-- [ ] Keep every factual claim tied to source evidence from email, notes, calendar context, or explicit research.
+- [x] Keep every factual claim tied to source evidence from email, notes, calendar context, or explicit research.
 
 ## Product Positioning
 
@@ -58,7 +58,7 @@ The memory layer should be built from small, understandable objects with clear e
 - [x] `Track` stores topic, people, company/domain, status, open loops, claims, commitments, last activity, memory IDs, and evidence refs.
 - [x] `Dossier` stores relationship summary, recent interactions, active tracks, open loops, research notes, vault links, and freshness.
 - [x] `Nudge` stores type, message, why it matters, source refs, user action state, and dismissal scope.
-- [ ] `Evidence` can point to email messages, sent replies, notes, calendar events, attachments, and research URLs without copying full private content.
+- [x] `Evidence` can point to email messages, sent replies, notes, calendar events, attachments, and research URLs without copying full private content.
 
 ## Primary Surfaces
 
@@ -212,7 +212,8 @@ Testing should start with deterministic fixtures and then graduate to tmux-visib
 - [x] Update `engineering/testplans/TUI_TESTPLAN.md` with memory chat, Compose Radar, Contacts dossier, and Obsidian sync cases before implementation.
 - [x] Unit-test memory extraction on synthetic inbound and sent messages.
 - [x] Unit-test track status transitions for active, waiting, stale, resolved, backlog, and done.
-- [ ] Unit-test evidence validation, deletion propagation, and stale-memory behavior.
+- [x] Unit-test evidence source-type validation and snippet bounding for email, sent replies, notes, calendar events, attachments, and research URLs.
+- [ ] Unit-test deletion propagation and stale-memory behavior.
 - [x] Unit-test Obsidian Markdown generation with frontmatter and generated-section preservation.
 - [x] App-level tests prove Compose Radar retrieval does not mutate draft content without user action.
 - [x] Snapshot or tmux tests cover Compose Radar at `220x50`, `80x24`, and `50x15`.

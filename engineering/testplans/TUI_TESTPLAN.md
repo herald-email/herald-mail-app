@@ -1267,6 +1267,21 @@ Check these states during every applicable lane:
 - Waiting tracks prefer unresolved open loops, stale tracks are derived from stale records or configured age, and backlog/done tracks can be inferred from configured Obsidian job-search paths.
 - Resolved, backlog, and done tracks remain available for dossiers and daily diffs instead of disappearing.
 
+### TC-18I — Herald Memories evidence validation
+
+**Lane:** G
+**Sizes:** code-focused
+
+**Steps:**
+1. Build memory records with email, sent-email, Obsidian note, calendar event, attachment, and research URL evidence.
+2. Build invalid records missing the required stable pointer for each evidence source type.
+3. Run the focused memory evidence validation tests.
+
+**Expect:**
+- Valid evidence pointers append successfully for every supported source type without requiring raw private content.
+- Invalid evidence is rejected with source-type-specific errors before an immutable memory record is written.
+- Evidence snippets are normalized and bounded so memory records remain compact source pointers, not a second raw-mail or attachment archive.
+
 ### TC-24A — Theme selection and custom theme editing
 
 **Lane:** A
