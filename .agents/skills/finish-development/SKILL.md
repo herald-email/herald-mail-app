@@ -127,13 +127,13 @@ git commit -m "<concise imperative summary>"
 
 Include issue references in the body when the completed task came from an issue. Do not include unrelated pending changes in the commit.
 
-For issue-backed work, prefer a commit body like:
+For issue-backed work that fully completes the requested issue, prefer a closing keyword in the task commit body:
 
 ```text
-Refs #<issue-number>
+Closes #<issue-number>
 ```
 
-Use `Refs`, not `Fixes`, because this skill may intentionally keep the work local unless the user asks to push.
+Use `Refs #<issue-number>` only when the branch is a partial slice, the issue is related but not completed, or the workflow is intentionally stopping at branch handoff without merging the completed work to the default branch. If a task commit was already created with `Refs` but the work is now being merged as complete, amend the commit or create the final merge/default-branch commit with `Closes #<issue-number>` before any push.
 
 ## Merge To Main
 
@@ -162,7 +162,7 @@ Do not push `main` unless the user explicitly asks.
 
 If the completed task clearly came from one or more GitHub issues:
 
-1. Keep the issue reference in the commit body as described in the Commit section.
+1. Confirm the completed issue has a closing reference (`Closes #<number>`, `Fixes #<number>`, or `Resolves #<number>`) in the final task/default-branch history. Use `Refs` only for partial or related work.
 2. After the final commit exists and any requested local merge to `main` has succeeded, collect the final commit hash and subject:
 
    ```bash
@@ -170,7 +170,7 @@ If the completed task clearly came from one or more GitHub issues:
    commit_subject="$(git log -1 --pretty=%s)"
    ```
 
-3. Close each verified issue with a comment that references the commit:
+3. Close each verified issue with a comment that references the commit whenever the issue is still open after local completion, especially when the workflow did not push `main`:
 
    ```bash
    gh issue close <number> --comment "Completed in commit ${commit_hash} (${commit_subject})."
