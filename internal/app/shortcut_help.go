@@ -692,13 +692,19 @@ func (m *Model) composeShortcutHelpSection() shortcutHelpSection {
 
 func (m *Model) contactsShortcutHelpSection() shortcutHelpSection {
 	if m.contactPreviewEmail != nil {
-		return shortcutHelpSection{"Contacts Preview", []shortcutHelpEntry{
+		entries := []shortcutHelpEntry{
 			{"Mouse drag", "select visible header, address, and body text"},
 			{"y", "copy the active preview text selection"},
 			{"m", "release or restore terminal mouse capture"},
 			{"Esc", "back to the selected contact"},
 			{"Tab", "switch contact panes when preview is closed"},
-		}}
+		}
+		if m.contactsPrintablePreviewLoaded() {
+			if !m.previewPrinterUnsupported() {
+				entries = append(entries, m.commandHelpEntry("contacts", CommandPreviewPrint, "print the loaded preview"))
+			}
+		}
+		return shortcutHelpSection{"Contacts Preview", entries}
 	}
 	if m.contactFocusPanel == 1 && m.contactDetail != nil {
 		return shortcutHelpSection{"Contacts Detail", []shortcutHelpEntry{
@@ -755,7 +761,7 @@ func (m *Model) timelineShortcutHelpSection() shortcutHelpSection {
 				{"Esc", "close preview"},
 			}}
 		}
-		return shortcutHelpSection{"Timeline Preview", []shortcutHelpEntry{
+		entries := []shortcutHelpEntry{
 			{"j/k or arrows", "scroll preview"},
 			{"Tab", "switch between list and preview"},
 			{"h / Left arrow", "return focus to the Timeline list without closing preview"},
@@ -777,7 +783,13 @@ func (m *Model) timelineShortcutHelpSection() shortcutHelpSection {
 			{"z", "toggle full-screen preview"},
 			{"v / y / Y", "visual selection and copy"},
 			{"Esc", "close preview"},
-		}}
+		}
+		if m.timelinePrintablePreviewLoaded() {
+			if !m.previewPrinterUnsupported() {
+				entries = append(entries, m.commandHelpEntry("timeline", CommandPreviewPrint, "print the loaded preview"))
+			}
+		}
+		return shortcutHelpSection{"Timeline Preview", entries}
 	}
 	return shortcutHelpSection{"Timeline", []shortcutHelpEntry{
 		{"h/j/k/l or arrows", "navigate messages and threads"},

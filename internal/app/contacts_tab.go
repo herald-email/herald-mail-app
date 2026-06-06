@@ -220,6 +220,9 @@ func (m *Model) handleContactsKey(msg tea.KeyPressMsg) (*Model, tea.Cmd) {
 				return m, cmd
 			}
 			return m, nil
+		case "p":
+			model, cmd, _ := m.openPreviewPrintChooser(previewPrintSurfaceContacts)
+			return model.(*Model), cmd
 		}
 	}
 	switch key {

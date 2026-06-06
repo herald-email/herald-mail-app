@@ -7,6 +7,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/herald-email/herald-mail-app/internal/ai"
+	"github.com/herald-email/herald-mail-app/internal/printing"
 )
 
 const titleTabGap = " "
@@ -508,6 +509,13 @@ func (m *Model) rawKeyHintsForWidth(w int, chrome ChromeState) string {
 		hints = m.settingsPanel.keyHints()
 	} else if m.showProblemReport {
 		hints = joinHintSegments("e: email support", "c: copy report/logs", "s: save report", "f: copy feedback link", "esc: close")
+	} else if m.previewPrintChooser {
+		segments := []string{"1: Original Visual"}
+		for _, option := range printing.MarkdownThemes() {
+			segments = append(segments, option.Key+": "+strings.TrimPrefix(option.Name, "Markdown "))
+		}
+		segments = append(segments, "esc: cancel")
+		hints = joinHintSegments(segments...)
 	} else if m.pendingComposeExitPrompt {
 		hints = "[k/y] keep draft  │  [d/n] discard  │  esc: cancel"
 	} else if m.pendingDeleteConfirm || m.pendingUnsubscribe {
@@ -570,7 +578,14 @@ func (m *Model) rawKeyHintsForWidth(w int, chrome ChromeState) string {
 				segments := append(selectionHints, "q: quit")
 				hints = joinHintSegments(segments...)
 			} else {
-				hints = joinHintSegments("v: cursor", "j/k: scroll", "drag: select", "y: copy selection", "yy: copy line", "Y: copy all", problemReportShortcutHint, "m: mouse mode", "esc: back to contact", "q: quit")
+				segments := []string{"v: cursor", "j/k: scroll", "drag: select", "y: copy selection", "yy: copy line", "Y: copy all"}
+				if m.contactsPrintablePreviewLoaded() {
+					if printHint := m.previewPrintHint("contacts"); printHint != "" {
+						segments = append(segments, printHint)
+					}
+				}
+				segments = append(segments, problemReportShortcutHint, "m: mouse mode", "esc: back to contact", "q: quit")
+				hints = joinHintSegments(segments...)
 			}
 		} else if m.contactFocusPanel == 1 {
 			if m.mouseSelectionMode {

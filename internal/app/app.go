@@ -24,6 +24,7 @@ import (
 	"github.com/herald-email/herald-mail-app/internal/logger"
 	"github.com/herald-email/herald-mail-app/internal/models"
 	"github.com/herald-email/herald-mail-app/internal/notifications"
+	"github.com/herald-email/herald-mail-app/internal/printing"
 	appsmtp "github.com/herald-email/herald-mail-app/internal/smtp"
 )
 
@@ -238,6 +239,11 @@ type EmailBodyMsg struct {
 type ProblemReportMsg struct {
 	Path string
 	Err  error
+}
+
+type PreviewPrintMsg struct {
+	Result printing.Result
+	Err    error
 }
 
 type terminalLinkOpenMsg struct {
@@ -702,6 +708,13 @@ type Model struct {
 	// Compose original-message previews.
 	previewSelection previewSelectionState
 
+	previewPrinter      printing.Printer
+	previewPrintChooser bool
+	previewPrintSurface previewPrintSurface
+	previewPrintBusy    bool
+	previewPrintRemote  bool
+	previewPrintPending bool
+
 	// Chat panel
 	showChat         bool
 	chatMessages     []ai.ChatMessage // conversation history
@@ -1091,6 +1104,7 @@ func New(b backend.Backend, mailer *appsmtp.Client, fromAddress string, classifi
 		chatInput:       chatInput,
 		classifier:      classifier,
 		classifications: make(map[string]string),
+		previewPrinter:  printing.NewSystemPrinter(),
 		timeline: TimelineState{
 			expandedThreads:     make(map[string]bool),
 			selectedMessageIDs:  make(map[string]bool),
@@ -1961,6 +1975,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.statusMessage = "Problem report written: " + msg.Path
 			logger.Info("Problem report written: %s", msg.Path)
 		}
+		return m, nil
+
+	case PreviewPrintMsg:
+		m.previewPrintBusy = false
+		m.statusMessage = previewPrintStatusMessage(msg.Result, msg.Err)
 		return m, nil
 
 	case terminalLinkOpenMsg:
@@ -3457,6 +3476,9 @@ func (m *Model) View() tea.View {
 	}
 	if m.showProblemReport {
 		return m.buildView(m.renderProblemReportOverlayView())
+	}
+	if m.previewPrintChooser {
+		return m.buildView(m.renderPreviewPrintChooserView())
 	}
 	if m.showHelp {
 		return m.buildView(m.renderShortcutHelpView())

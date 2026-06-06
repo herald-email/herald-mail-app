@@ -12,7 +12,7 @@ Use this skill as the Herald shorthand for: nice, commit, merge to `main`, delet
 1. Preserve unrelated user changes. Do not stage, commit, merge, delete, or overwrite files that are outside the completed task.
 2. Treat "nice" as the final polish pass: review the diff, run formatting, run appropriate verification, and fix anything small and clearly in scope before committing.
 3. Treat "fast merge", "fastpass", "quick merge", "quickpass", "fast mode", or similar no-tests merge phrasing as Fast Mode: skip tests only if the main-branch sync and merge are mechanically clean and the change-interference review is boring.
-4. Ask before destructive or externally visible actions not already implied by this skill, especially pushing to a remote, force operations, deleting an unmerged branch, or removing a non-`.worktrees` checkout.
+4. Ask before destructive or externally visible actions not already implied by this skill, especially pushing to a remote, force operations, deleting an unmerged branch, or removing a non-`.worktrees` checkout. Closing a GitHub issue is implied only when the thread was clearly about that issue and the Issue Closure section below applies.
 5. Prefer non-interactive git commands. Avoid interactive rebases, commit editors, and merge editors.
 6. If a conflict, failing verification, or ambiguous dirty worktree appears, stop with the exact blocker and the safest next option.
 
@@ -34,8 +34,17 @@ Identify:
 - default branch, normally `main`
 - files that belong to the completed task
 - unrelated dirty files that must be left alone
+- issue numbers that clearly define the completed task, from the user request, current thread title/context, a GitHub issue URL, or an unambiguous branch name such as `issue-123` or `product-polish-123`
 
 If the current checkout is already `main`, adapt the workflow: commit on `main` only if that is clearly what the user requested, skip merge, and never remove the repository root worktree.
+
+For any candidate issue number, verify it belongs to the current remote before relying on it:
+
+```bash
+gh issue view <number> --json number,title,state,url
+```
+
+Do not infer issue intent from arbitrary numbers in filenames, dates, versions, test names, or commit hashes.
 
 ## Nice Pass
 
@@ -118,6 +127,14 @@ git commit -m "<concise imperative summary>"
 
 Include issue references in the body when the completed task came from an issue. Do not include unrelated pending changes in the commit.
 
+For issue-backed work, prefer a commit body like:
+
+```text
+Refs #<issue-number>
+```
+
+Use `Refs`, not `Fixes`, because this skill may intentionally keep the work local unless the user asks to push.
+
 ## Merge To Main
 
 After the feature branch has a clean, verified commit, or a Fast Mode commit that passed the no-interference review:
@@ -141,6 +158,28 @@ If fast-forward is impossible, inspect why. Use a normal merge only when it is c
 
 Do not push `main` unless the user explicitly asks.
 
+## Issue Closure
+
+If the completed task clearly came from one or more GitHub issues:
+
+1. Keep the issue reference in the commit body as described in the Commit section.
+2. After the final commit exists and any requested local merge to `main` has succeeded, collect the final commit hash and subject:
+
+   ```bash
+   commit_hash="$(git rev-parse HEAD)"
+   commit_subject="$(git log -1 --pretty=%s)"
+   ```
+
+3. Close each verified issue with a comment that references the commit:
+
+   ```bash
+   gh issue close <number> --comment "Completed in commit ${commit_hash} (${commit_subject})."
+   ```
+
+If the issue is already closed, add no duplicate closure comment unless the user explicitly asks for a handoff note. If `gh issue close` fails because of authentication, network, or permissions, leave the issue open and report the exact command and error in the final response.
+
+Do not close issues for broad roadmap work, partially completed issue slices, speculative references, or issue numbers mentioned only as related context. When multiple issues are present, close only the issues whose requested acceptance criteria were actually completed by the final commit.
+
 ## Delete Worktree
 
 Remove only the completed feature worktree, never the repository root checkout:
@@ -161,6 +200,7 @@ Report:
 - merge result on `main`
 - verification commands and outcomes
 - when Fast Mode was used, the merge-from-main result, the no-interference review result, and the verification commands intentionally skipped
+- any issue numbers closed, with the closing commit hash, or why issue closure was skipped
 - removed worktree path and deleted branch
 - a copy-paste "How To Test This Change" block with `cd <main-checkout>`, the build command, and either `./bin/herald <parameters>` or the full path to the built test binary
 - any skipped step and why

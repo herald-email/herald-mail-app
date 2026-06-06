@@ -26,6 +26,7 @@ import (
 	"github.com/herald-email/herald-mail-app/internal/config"
 	demodata "github.com/herald-email/herald-mail-app/internal/demo"
 	"github.com/herald-email/herald-mail-app/internal/logger"
+	"github.com/herald-email/herald-mail-app/internal/printing"
 	appsmtp "github.com/herald-email/herald-mail-app/internal/smtp"
 	buildversion "github.com/herald-email/herald-mail-app/internal/version"
 )
@@ -208,6 +209,7 @@ func newSessionModel(s ssh.Session, opts sshServerOptions) (tea.Model, []tea.Pro
 	m := app.New(b, opts.Mailer, configuredEmailAddress(opts.Config), opts.Classifier, false)
 	m.SetLocalImageLinksEnabled(false)
 	m.SetTerminalLinkBrowserFallbackEnabled(false)
+	m.SetPreviewPrinter(printing.UnsupportedPrinter{Reason: "SSH remote session"})
 	m.SetPreviewImageMode(opts.ImageMode)
 	m.SetConfigPath(opts.ResolvedConfig)
 	m.SetConfig(opts.Config)

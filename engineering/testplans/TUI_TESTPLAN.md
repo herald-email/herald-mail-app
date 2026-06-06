@@ -1031,6 +1031,30 @@ Check these states during every applicable lane:
 - Plain-text clipboard payloads are exact and ANSI-free; HTML-derived selections include rich HTML where supported; image-copy fallback is explicit and bounded.
 - Preview-selection shortcuts do not fire from editable text-entry surfaces.
 
+### TC-17B — macOS preview print chooser
+
+**Lane:** A, G
+**Sizes:** `220x50`, `80x24`, `50x15`
+
+**Steps:**
+1. Launch Herald in demo mode on macOS and open a loaded Timeline split preview for `Example: Rich HTML rendering showcase`.
+2. Press `p`, confirm the compact chooser offers `1 Original Visual`, `2 Markdown Swiss`, `3 Markdown GitHub`, `4 Markdown Manuscript`, `5 Markdown Academic`, and `Esc cancel`.
+3. Press `Esc`, confirm the chooser closes without changing the selected message, scroll offset, preview copy mode, or remote-image reveal state.
+4. Reopen the chooser, press `1`, and verify the standard macOS print dialog opens for the original visual document; cancel the dialog.
+5. Reopen the chooser, press each Markdown theme key (`2` through `5`) and verify the standard macOS print dialog opens for the rendered Markdown document with the selected theme; cancel each dialog.
+6. Repeat chooser open/cancel in Timeline full-screen preview and Contacts inline preview.
+7. In an SSH session or unsupported build, press `p` from a loaded preview and confirm Herald reports printing is unsupported instead of opening host-local UI.
+8. Type literal `p` in Compose body, Timeline search, Contacts search, Settings fields, prompt editor, and rule editor fields.
+
+**Expect:**
+- The chooser appears only when a read-only preview body is loaded and remains discoverable through `?` help and bottom hints when room allows.
+- Original Visual mode uses sender HTML/plain content; Rendered Markdown modes use Herald's Markdown-derived reading representation with the selected print theme.
+- Remote image URLs are not fetched by printing, and remote `<img src=http...>` resources are not emitted into the printable document.
+- Local CID inline images with bytes can appear in Original Visual and Rendered Markdown printable documents as embedded data URIs.
+- Markdown image syntax from remote-image newsletters, including the demo v0.5 newsletter, appears as blocked-image placeholders with sanitized source links rather than empty image tags or remote loads.
+- Non-macOS, non-cgo, and SSH surfaces return bounded unsupported status without mutating preview or mailbox state.
+- `p` remains literal text in editable text-entry surfaces.
+
 ### TC-18 — Logs and chat resilience
 
 **Lane:** A, B, C  
@@ -1943,16 +1967,18 @@ This case covers the provider-backed event creation and deletion slice plus the 
 2. Press `3` or `F4` to open Calendar, select the read-only calendar in the rail, then press `n`; confirm Create Event opens on an available writable calendar rather than targeting the read-only collection.
 3. Repeat with a fixture that has no writable calendar collections; press `n` and confirm Create Event does not open and the status explains that a writable calendar source is required.
 4. Confirm Create Event shows Calendar, Title, Location, Start, End, Start TZ, End TZ, Display TZs, All day, Attendees, Recurrence, Reminders, Notes, Preview, Timezone preview, Conflict check, and Recurrence preview.
-5. Fill title/start/end fields, move the cursor within the fields, and verify digits, arrows, and `h/j/k/l` do not switch tabs or move the calendar range while Create Event is active.
-6. Use the timezone picker, attendee contact autocomplete, recurrence dropdown, reminder multi-select, and mini calendar picker; confirm each selection updates the draft while manual text entry still works.
-7. Press `Ctrl+S`; confirm the event appears in Agenda, Detail, Search, and Cross-Source Search only after provider success.
-8. Open the created event, press `e`, edit a visible field, set different start/end timezones such as `America/Los_Angeles` and `Asia/Tokyo`, press `Ctrl+S`, and confirm the provider/cache update path preserves the event's source-scoped ref and both endpoint timezones.
-9. Force a Google Calendar authorization or missing-write-scope error, press `Ctrl+S`, and confirm Event Create/Edit stays open with unsaved values plus an `r: reconnect` action.
-10. Press `D` from Calendar browse/detail, confirm the Delete Event screen names the event and shows `y: delete` plus `esc: cancel`, then press `y`.
-11. Confirm the event disappears from Agenda, Detail, Search, and Cross-Source Search only after provider success; repeat a forced provider failure and confirm the cached row remains.
-12. Enter notes containing HTML or Markdown, then confirm the edit preview renders readable note text instead of raw tags or formatting markers.
-13. Capture the implemented Create/Edit Event screen in color with `env -u NO_COLOR TERM=xterm-256color COLORTERM=truecolor HERALD_THEME=sonokai-signal`.
-14. Produce a color side-by-side image with `docs/superpowers/specs/2026-05-23-calendar-tui-roadmap-assets/06-event-edit-timezones.png` on the left and the implemented Herald UI on the right.
+5. Focus the Calendar field, press `Enter`, and confirm the writable-calendar picker opens with the active account's calendars listed before calendars from other configured accounts; select a non-current-account writable calendar and confirm the draft preview updates to that calendar.
+6. Confirm explicitly read-only calendars such as subscribed holidays remain visible for browsing/filtering but do not appear as create targets in the form picker.
+7. Fill title/start/end fields, move the cursor within the fields, and verify digits, arrows, and `h/j/k/l` do not switch tabs or move the calendar range while Create Event is active.
+8. Use the timezone picker, attendee contact autocomplete, recurrence dropdown, reminder multi-select, and mini calendar picker; confirm each selection updates the draft while manual text entry still works.
+9. Press `Ctrl+S`; confirm the event appears in Agenda, Detail, Search, and Cross-Source Search only after provider success and carries the selected calendar's source-scoped ref.
+10. Open the created event, press `e`, edit a visible field, set different start/end timezones such as `America/Los_Angeles` and `Asia/Tokyo`, press `Ctrl+S`, and confirm the provider/cache update path preserves the event's source-scoped ref and both endpoint timezones.
+11. Force a Google Calendar authorization or missing-write-scope error, press `Ctrl+S`, and confirm Event Create/Edit stays open with unsaved values plus an `r: reconnect` action.
+12. Press `D` from Calendar browse/detail, confirm the Delete Event screen names the event and shows `y: delete` plus `esc: cancel`, then press `y`.
+13. Confirm the event disappears from Agenda, Detail, Search, and Cross-Source Search only after provider success; repeat a forced provider failure and confirm the cached row remains.
+14. Enter notes containing HTML or Markdown, then confirm the edit preview renders readable note text instead of raw tags or formatting markers.
+15. Capture the implemented Create/Edit Event screen in color with `env -u NO_COLOR TERM=xterm-256color COLORTERM=truecolor HERALD_THEME=sonokai-signal`.
+16. Produce a color side-by-side image with `docs/superpowers/specs/2026-05-23-calendar-tui-roadmap-assets/06-event-edit-timezones.png` on the left and the implemented Herald UI on the right.
 
 **Expect:**
 - Create, update, and delete use provider-backed mutation boundaries first and update or invalidate cached rows only after success.
@@ -1961,8 +1987,9 @@ This case covers the provider-backed event creation and deletion slice plus the 
 - Delete always requires confirmation in the Calendar TUI and never runs from a text-entry surface.
 - Event Edit/Create follows the Screen 06 structure closely enough that the color side-by-side comparison can be reviewed without relying on prose.
 - Event Edit/Create owns text input modally: tab switching, calendar range movement, and browse navigation do not fire while editing fields or picker search.
-- Event Edit/Create shows contextual Enter hints for date, timezone, recurrence, reminder, and contact-selection fields.
-- Timezone, attendee, recurrence, reminder, and mini calendar pickers are keyboard-selectable, searchable where relevant, and reversible with `Esc`; text fallbacks remain parseable for advanced values.
+- Event Create shows a contextual Enter hint for the Calendar field, lists only writable create targets, orders current-account calendars first, and allows choosing writable calendars from other accounts.
+- Event Edit/Create shows contextual Enter hints for calendar, date, timezone, recurrence, reminder, and contact-selection fields.
+- Calendar, timezone, attendee, recurrence, reminder, and mini calendar pickers are keyboard-selectable, searchable where relevant, and reversible with `Esc`; text fallbacks remain parseable for advanced values.
 - Start and end timezones can differ for travel events; Google Calendar, CalDAV, cache, daemon, and MCP preserve those endpoint-specific zones.
 - HTML and Markdown notes render in the edit preview with readable paragraphs/lists/links rather than raw provider markup.
 - Daemon and MCP create/update/delete tools route through the same scoped mutation semantics as the TUI.
