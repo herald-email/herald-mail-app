@@ -52,8 +52,9 @@ High-level milestones. Detailed feature status is in each section below.
 - [ ] Classification action: flag on match (set IMAP `\Flagged`)
 - [x] Auto-cleanup rules (per-sender delete/archive older than N days)
 - [ ] Multi-account support
-- [x] Chat tool calling (Ollama tool API + MCP tools in-process)
-- [x] Filtered timeline from chat results
+- [x] Legacy chat tool calling exists today, but is scheduled for Gollem replacement rather than expansion
+- [x] Legacy filtered timeline from chat results exists today, but is scheduled for typed Gollem Timeline intents
+- [ ] Gollem UI chat-agent replacement with typed search, summary, Timeline, and Compose intents
 - [x] Multiple AI backends (Claude, OpenAI-compatible)
 - [x] External embedding provider/model selection for OpenAI-compatible vendors, including Settings > AI controls
 - [x] Compose AI assistant baseline (rewrite, tone/length adjustments, subject suggestion, accept into draft)
@@ -190,36 +191,60 @@ A single persistent line at the bottom of the screen. Its content changes based 
 
 ### Chat Panel
 
-The chat panel is a right-side slide-out (`g` key, with `c` retained as a legacy alias outside Timeline) that lets you have a conversation with your inbox using a local Ollama model. It currently supports Q&A over email content. The vision is to evolve it into a full agentic assistant that can search, summarise, compose, and manage email through natural conversation.
+The chat panel is a right-side slide-out (`g` key, with `c` retained as a legacy alias outside Timeline) that will become Herald's UI-only email agent surface. The current hand-written Ollama `/api/chat` loop is legacy scaffolding, not the roadmap foundation; the next agent implementation should replace it with a Gollem runner that treats Ollama as only one possible local provider.
 
 - [x] Slide-out panel (`g` key, with `c` retained as a legacy alias outside Timeline)
 - [x] Conversation history (multiple turns)
 - [x] Markdown rendering of assistant responses (glamour)
 - [x] Context: currently open email available to the model
-- [x] Tool calling via Ollama's native tool API
-- [x] In-process tools (search, sender stats, threads — not the full MCP surface yet)
-- [x] Filtered timeline: chat result sets pushed into Timeline as a live view
 - [x] Context: active folder and selection state passed to model
-- [ ] `draft_reply` / `send_email` from within chat (currently MCP-only)
-- [x] Multiple AI backends (Ollama, Claude, OpenAI-compatible)
+- [x] Legacy in-process chat tools exist for search, sender stats, and threads, but are scheduled for replacement rather than expansion
+- [x] Legacy filtered timeline from chat result sets exists, but currently depends on a prose `<filter>` block contract
+- [ ] Replace the legacy Ollama chat loop with a Gollem-only chat runner before adding new chat capabilities
+- [ ] Remove the legacy chat tool registry and `<filter>` response parser once Gollem can return a plain assistant reply and a typed Timeline intent
+- [ ] Keep the chat drawer as the user-facing entry point while moving agent execution into an `internal/agent` boundary
+- [ ] Use typed Gollem outputs for `reply`, `timeline_intent`, `summary`, and `compose_intent` instead of prompt-injected control markup
+- [ ] Make chat a UI-mode feature only; do not add daemon, MCP, or background-agent entrypoints in the first Gollem iteration
+- [ ] Do not allow chat to send, delete, archive, or mutate calendar events in the first Gollem iteration
 
-#### Tool calling
+#### Gollem replacement roadmap
 
-The chat uses Ollama's `tools` field in `/api/chat` to invoke tools directly in-process. The model decides which tools to call; the app executes them and feeds results back until the model produces a final reply. Current chat tools: `search_emails`, `list_emails_by_sender`, `get_thread`, `get_sender_stats`.
+The next chat architecture uses Gollem agents and typed tools. The model can search, inspect, summarize, and propose UI intents, while Bubble Tea remains the only layer allowed to mutate Timeline or Compose state.
 
-- [ ] Expand chat tools to mirror the full MCP surface (read body, summarise, reply, manage, classify)
+- [ ] Add a Gollem provider factory for `ollama`, `anthropic`, `kimi`, and `fireworks`
+- [ ] Add `find_emails` with keyword, semantic, hybrid, current-folder, cross-folder, unread, sender, date, and result-limit parameters
+- [ ] Add `get_email_context` for bounded subject/sender/date/body-snippet context by message ID
+- [ ] Add `summarize_email_set` for search-result summaries with cited message IDs, involved people, dates, open questions, and action items
+- [ ] Add `explain_people` to identify senders, recipients, mentioned people, organizers, and likely owners from a bounded email set
+- [ ] Add `TimelineIntent` so chat can show explicit selections, keyword results, semantic results, or hybrid results in Timeline
+- [ ] Add `ComposeIntent` so chat can propose subject/body edits when Compose is active, routed through the existing review/accept flow
+- [ ] Add progress states for `searching`, `reading`, `summarizing`, and `draft edit ready` so long-running chat requests do not look frozen
+- [ ] Add provider bakeoff tests for plain reply, one tool call, two-step search-plus-summary, typed Timeline intent, typed Compose intent, malformed args, and provider failure
 
 #### Filtered timeline
 
-When the chat returns a set of emails (from a search, date filter, or semantic query), those results are pushed into the Timeline tab as a live filtered view. The user can browse and act on them without leaving the chat flow. `Esc` or "show all" restores the full timeline.
+When the Gollem agent returns a Timeline intent, the TUI pushes those results into the Timeline tab as a live filtered view. The user can browse and act on the messages without leaving the chat flow, and `Esc` or "show all" restores the full timeline.
 
-#### Multiple AI backends
+- [ ] `explicit_ids` shows exactly the message IDs returned by the agent
+- [ ] `keyword`, `semantic`, and `hybrid` intents reuse the existing Timeline search pipeline instead of duplicating ranking logic in the agent
+- [ ] Result labels appear as compact Timeline state such as `Agent: onboarding issue`
+- [ ] Empty result sets render a useful empty state and keep the previous Timeline recoverable
+- [ ] Large result sets are capped, deterministic, and disclose how many messages were searched versus summarized
 
-| Backend | How | When to use |
+#### Provider policy
+
+Gollem is the chat-agent framework. Ollama/local, Anthropic, Kimi, and Fireworks are providers behind Gollem, not separate Herald chat architectures.
+
+| Provider | Gollem route | First use |
 |---------|-----|-------------|
-| Ollama (local) | `/api/chat` with tools | Default; fully offline, no cost |
-| Claude | `claude-sonnet-4-6` via Anthropic SDK | Stronger reasoning, better tool use |
-| OpenAI-compatible | Any server speaking OpenAI chat completions | Flexibility |
+| Ollama/local | Gollem OpenAI-compatible/Ollama provider | Offline local agent experiments |
+| Anthropic | Gollem Anthropic provider | Highest-quality remote reasoning and tool use |
+| Kimi | Gollem OpenAI-compatible provider | Long-context or Kimi-specific model experiments |
+| Fireworks | Gollem OpenAI-compatible provider | Hosted open-model and Kimi variants |
+
+- [ ] Config selects one Gollem chat provider and model for UI chat without changing the existing embedding provider contract
+- [ ] Ollama remains supported for local chat through Gollem only; the old direct Ollama chat loop is removed when replacement is ready
+- [ ] Provider-specific quirks are isolated in the Gollem provider factory, not scattered through Bubble Tea update logic
 
 ---
 
