@@ -144,12 +144,12 @@ Memory updates need predictable rules because stale or overwritten memory is wor
 
 Research Mode should enrich dossiers with public information only when the user asks for it. Private emails should remain local, and external queries should use minimal public identifiers unless the user explicitly approves more context.
 
-- [ ] Add explicit actions: research this person, research this company, refresh dossier, and research before reply.
-- [ ] Build web queries from public identifiers such as name, company, domain, role, and user-provided URL.
-- [ ] Do not send private email bodies, private notes, attachments, or full thread summaries to external research by default.
-- [ ] Save research notes with source URLs, retrieval date, confidence, and "what changed since last contact."
-- [ ] Mark research stale after a configurable interval.
-- [ ] Distinguish "from your email", "from Obsidian", "from public research", and "inference" in chat answers.
+- [x] Add explicit actions: research this person, research this company, refresh dossier, and research before reply.
+- [x] Build web queries from public identifiers such as name, company, domain, role, and user-provided URL.
+- [x] Do not send private email bodies, private notes, attachments, or full thread summaries to external research by default.
+- [x] Save research notes with source URLs, retrieval date, confidence, and "what changed since last contact."
+- [x] Mark research stale after a configurable interval.
+- [x] Distinguish "from your email", "from Obsidian", "from public research", and "inference" in chat answers.
 
 ## Architecture Direction
 
@@ -159,7 +159,7 @@ The implementation should add a memory service behind the backend/agent boundary
 - [ ] Add extraction jobs that run through the existing AI scheduler with interactive-before-background priority.
 - [x] Reuse existing body-cache, classification, contact-enrichment, thread-header, and embedding-cache signals before fetching additional message bodies.
 - [x] Add memory-aware Gollem tools after the Gollem chat-agent runner is in place.
-- [ ] Keep external research as a separate opt-in capability from local memory extraction.
+- [x] Keep external research as a separate opt-in capability from local memory extraction.
 - [x] Keep Obsidian sync as an export/sync adapter so the local memory index remains usable without Obsidian.
 - [ ] Ensure deletion, archive, and cache cleanup can mark memories stale or remove evidence links when source messages disappear.
 
@@ -178,7 +178,7 @@ The roadmap is ordered so the feature becomes useful before it becomes broad. Th
 - [ ] **M5: Dossier views** - enrich Contacts and company/thread detail views with relationship summaries, active tracks, open loops, vault links, and evidence.
 - [x] Person dossier v1 appears inside Contacts detail as a bounded, source-backed, read-only section built from immutable local memory records.
 - [x] Company dossier v1 appears inside Contacts detail as a bounded, source-backed, read-only section for company/domain-backed tracks, open loops, vault links, and evidence.
-- [ ] **M6: Research Mode** - add explicit person/company research, sourced research notes, freshness checks, and "research before reply."
+- [x] **M6: Research Mode** - add explicit person/company research, sourced research notes, freshness checks, and "research before reply."
 - [ ] **M7: Daily memory briefing** - produce a diff over changed tracks, resolved questions, stale loops, and vault hygiene items.
 - [ ] **M8: Hardening and privacy controls** - add forget, pin, correct, source audit, update-rule audit, retention settings, prompt reset, and deletion propagation.
 
@@ -202,7 +202,7 @@ Memory features can become creepy or noisy if they overclaim. The system should 
 - [x] Low-confidence memories remain searchable but do not become Compose Radar nudges.
 - [x] Provider or local-model failure leaves Compose usable and shows a concise memory-unavailable state.
 - [x] Obsidian write conflicts show a preview and never overwrite user sections silently.
-- [ ] External research failure keeps local dossiers usable.
+- [x] External research failure keeps local dossiers usable.
 - [ ] Deleted or missing source emails mark dependent memories stale until revalidated.
 - [ ] User-dismissed nudges respect dismissal scope: this draft, this thread, this person, or permanently.
 

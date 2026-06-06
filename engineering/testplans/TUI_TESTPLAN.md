@@ -1201,6 +1201,7 @@ Check these states during every applicable lane:
 **Expect:**
 - Memory chat tools are read-only and cannot send, delete, archive, mutate calendar events, or write Obsidian notes.
 - Chat distinguishes email-backed memory, Obsidian-backed memory, research-backed memory, and inference when those sources are present.
+- Research Mode actions are explicit, construct public-identifier-only queries by default, save sourced research notes with URLs and freshness, and leave local dossiers usable when external research is unavailable.
 - Compose Radar shows at most three source-backed nudges and stays hidden or quiet when there is no high-confidence memory.
 - Compose Radar nudges carry typed conflict, callback, open-loop, relationship-context, research-update, and draft-risk metadata plus source evidence, action-state, and configured dismissal scope for later explicit actions.
 - Compose Radar exposes explicit local actions for source inspection, inserting a bounded phrase, dismissal, marking resolved, saving for review, and recording research intent without sending mail, writing Obsidian, or calling external research.

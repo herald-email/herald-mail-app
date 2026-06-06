@@ -649,6 +649,94 @@ func TestObsidianSyncPlanFiltersLowConfidenceAndRejectsUnsafeTargets(t *testing.
 	}
 }
 
+func TestResearchModePlanUsesPublicIdentifiersAndBlocksPrivateContext(t *testing.T) {
+	settings := DefaultSettings()
+	request := ResearchModeRequest{
+		Action:            ResearchActionBeforeReply,
+		PersonName:        "Sergey Brin",
+		Company:           "Cobalt Works",
+		Domain:            "cobalt.example",
+		Role:              "Founder",
+		URL:               "https://cobalt.example/team",
+		PrivateBodyText:   "private salary negotiation details",
+		FullThreadSummary: "private thread recap",
+	}
+
+	plan := BuildResearchModePlan(request, settings)
+	if plan.Ready || plan.Reason != "research mode is disabled" {
+		t.Fatalf("default plan readiness = %#v", plan)
+	}
+	if len(plan.Queries) == 0 || !strings.Contains(plan.Queries[0].Query, "Sergey Brin") || !strings.Contains(plan.Queries[0].Query, "cobalt.example") {
+		t.Fatalf("public query missing identifiers: %#v", plan.Queries)
+	}
+	if strings.Contains(plan.Queries[0].Query, "salary") || strings.Contains(plan.Queries[0].Query, "private thread") {
+		t.Fatalf("query leaked private context: %q", plan.Queries[0].Query)
+	}
+	if got := strings.Join(plan.BlockedPrivateContext, ","); !strings.Contains(got, "private_body_text") || !strings.Contains(got, "full_thread_summary") {
+		t.Fatalf("blocked private context = %#v", plan.BlockedPrivateContext)
+	}
+
+	settings.Research.Enabled = true
+	settings.Research.ExternalOptIn = true
+	plan = BuildResearchModePlan(request, settings)
+	if !plan.Ready || plan.PrivateContextAllowed || len(plan.ApprovedPrivateContext) != 0 {
+		t.Fatalf("opt-in public plan = %#v", plan)
+	}
+
+	settings.Research.PrivateBodiesAllowed = true
+	request.AllowPrivateContext = true
+	plan = BuildResearchModePlan(request, settings)
+	if !plan.PrivateContextAllowed || len(plan.BlockedPrivateContext) != 0 || len(plan.ApprovedPrivateContext) == 0 {
+		t.Fatalf("explicit private context plan = %#v", plan)
+	}
+}
+
+func TestAppendResearchNoteSavesSourcedFreshnessAndVaultTarget(t *testing.T) {
+	ctx := context.Background()
+	store, err := NewFileStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings := DefaultSettings()
+	settings.Directory = store.Root()
+	settings.Destinations.Research = "Research/People"
+	input := ResearchNoteInput{
+		Action:      ResearchActionCompany,
+		Company:     "Cobalt Works",
+		Domain:      "cobalt.example",
+		Summary:     "Cobalt Works announced a hiring pause.",
+		WhatChanged: "Hiring page changed from open roles to waitlist.",
+		URL:         "https://cobalt.example/jobs",
+		Query:       "Cobalt Works cobalt.example latest",
+		RetrievedAt: testTime(),
+		Confidence:  0.88,
+	}
+
+	mem, _, err := store.AppendResearchNote(ctx, input, settings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if mem.Kind != KindResearchNote || mem.Evidence[0].SourceType != SourceResearch || mem.Evidence[0].URL != input.URL {
+		t.Fatalf("research memory = %#v", mem)
+	}
+	if mem.ObsidianTarget != "Research/People/Cobalt Works.md" {
+		t.Fatalf("obsidian target = %q", mem.ObsidianTarget)
+	}
+	if !strings.Contains(mem.Claim, "What changed since last contact") || !strings.Contains(strings.Join(mem.Details.SourceSignals, " "), "from public research") {
+		t.Fatalf("research details = %#v", mem)
+	}
+	listed, err := store.List(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(listed) != 1 || listed[0].ID != mem.ID {
+		t.Fatalf("listed memories = %#v", listed)
+	}
+	if got := ResearchFreshness(testTime(), testTime().Add(31*24*time.Hour), 30); got != FreshnessStale {
+		t.Fatalf("freshness = %q", got)
+	}
+}
+
 func testMemory(claim string) Memory {
 	return testMemoryWithKind(claim, KindOpenQuestion, 0.90)
 }
