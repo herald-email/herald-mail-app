@@ -44,12 +44,16 @@ type Settings struct {
 }
 
 type SourceSettings struct {
-	Folders       []string `yaml:"folders,omitempty" json:"folders,omitempty"`
-	Accounts      []string `yaml:"accounts,omitempty" json:"accounts,omitempty"`
-	Contacts      bool     `yaml:"contacts,omitempty" json:"contacts,omitempty"`
-	Calendar      bool     `yaml:"calendar,omitempty" json:"calendar,omitempty"`
-	Obsidian      bool     `yaml:"obsidian,omitempty" json:"obsidian,omitempty"`
-	ResearchNotes bool     `yaml:"research_notes,omitempty" json:"research_notes,omitempty"`
+	Folders               []string `yaml:"folders,omitempty" json:"folders,omitempty"`
+	Accounts              []string `yaml:"accounts,omitempty" json:"accounts,omitempty"`
+	Contacts              bool     `yaml:"contacts,omitempty" json:"contacts,omitempty"`
+	Calendar              bool     `yaml:"calendar,omitempty" json:"calendar,omitempty"`
+	CalendarLookbackDays  int      `yaml:"calendar_lookback_days,omitempty" json:"calendar_lookback_days,omitempty"`
+	CalendarLookaheadDays int      `yaml:"calendar_lookahead_days,omitempty" json:"calendar_lookahead_days,omitempty"`
+	Obsidian              bool     `yaml:"obsidian,omitempty" json:"obsidian,omitempty"`
+	MaxObsidianNotes      int      `yaml:"max_obsidian_notes,omitempty" json:"max_obsidian_notes,omitempty"`
+	ResearchNotes         bool     `yaml:"research_notes,omitempty" json:"research_notes,omitempty"`
+	MaxResearchNotes      int      `yaml:"max_research_notes,omitempty" json:"max_research_notes,omitempty"`
 
 	contactsSet bool `yaml:"-" json:"-"`
 }
@@ -234,12 +238,16 @@ func (u *UpdateRuleSettings) UnmarshalYAML(value *yaml.Node) error {
 
 func (s *SourceSettings) UnmarshalYAML(value *yaml.Node) error {
 	type rawSources struct {
-		Folders       []string `yaml:"folders"`
-		Accounts      []string `yaml:"accounts"`
-		Contacts      *bool    `yaml:"contacts"`
-		Calendar      bool     `yaml:"calendar"`
-		Obsidian      bool     `yaml:"obsidian"`
-		ResearchNotes bool     `yaml:"research_notes"`
+		Folders               []string `yaml:"folders"`
+		Accounts              []string `yaml:"accounts"`
+		Contacts              *bool    `yaml:"contacts"`
+		Calendar              bool     `yaml:"calendar"`
+		CalendarLookbackDays  int      `yaml:"calendar_lookback_days"`
+		CalendarLookaheadDays int      `yaml:"calendar_lookahead_days"`
+		Obsidian              bool     `yaml:"obsidian"`
+		MaxObsidianNotes      int      `yaml:"max_obsidian_notes"`
+		ResearchNotes         bool     `yaml:"research_notes"`
+		MaxResearchNotes      int      `yaml:"max_research_notes"`
 	}
 	var decoded rawSources
 	if err := value.Decode(&decoded); err != nil {
@@ -252,8 +260,12 @@ func (s *SourceSettings) UnmarshalYAML(value *yaml.Node) error {
 		s.contactsSet = true
 	}
 	s.Calendar = decoded.Calendar
+	s.CalendarLookbackDays = decoded.CalendarLookbackDays
+	s.CalendarLookaheadDays = decoded.CalendarLookaheadDays
 	s.Obsidian = decoded.Obsidian
+	s.MaxObsidianNotes = decoded.MaxObsidianNotes
 	s.ResearchNotes = decoded.ResearchNotes
+	s.MaxResearchNotes = decoded.MaxResearchNotes
 	return nil
 }
 
@@ -280,8 +292,21 @@ func (s *Settings) ApplyDefaults() {
 		s.Sources.Folders = []string{"INBOX", "Sent"}
 	}
 	s.Sources.Folders = CompactStrings(s.Sources.Folders)
+	s.Sources.Accounts = CompactStrings(s.Sources.Accounts)
 	if !s.Sources.contactsSet {
 		s.Sources.Contacts = true
+	}
+	if s.Sources.CalendarLookbackDays <= 0 {
+		s.Sources.CalendarLookbackDays = 30
+	}
+	if s.Sources.CalendarLookaheadDays <= 0 {
+		s.Sources.CalendarLookaheadDays = 90
+	}
+	if s.Sources.MaxObsidianNotes <= 0 {
+		s.Sources.MaxObsidianNotes = 100
+	}
+	if s.Sources.MaxResearchNotes <= 0 {
+		s.Sources.MaxResearchNotes = 50
 	}
 	if strings.TrimSpace(s.Destinations.People) == "" {
 		s.Destinations.People = "People"

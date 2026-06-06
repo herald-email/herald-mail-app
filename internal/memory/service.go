@@ -6,25 +6,40 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
 type EmailSource interface {
 	MemoryEmails(folder string, limit int) ([]EmailSnapshot, error)
 }
 
+type CalendarSource interface {
+	MemoryCalendarEvents(start, end time.Time, limit int) ([]models.CalendarEvent, error)
+}
+
+type SourceBundle struct {
+	Email    EmailSource
+	Calendar CalendarSource
+}
+
 type RefreshResult struct {
-	ScannedFolders int      `json:"scanned_folders"`
-	ScannedEmails  int      `json:"scanned_emails"`
-	Extracted      int      `json:"extracted"`
-	Written        int      `json:"written"`
-	Skipped        int      `json:"skipped"`
-	Errors         []string `json:"errors,omitempty"`
+	ScannedFolders        int      `json:"scanned_folders"`
+	ScannedEmails         int      `json:"scanned_emails"`
+	ScannedCalendarEvents int      `json:"scanned_calendar_events"`
+	ScannedObsidianNotes  int      `json:"scanned_obsidian_notes"`
+	ScannedResearchNotes  int      `json:"scanned_research_notes"`
+	Extracted             int      `json:"extracted"`
+	Written               int      `json:"written"`
+	Skipped               int      `json:"skipped"`
+	Errors                []string `json:"errors,omitempty"`
 }
 
 type Service struct {
 	settings Settings
 	store    *FileStore
 	source   EmailSource
+	calendar CalendarSource
 	extract  Extractor
 	now      func() time.Time
 }
@@ -39,12 +54,17 @@ func NewService(settings Settings, source EmailSource) (*Service, error) {
 }
 
 func NewServiceWithStore(settings Settings, store *FileStore, source EmailSource) *Service {
+	return NewServiceWithSourceBundle(settings, store, SourceBundle{Email: source})
+}
+
+func NewServiceWithSourceBundle(settings Settings, store *FileStore, sources SourceBundle) *Service {
 	settings.ApplyDefaults()
 	now := time.Now
 	return &Service{
 		settings: settings,
 		store:    store,
-		source:   source,
+		source:   sources.Email,
+		calendar: sources.Calendar,
 		now:      now,
 		extract: Extractor{
 			Now:      now,
@@ -63,27 +83,56 @@ func (s *Service) Refresh(ctx context.Context) (RefreshResult, error) {
 	if !s.settings.Enabled {
 		return RefreshResult{}, nil
 	}
-	if s.source == nil {
-		return RefreshResult{}, fmt.Errorf("memory email source is not configured")
-	}
 	var all []EmailSnapshot
 	var result RefreshResult
 	limitPerFolder := 250
-	for _, folder := range s.settings.Sources.Folders {
-		folder = strings.TrimSpace(folder)
-		if folder == "" {
-			continue
+	if s.source == nil {
+		result.Errors = append(result.Errors, "memory email source is not configured")
+	} else {
+		for _, folder := range s.settings.Sources.Folders {
+			folder = strings.TrimSpace(folder)
+			if folder == "" {
+				continue
+			}
+			result.ScannedFolders++
+			emails, err := s.source.MemoryEmails(folder, limitPerFolder)
+			if err != nil {
+				result.Errors = append(result.Errors, fmt.Sprintf("%s: %v", folder, err))
+				continue
+			}
+			result.ScannedEmails += len(emails)
+			all = append(all, emails...)
 		}
-		result.ScannedFolders++
-		emails, err := s.source.MemoryEmails(folder, limitPerFolder)
-		if err != nil {
-			result.Errors = append(result.Errors, fmt.Sprintf("%s: %v", folder, err))
-			continue
-		}
-		result.ScannedEmails += len(emails)
-		all = append(all, emails...)
 	}
 	memories := s.extract.Extract(all)
+	if s.settings.Sources.Calendar {
+		calendarMemories, count, err := s.refreshCalendarMemories(ctx)
+		if err != nil {
+			result.Errors = append(result.Errors, err.Error())
+		} else {
+			result.ScannedCalendarEvents = count
+			memories = append(memories, calendarMemories...)
+		}
+	}
+	if s.settings.Sources.Obsidian {
+		notes, err := LoadConfiguredObsidianNotes(ctx, s.settings)
+		if err != nil {
+			result.Errors = append(result.Errors, fmt.Sprintf("Obsidian notes: %v", err))
+		} else {
+			result.ScannedObsidianNotes = len(notes)
+			memories = append(memories, s.extract.ExtractObsidianNotes(notes)...)
+		}
+	}
+	if s.settings.Sources.ResearchNotes {
+		notes, err := LoadConfiguredResearchNotes(ctx, s.settings)
+		if err != nil {
+			result.Errors = append(result.Errors, fmt.Sprintf("research notes: %v", err))
+		} else {
+			result.ScannedResearchNotes = len(notes)
+			memories = append(memories, s.extract.ExtractResearchNotes(notes)...)
+		}
+	}
+	memories = dedupeMemories(memories)
 	result.Extracted = len(memories)
 	for _, memory := range memories {
 		if err := ctx.Err(); err != nil {
@@ -104,6 +153,37 @@ func (s *Service) Refresh(ctx context.Context) (RefreshResult, error) {
 		return result, fmt.Errorf("memory refresh failed: %s", strings.Join(result.Errors, "; "))
 	}
 	return result, nil
+}
+
+func (s *Service) refreshCalendarMemories(ctx context.Context) ([]Memory, int, error) {
+	if s.calendar == nil {
+		return nil, 0, fmt.Errorf("calendar memory source is not configured")
+	}
+	start, end := s.calendarMemoryWindow()
+	events, err := s.calendar.MemoryCalendarEvents(start, end, 250)
+	if err != nil {
+		return nil, 0, fmt.Errorf("calendar events: %w", err)
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, len(events), err
+	}
+	return s.extract.ExtractCalendarEvents(events), len(events), nil
+}
+
+func (s *Service) calendarMemoryWindow() (time.Time, time.Time) {
+	now := s.now()
+	if now.IsZero() {
+		now = time.Now()
+	}
+	lookback := s.settings.Sources.CalendarLookbackDays
+	if lookback <= 0 {
+		lookback = 30
+	}
+	lookahead := s.settings.Sources.CalendarLookaheadDays
+	if lookahead <= 0 {
+		lookahead = 90
+	}
+	return now.AddDate(0, 0, -lookback), now.AddDate(0, 0, lookahead)
 }
 
 func (s *Service) Search(ctx context.Context, q Query) ([]Memory, error) {

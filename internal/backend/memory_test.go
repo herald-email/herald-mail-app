@@ -105,6 +105,40 @@ func TestLocalMemoryEmailSourceReadsCachedHeadersAndBodies(t *testing.T) {
 	}
 }
 
+func TestLocalMemoryCalendarSourceReadsCachedScopedEvents(t *testing.T) {
+	store, err := cache.New(":memory:")
+	if err != nil {
+		t.Fatalf("cache.New: %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	start := time.Date(2026, 6, 7, 9, 0, 0, 0, time.UTC)
+	event := models.CalendarEvent{
+		Ref: models.EventRef{
+			SourceID:   models.DefaultCalendarSourceID,
+			AccountID:  models.DefaultAccountID,
+			CalendarID: "primary",
+			EventID:    "evt-memory-calendar",
+		},
+		Title:          "Sergey interview loop",
+		Description:    "Discuss next steps.",
+		Start:          start,
+		End:            start.Add(time.Hour),
+		OrganizerEmail: "sergey@example.com",
+	}
+	if err := store.PutCalendarEvent(event); err != nil {
+		t.Fatalf("PutCalendarEvent: %v", err)
+	}
+	source := localMemoryEmailSource{cache: store}
+
+	got, err := source.MemoryCalendarEvents(start.Add(-time.Hour), start.Add(2*time.Hour), 10)
+	if err != nil {
+		t.Fatalf("MemoryCalendarEvents: %v", err)
+	}
+	if len(got) != 1 || got[0].Ref.EventID != event.Ref.EventID || got[0].Title != event.Title {
+		t.Fatalf("calendar memory events = %#v", got)
+	}
+}
+
 func TestDemoBackendMemoryReplyPrepReturnsSourceBackedNudges(t *testing.T) {
 	demoBackend := NewDemoBackend()
 

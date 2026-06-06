@@ -91,6 +91,8 @@ Private email bodies, private note text, attachments, and full thread summaries 
 
 Memory files are local by default at `~/.herald/memories`. Records store compact claims, source evidence pointers, bounded snippets, confidence, freshness, prompt version, and optional Obsidian target metadata. They are not a second raw-mail archive.
 
+Optional calendar, Obsidian, and research-note sources are off by default. When enabled, calendar ingestion reads cached calendar events, Obsidian ingestion reads Markdown only under configured destination folders, and research-note ingestion reads saved Markdown notes that contain explicit source URLs.
+
 Obsidian sync writes only after preview approval and only to configured vault targets. Research Mode is explicit and uses public identifiers by default. MCP and daemon servers do not expose a memory API in the current UI-first release.
 
 ## Troubleshooting

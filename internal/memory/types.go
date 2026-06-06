@@ -172,6 +172,13 @@ type EmailSnapshot struct {
 	HasEmbedding       bool
 }
 
+type ObsidianNoteSnapshot struct {
+	Path       string
+	Title      string
+	BodyText   string
+	ModifiedAt time.Time
+}
+
 type Query struct {
 	Text                 string   `json:"text,omitempty" yaml:"text,omitempty"`
 	People               []string `json:"people,omitempty" yaml:"people,omitempty"`

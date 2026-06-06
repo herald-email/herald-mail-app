@@ -47,6 +47,13 @@ memories:
   sources:
     folders: ["INBOX", "Sent"]
     contacts: true
+    calendar: false
+    calendar_lookback_days: 30
+    calendar_lookahead_days: 90
+    obsidian: false
+    max_obsidian_notes: 100
+    research_notes: false
+    max_research_notes: 50
   obsidian:
     vault_path: ""
     frontmatter_mode: minimal
@@ -127,9 +134,13 @@ memories:
 | `memories.directory` | Local immutable memory record directory. Default `~/.herald/memories`. |
 | `memories.sources.folders` | Mail folders used for cached-mail extraction. Default `INBOX` and `Sent`. |
 | `memories.sources.contacts` | Includes contact enrichment metadata when available. Default `true`. |
-| `memories.sources.calendar` | Reserved source toggle for calendar-backed memory ingestion. Default `false`. |
-| `memories.sources.obsidian` | Reserved source toggle for Obsidian note ingestion. Default `false`. |
-| `memories.sources.research_notes` | Includes explicit saved research notes in memory views when present. |
+| `memories.sources.calendar` | Opt-in cached calendar event ingestion. Default `false`. |
+| `memories.sources.calendar_lookback_days` | Days of past cached calendar events to inspect when calendar ingestion is enabled. Default `30`. |
+| `memories.sources.calendar_lookahead_days` | Days of upcoming cached calendar events to inspect when calendar ingestion is enabled. Default `90`. |
+| `memories.sources.obsidian` | Opt-in ingestion of Markdown note bodies under configured Obsidian destination folders. Default `false`. |
+| `memories.sources.max_obsidian_notes` | Maximum configured Obsidian Markdown notes to inspect per refresh. Default `100`. |
+| `memories.sources.research_notes` | Opt-in ingestion of saved research Markdown notes with explicit source URLs. Default `false`. |
+| `memories.sources.max_research_notes` | Maximum saved research notes to inspect per refresh. Default `50`. |
 | `memories.destinations.people` | Obsidian people note folder. Default `People`. |
 | `memories.destinations.companies` | Obsidian company/job note folder. Default `Job search/active`. |
 | `memories.destinations.daily_briefing` | Daily memory briefing folder. Default `Scheduled Task Artifacts`. |

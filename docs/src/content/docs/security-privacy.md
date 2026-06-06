@@ -47,6 +47,8 @@ Semantic search stores embeddings in the local SQLite cache. Embeddings are tied
 
 Research Mode is explicit. By default, external research queries use public identifiers such as person name, company, domain, role, or URL, and do not include private email bodies, private note text, attachments, or full thread summaries.
 
+Herald Memories source expansion is opt-in. Calendar memories use cached events, Obsidian note ingestion is bounded to configured destination folders in the vault, and saved research-note ingestion requires explicit URLs in local Markdown notes.
+
 ## MCP behavior
 
 The MCP server runs over stdio. It exposes cached email data to whatever AI client you connect it to. Configure it only in clients you trust, and remember that the client may include returned email data in its own model requests.

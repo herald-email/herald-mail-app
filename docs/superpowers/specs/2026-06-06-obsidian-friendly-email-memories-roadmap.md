@@ -159,6 +159,7 @@ The implementation should add a memory service behind the backend/agent boundary
 - [x] Add memory storage and retrieval behind backend-facing methods rather than direct SQLite access from Bubble Tea.
 - [x] Add extraction jobs that run through the existing AI scheduler with interactive-before-background priority.
 - [x] Reuse existing body-cache, classification, contact-enrichment, thread-header, and embedding-cache signals before fetching additional message bodies.
+- [x] Ingest opt-in cached calendar events, configured Obsidian note bodies, and saved research notes without broad vault crawling or silent external web research.
 - [x] Add memory-aware Gollem tools after the Gollem chat-agent runner is in place.
 - [x] Keep external research as a separate opt-in capability from local memory extraction.
 - [x] Keep Obsidian sync as an export/sync adapter so the local memory index remains usable without Obsidian.

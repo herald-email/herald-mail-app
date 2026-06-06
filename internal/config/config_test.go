@@ -799,7 +799,15 @@ memories:
   directory: /tmp/herald-memory-test
   sources:
     folders: [INBOX]
+    accounts: [work]
     contacts: false
+    calendar: true
+    calendar_lookback_days: 14
+    calendar_lookahead_days: 45
+    obsidian: true
+    max_obsidian_notes: 12
+    research_notes: true
+    max_research_notes: 7
   obsidian:
     yaml_headers: false
     link_mode: markdown
@@ -818,6 +826,13 @@ memories:
 	}
 	if loaded.Memories.Sources.Contacts {
 		t.Fatal("explicit memories.sources.contacts false should be preserved")
+	}
+	if !loaded.Memories.Sources.Calendar || loaded.Memories.Sources.CalendarLookbackDays != 14 || loaded.Memories.Sources.CalendarLookaheadDays != 45 {
+		t.Fatalf("calendar source knobs = %#v", loaded.Memories.Sources)
+	}
+	if !loaded.Memories.Sources.Obsidian || loaded.Memories.Sources.MaxObsidianNotes != 12 ||
+		!loaded.Memories.Sources.ResearchNotes || loaded.Memories.Sources.MaxResearchNotes != 7 {
+		t.Fatalf("Obsidian/research source knobs = %#v", loaded.Memories.Sources)
 	}
 	if loaded.Memories.Directory != "/tmp/herald-memory-test" {
 		t.Fatalf("directory = %q", loaded.Memories.Directory)

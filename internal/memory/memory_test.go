@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -260,6 +261,171 @@ func TestExtractorBuildsJobSearchMemoriesFromInboxAndSent(t *testing.T) {
 		}
 		if strings.Contains(memory.Details.SourceQuote, "availability by Friday") && len([]rune(memory.Details.SourceQuote)) > 300 {
 			t.Fatalf("source quote not bounded: %q", memory.Details.SourceQuote)
+		}
+	}
+}
+
+type staticMemoryEmailSource struct{}
+
+func (s staticMemoryEmailSource) MemoryEmails(_ string, _ int) ([]EmailSnapshot, error) {
+	return nil, nil
+}
+
+type staticMemoryCalendarSource struct {
+	events []models.CalendarEvent
+}
+
+func (s staticMemoryCalendarSource) MemoryCalendarEvents(_ time.Time, _ time.Time, _ int) ([]models.CalendarEvent, error) {
+	return s.events, nil
+}
+
+func TestExtractorBuildsCalendarObsidianAndResearchMemories(t *testing.T) {
+	settings := DefaultSettings()
+	settings.Sources.Calendar = true
+	settings.Sources.Obsidian = true
+	settings.Sources.ResearchNotes = true
+	extractor := Extractor{Now: testTime, Settings: settings}
+	event := models.CalendarEvent{
+		Ref: models.EventRef{
+			SourceID:   "work-calendar",
+			AccountID:  "work",
+			CalendarID: "primary",
+			EventID:    "evt-interview",
+			LocalID:    "calendar:work:primary:evt-interview",
+		},
+		Title:          "Sergey interview loop",
+		Description:    "Discuss platform role and follow-up timeline.",
+		Location:       "Meet",
+		Start:          testTime().Add(24 * time.Hour),
+		End:            testTime().Add(25 * time.Hour),
+		Organizer:      "Sergey Petrov",
+		OrganizerEmail: "sergey@example.com",
+		Attendees: []models.CalendarAttendee{{
+			Name:  "Me",
+			Email: "me@example.com",
+			RSVP:  "accepted",
+		}},
+	}
+	note := ObsidianNoteSnapshot{
+		Path:       "People/Sergey Petrov.md",
+		Title:      "Sergey Petrov",
+		BodyText:   "Sergey prefers concise written follow-ups. Avoid long recaps.",
+		ModifiedAt: testTime().Add(-2 * time.Hour),
+	}
+	research := ResearchNoteInput{
+		Action:      ResearchActionCompany,
+		Company:     "Cobalt Works",
+		Domain:      "cobalt.example",
+		Title:       "Cobalt Works hiring update",
+		Summary:     "Cobalt Works opened a new platform role.",
+		WhatChanged: "The role moved from draft to public posting.",
+		URL:         "https://example.com/cobalt-role",
+		RetrievedAt: testTime().Add(-time.Hour),
+		Confidence:  0.88,
+	}
+
+	memories := append(extractor.ExtractCalendarEvents([]models.CalendarEvent{event}), extractor.ExtractObsidianNotes([]ObsidianNoteSnapshot{note})...)
+	memories = append(memories, extractor.ExtractResearchNotes([]ResearchNoteInput{research})...)
+
+	if !hasMemorySource(memories, SourceCalendar) || !hasMemorySource(memories, SourceObsidian) || !hasMemorySource(memories, SourceResearch) {
+		t.Fatalf("expected calendar, Obsidian, and research memories, got %#v", memories)
+	}
+	for _, memory := range memories {
+		if memory.ID == "" || len(memory.Evidence) == 0 {
+			t.Fatalf("memory missing immutable id/evidence: %#v", memory)
+		}
+		if memory.Evidence[0].SourceType == SourceCalendar && (memory.Evidence[0].ID == "" || memory.Evidence[0].SourceID != "work-calendar") {
+			t.Fatalf("calendar evidence missing stable scoped ref: %#v", memory.Evidence[0])
+		}
+		if memory.Evidence[0].SourceType == SourceObsidian && memory.ObsidianTarget != note.Path {
+			t.Fatalf("obsidian memory target = %q, want %q", memory.ObsidianTarget, note.Path)
+		}
+		if len([]rune(memory.Evidence[0].Snippet)) > 300 {
+			t.Fatalf("evidence snippet was not bounded: %q", memory.Evidence[0].Snippet)
+		}
+	}
+}
+
+func TestServiceRefreshIngestsOptInCalendarObsidianAndResearchSources(t *testing.T) {
+	vault := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(vault, "People"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(vault, "Research"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(vault, "People", "Sergey Petrov.md"), []byte(`---
+company: Cobalt Works
+---
+# Sergey Petrov
+
+Sergey prefers concise follow-ups and asked about platform scope.
+
+<!-- HERALD:MEMORIES:BEGIN -->
+## Herald Memories
+
+Generated content that must not be re-ingested.
+<!-- HERALD:MEMORIES:END -->
+`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(vault, "Research", "Cobalt Works.md"), []byte(`# Cobalt Works
+
+Cobalt Works announced a platform role.
+Source: https://example.com/cobalt-role
+`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	store, err := NewFileStoreWithClock(t.TempDir(), testTime)
+	if err != nil {
+		t.Fatalf("NewFileStoreWithClock: %v", err)
+	}
+	settings := DefaultSettings()
+	settings.Directory = store.Root()
+	settings.Sources.Calendar = true
+	settings.Sources.Obsidian = true
+	settings.Sources.ResearchNotes = true
+	settings.Sources.MaxObsidianNotes = 10
+	settings.Sources.MaxResearchNotes = 10
+	settings.Obsidian.VaultPath = vault
+	event := models.CalendarEvent{
+		Ref: models.EventRef{
+			SourceID:   "work-calendar",
+			AccountID:  "work",
+			CalendarID: "primary",
+			EventID:    "evt-memory-refresh",
+			LocalID:    "calendar:work:primary:evt-memory-refresh",
+		},
+		Title:          "Cobalt Works interview",
+		Description:    "Discuss next steps with Sergey.",
+		Start:          testTime(),
+		End:            testTime().Add(time.Hour),
+		OrganizerEmail: "sergey@example.com",
+	}
+	service := NewServiceWithSourceBundle(settings, store, SourceBundle{
+		Email:    staticMemoryEmailSource{},
+		Calendar: staticMemoryCalendarSource{events: []models.CalendarEvent{event}},
+	})
+
+	result, err := service.Refresh(context.Background())
+	if err != nil {
+		t.Fatalf("Refresh: %v (%#v)", err, result)
+	}
+	if result.ScannedCalendarEvents != 1 || result.ScannedObsidianNotes == 0 || result.ScannedResearchNotes != 1 {
+		t.Fatalf("refresh source counts = %#v", result)
+	}
+	listed, err := store.List(context.Background())
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	for _, sourceType := range []string{SourceCalendar, SourceObsidian, SourceResearch} {
+		if !hasMemorySource(listed, sourceType) {
+			t.Fatalf("listed memories missing %s source: %#v", sourceType, listed)
+		}
+	}
+	for _, memory := range listed {
+		if strings.Contains(memory.Claim, "Generated content") || strings.Contains(memory.Details.SourceQuote, "Generated content") {
+			t.Fatalf("generated Obsidian section was re-ingested: %#v", memory)
 		}
 	}
 }
@@ -1221,6 +1387,17 @@ func hasMemoryKind(memories []Memory, kind string) bool {
 	for _, memory := range memories {
 		if memory.Kind == kind {
 			return true
+		}
+	}
+	return false
+}
+
+func hasMemorySource(memories []Memory, sourceType string) bool {
+	for _, memory := range memories {
+		for _, evidence := range memory.Evidence {
+			if evidence.SourceType == sourceType {
+				return true
+			}
 		}
 	}
 	return false

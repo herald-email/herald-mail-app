@@ -8,6 +8,7 @@ import (
 	"net/mail"
 	"os/exec"
 	"runtime"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -265,10 +266,15 @@ func NewLocal(cfg *config.Config, configPath string, classifier ai.AIClient) (*L
 		StoragePolicy: b.currentCacheStoragePolicy,
 	})
 	if cfg.Memories.Enabled {
-		service, err := memory.NewService(cfg.Memories, localMemoryEmailSource{cache: c})
+		source := localMemoryEmailSource{cache: c, cfg: cfg, settings: cfg.Memories}
+		store, err := memory.NewFileStore(cfg.Memories.Directory)
 		if err != nil {
 			logger.Warn("Herald Memories unavailable: %v", err)
 		} else {
+			service := memory.NewServiceWithSourceBundle(cfg.Memories, store, memory.SourceBundle{
+				Email:    source,
+				Calendar: source,
+			})
 			b.memoryService = service
 		}
 	}
@@ -1618,7 +1624,9 @@ func (b *LocalBackend) UpsertContacts(addrs []models.ContactAddr, direction stri
 // --- Herald Memories ---
 
 type localMemoryEmailSource struct {
-	cache *cache.Cache
+	cache    *cache.Cache
+	cfg      *config.Config
+	settings memory.Settings
 }
 
 func (s localMemoryEmailSource) MemoryEmails(folder string, limit int) ([]memory.EmailSnapshot, error) {
@@ -1670,6 +1678,70 @@ func (s localMemoryEmailSource) MemoryEmails(folder string, limit int) ([]memory
 		out = append(out, snapshot)
 	}
 	return out, nil
+}
+
+func (s localMemoryEmailSource) MemoryCalendarEvents(start, end time.Time, limit int) ([]models.CalendarEvent, error) {
+	if s.cache == nil {
+		return nil, nil
+	}
+	scopes := s.memoryCalendarScopes()
+	out := make([]models.CalendarEvent, 0)
+	for _, scope := range scopes {
+		events, err := s.cache.ListCalendarAgendaEvents(scope.sourceID, scope.accountID, start, end)
+		if err != nil {
+			return out, err
+		}
+		out = append(out, events...)
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		return out[i].Start.Before(out[j].Start)
+	})
+	if limit > 0 && len(out) > limit {
+		out = out[:limit]
+	}
+	return out, nil
+}
+
+type memoryCalendarScope struct {
+	sourceID  models.SourceID
+	accountID models.AccountID
+}
+
+func (s localMemoryEmailSource) memoryCalendarScopes() []memoryCalendarScope {
+	allowedAccounts := make(map[string]bool)
+	for _, account := range s.settings.Sources.Accounts {
+		account = strings.TrimSpace(account)
+		if account != "" {
+			allowedAccounts[strings.ToLower(account)] = true
+		}
+	}
+	seen := make(map[string]bool)
+	var scopes []memoryCalendarScope
+	if s.cfg != nil {
+		for _, source := range s.cfg.Sources {
+			if strings.TrimSpace(source.Kind) != string(models.SourceKindCalendar) {
+				continue
+			}
+			accountID := models.NormalizeAccountID(models.AccountID(source.AccountID))
+			if len(allowedAccounts) > 0 && !allowedAccounts[strings.ToLower(string(accountID))] {
+				continue
+			}
+			sourceID := models.NormalizeSourceID(models.SourceID(source.ID), models.DefaultCalendarSourceID)
+			key := string(sourceID) + "\x00" + string(accountID)
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+			scopes = append(scopes, memoryCalendarScope{sourceID: sourceID, accountID: accountID})
+		}
+	}
+	if len(scopes) == 0 {
+		scopes = append(scopes, memoryCalendarScope{
+			sourceID:  models.DefaultCalendarSourceID,
+			accountID: models.DefaultAccountID,
+		})
+	}
+	return scopes
 }
 
 func localMemoryClassification(email *models.EmailData, classifications map[string]string) string {
