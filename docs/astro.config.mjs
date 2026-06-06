@@ -61,6 +61,7 @@ export default defineConfig({
             { label: 'Overview', slug: '' },
             { label: "What's New", slug: 'whats-new-in-v0-6' },
             { label: 'Install and run', slug: 'getting-started' },
+            { label: 'First 5 Minutes', slug: 'first-5-minutes' },
             { label: 'Nightly Builds', slug: 'nightly-builds' },
             { label: 'First-run wizard', slug: 'first-run-wizard' },
             { label: 'Run without email', slug: 'demo-mode' },
