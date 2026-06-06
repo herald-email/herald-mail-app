@@ -1233,7 +1233,8 @@ Check these states during every applicable lane:
 - The Obsidian-friendly toggle can hide YAML headers while preserving generated-section metadata inside Herald markers.
 - Saving from `Settings > Memories` persists only the `memories` config subtree and returns to the Settings menu.
 - Sync preview shows the destination path, generated section, frontmatter/link/tag mode, and source evidence before any write.
-- Applying a generated-section update preserves user-authored content outside stable Herald markers.
+- Applying a generated-section update requires an explicit approved write flow, writes only within the configured vault, and preserves user-authored content outside stable Herald markers.
+- `Settings > Memories` shows Obsidian write state: pending writes, last applied writes, failed writes, last run, and whether the latest flow was approved or still needs preview approval.
 
 ### TC-18G — Herald Memories contact dossiers
 

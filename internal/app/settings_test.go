@@ -4,6 +4,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/huh/v2"
@@ -2210,6 +2211,32 @@ func TestSettingsPanelMemoriesSavePersistsMemorySubtree(t *testing.T) {
 	}
 	if !mem.Research.ExternalOptIn {
 		t.Fatal("research opt-in should be preserved, not reset by settings save")
+	}
+}
+
+func TestSettingsMemoryStatusShowsObsidianWriteState(t *testing.T) {
+	s := NewSettings(SettingsModePanel, nil)
+	s.memoryObsidianEnabled = true
+	s.memoryVaultPath = "/tmp/Life organizer"
+	s.memoryObsidianSyncState = memory.ObsidianSyncState{
+		Enabled:         true,
+		VaultPath:       "/tmp/Life organizer",
+		PendingWrites:   2,
+		AppliedWrites:   3,
+		FailedWrites:    1,
+		LastRun:         time.Date(2026, 6, 6, 9, 30, 0, 0, time.Local),
+		PreviewRequired: true,
+	}
+
+	rendered := s.memoryStatusDescription()
+	for _, want := range []string{
+		"Obsidian writes: pending 2 / applied 3 / failed 1",
+		"last 2026-06-06 09:30",
+		"needs preview approval",
+	} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("memory status missing %q:\n%s", want, rendered)
+		}
 	}
 }
 

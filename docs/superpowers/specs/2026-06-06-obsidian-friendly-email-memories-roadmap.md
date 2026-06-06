@@ -6,7 +6,7 @@ Herald should turn important email history into local, source-backed memory that
 
 - [x] Give users a trustworthy answer to "what should I remember before I reply?"
 - [x] Make Sent mail a first-class source because user replies reveal commitments, decisions, tone, and resolved loops.
-- [ ] Produce memory artifacts that can sync to an Obsidian vault without becoming a separate closed database.
+- [x] Produce memory artifacts that can sync to an Obsidian vault without becoming a separate closed database.
 - [x] Keep every factual claim tied to source evidence from email, notes, calendar context, or explicit research.
 
 ## Product Positioning
@@ -29,7 +29,7 @@ Herald already has most of the raw ingredients: cached email metadata, body cach
 - [x] Chat has a visible drawer, but the current legacy runtime is scheduled for Gollem replacement.
 - [x] The user's Obsidian vault already uses `People/`, `Job search/active`, `Job search/backlog`, `Job search/done`, and `Scheduled Task Artifacts/` as durable surfaces.
 - [x] Herald has a first-class memory model, reply-prep nudge model, immutable local store, and Obsidian generated-section preview contract.
-- [ ] Herald does not yet have full track lifecycle, dossier UI, or approved Obsidian write flows.
+- [x] Herald has track lifecycle, dossier UI, and approved Obsidian write-flow foundations for generated Markdown sections.
 
 ## User Jobs
 
@@ -112,7 +112,7 @@ The feature should be tweakable without making users design a memory system from
 - [x] Surface the shipped safe defaults in Settings: immutable local records, configured cached-mail sources, external research opt-in, and private body text never sent to web research by default.
 - [x] Provide a Settings screen section that summarizes memory status, configured vault path, prompt template count, update rules, and confidence thresholds.
 - [x] Add read-only total, stale, and review-needed memory counts to Settings from the immutable local store without mutating memory records.
-- [ ] Extend the Settings screen section with last run, pending writes, failed writes, and approved write-flow state once Obsidian writes exist.
+- [x] Extend the Settings screen section with last run, pending writes, failed writes, and approved write-flow state once Obsidian writes exist.
 
 ## Prompt Surface
 
@@ -171,7 +171,7 @@ The roadmap is ordered so the feature becomes useful before it becomes broad. Th
 - [x] **M1: Local email memories MVP** - extract last contact, last user reply, open questions, commitments, deadlines, people, company, topic, evidence, prompt version, confidence, and stale state from cached Inbox plus Sent messages.
 - [x] **M2: Memory-aware chat tools** - add read-only Gollem tools for contact history, company tracks, related replies, open loops, and reply-prep context.
 - [x] Track lifecycle assembly derives active, waiting, stale, resolved, backlog, and done track views from immutable source-backed memories.
-- [ ] **M3: Obsidian sync preview and settings** - configure vault path, memory destinations, Obsidian output profile, update cadence, prompt templates, confidence thresholds, generated sections, and write previews before saving.
+- [x] **M3: Obsidian sync preview and settings** - configure vault path, memory destinations, Obsidian output profile, update cadence, prompt templates, confidence thresholds, generated sections, and write previews before saving.
 - [x] **M4: Compose Radar v1** - surface source-backed nudges for job-search replies and high-confidence people callbacks, with open/dismiss/insert actions.
 - [x] Compose Radar refreshes reply-prep nudges after relevant draft context changes without letting stale results replace newer context.
 - [x] Compose Radar nudges carry typed conflict/callback/open-loop/relationship/research/draft-risk states plus action-state and dismissal-scope metadata.

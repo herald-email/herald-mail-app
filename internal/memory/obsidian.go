@@ -1,17 +1,29 @@
 package memory
 
 import (
+	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 	"time"
 )
 
+var (
+	ErrObsidianSyncDisabled        = errors.New("obsidian sync is disabled")
+	ErrObsidianVaultPathRequired   = errors.New("obsidian vault path is required")
+	ErrObsidianPreviewApprovalNeed = errors.New("obsidian sync preview approval required")
+)
+
 const (
 	generatedBegin = "<!-- HERALD:MEMORIES:BEGIN -->"
 	generatedEnd   = "<!-- HERALD:MEMORIES:END -->"
 )
+
+const obsidianSyncStateRelPath = "state/obsidian_sync.json"
 
 type NotePreview struct {
 	Path              string   `json:"path" yaml:"path"`
@@ -24,6 +36,42 @@ type NotePreview struct {
 	SourceEvidenceIDs []string `json:"source_evidence_ids,omitempty" yaml:"source_evidence_ids,omitempty"`
 	WouldCreate       bool     `json:"would_create" yaml:"would_create"`
 	WouldUpdate       bool     `json:"would_update" yaml:"would_update"`
+}
+
+type ObsidianSyncState struct {
+	Enabled         bool      `json:"enabled" yaml:"enabled"`
+	VaultPath       string    `json:"vault_path,omitempty" yaml:"vault_path,omitempty"`
+	LastRun         time.Time `json:"last_run,omitempty" yaml:"last_run,omitempty"`
+	PendingWrites   int       `json:"pending_writes" yaml:"pending_writes"`
+	CreatedNotes    int       `json:"created_notes" yaml:"created_notes"`
+	UpdatedNotes    int       `json:"updated_notes" yaml:"updated_notes"`
+	UnchangedNotes  int       `json:"unchanged_notes" yaml:"unchanged_notes"`
+	AppliedWrites   int       `json:"applied_writes" yaml:"applied_writes"`
+	FailedWrites    int       `json:"failed_writes" yaml:"failed_writes"`
+	Approved        bool      `json:"approved" yaml:"approved"`
+	PreviewRequired bool      `json:"preview_required" yaml:"preview_required"`
+	Unavailable     bool      `json:"unavailable,omitempty" yaml:"unavailable,omitempty"`
+	Error           string    `json:"error,omitempty" yaml:"error,omitempty"`
+}
+
+type ObsidianSyncPlan struct {
+	VaultPath       string            `json:"vault_path" yaml:"vault_path"`
+	GeneratedAt     time.Time         `json:"generated_at" yaml:"generated_at"`
+	Approved        bool              `json:"approved" yaml:"approved"`
+	PreviewRequired bool              `json:"preview_required" yaml:"preview_required"`
+	Previews        []NotePreview     `json:"previews" yaml:"previews"`
+	State           ObsidianSyncState `json:"state" yaml:"state"`
+}
+
+type ObsidianSyncFailure struct {
+	Path  string `json:"path" yaml:"path"`
+	Error string `json:"error" yaml:"error"`
+}
+
+type ObsidianSyncResult struct {
+	State    ObsidianSyncState     `json:"state" yaml:"state"`
+	Written  []string              `json:"written,omitempty" yaml:"written,omitempty"`
+	Failures []ObsidianSyncFailure `json:"failures,omitempty" yaml:"failures,omitempty"`
 }
 
 func PreviewObsidianSync(memories []Memory, settings Settings, existingByPath map[string]string) []NotePreview {
@@ -54,6 +102,215 @@ func PreviewObsidianSync(memories []Memory, settings Settings, existingByPath ma
 		})
 	}
 	return previews
+}
+
+func PlanObsidianSync(ctx context.Context, memories []Memory, settings Settings, approved bool) (ObsidianSyncPlan, error) {
+	if err := ctx.Err(); err != nil {
+		return ObsidianSyncPlan{}, err
+	}
+	settings.ApplyDefaults()
+	vaultRoot, err := obsidianVaultRoot(settings)
+	if err != nil {
+		return ObsidianSyncPlan{}, err
+	}
+	memories = ObsidianSyncEligibleMemories(memories, settings)
+	byPath := groupMemoriesByTarget(memories, settings)
+	existingByPath := make(map[string]string, len(byPath))
+	for path := range byPath {
+		if err := ctx.Err(); err != nil {
+			return ObsidianSyncPlan{}, err
+		}
+		notePath, err := obsidianSafeNotePath(vaultRoot, path)
+		if err != nil {
+			return ObsidianSyncPlan{}, err
+		}
+		data, err := os.ReadFile(notePath)
+		if err == nil {
+			existingByPath[path] = string(data)
+			continue
+		}
+		if !errors.Is(err, os.ErrNotExist) {
+			return ObsidianSyncPlan{}, fmt.Errorf("read Obsidian note %s: %w", path, err)
+		}
+	}
+	previews := PreviewObsidianSync(memories, settings, existingByPath)
+	state := obsidianSyncStateFromPreviews(settings, vaultRoot, previews, approved)
+	return ObsidianSyncPlan{
+		VaultPath:       vaultRoot,
+		GeneratedAt:     time.Now(),
+		Approved:        approved,
+		PreviewRequired: state.PreviewRequired,
+		Previews:        previews,
+		State:           state,
+	}, nil
+}
+
+func (s *FileStore) PlanObsidianSync(ctx context.Context, settings Settings, approved bool) (ObsidianSyncPlan, error) {
+	if err := ctx.Err(); err != nil {
+		return ObsidianSyncPlan{}, err
+	}
+	if s == nil {
+		return ObsidianSyncPlan{}, fmt.Errorf("memory store is nil")
+	}
+	memories, err := s.List(ctx)
+	if err != nil {
+		return ObsidianSyncPlan{}, err
+	}
+	return PlanObsidianSync(ctx, memories, settings, approved)
+}
+
+func (s *FileStore) ApplyObsidianSync(ctx context.Context, plan ObsidianSyncPlan) (ObsidianSyncResult, error) {
+	if err := ctx.Err(); err != nil {
+		return ObsidianSyncResult{}, err
+	}
+	if s == nil {
+		return ObsidianSyncResult{}, fmt.Errorf("memory store is nil")
+	}
+	result := ObsidianSyncResult{State: plan.State}
+	if plan.PreviewRequired && !plan.Approved {
+		result.State.Error = ErrObsidianPreviewApprovalNeed.Error()
+		return result, ErrObsidianPreviewApprovalNeed
+	}
+	state := plan.State
+	state.LastRun = time.Now()
+	state.AppliedWrites = 0
+	state.FailedWrites = 0
+	state.Approved = plan.Approved || !plan.PreviewRequired
+	state.PreviewRequired = false
+	state.Error = ""
+	for _, preview := range plan.Previews {
+		if err := ctx.Err(); err != nil {
+			return result, err
+		}
+		if !preview.WouldCreate && !preview.WouldUpdate {
+			continue
+		}
+		notePath, err := obsidianSafeNotePath(plan.VaultPath, preview.Path)
+		if err == nil {
+			err = os.MkdirAll(filepath.Dir(notePath), 0o700)
+		}
+		if err == nil {
+			err = os.WriteFile(notePath, []byte(preview.Merged), 0o600)
+		}
+		if err != nil {
+			result.Failures = append(result.Failures, ObsidianSyncFailure{Path: preview.Path, Error: err.Error()})
+			continue
+		}
+		result.Written = append(result.Written, preview.Path)
+	}
+	state.AppliedWrites = len(result.Written)
+	state.FailedWrites = len(result.Failures)
+	state.PendingWrites = state.FailedWrites
+	if state.FailedWrites > 0 {
+		state.Error = fmt.Sprintf("%d Obsidian write(s) failed", state.FailedWrites)
+	}
+	result.State = state
+	if err := s.writeObsidianSyncState(ctx, state); err != nil {
+		return result, err
+	}
+	if len(result.Failures) > 0 {
+		return result, errors.New(state.Error)
+	}
+	return result, nil
+}
+
+func ObsidianSyncEligibleMemories(memories []Memory, settings Settings) []Memory {
+	settings.ApplyDefaults()
+	threshold := settings.Thresholds.ObsidianWrite
+	if threshold <= 0 {
+		threshold = 0.70
+	}
+	out := make([]Memory, 0, len(memories))
+	for _, memory := range memories {
+		if memory.Confidence < threshold {
+			continue
+		}
+		if len(memory.Evidence) == 0 {
+			continue
+		}
+		if strings.EqualFold(strings.TrimSpace(memory.Status), StatusSourceMissing) {
+			continue
+		}
+		out = append(out, memory)
+	}
+	return out
+}
+
+func ObsidianSyncStateForSettings(ctx context.Context, settings Settings) ObsidianSyncState {
+	settings.ApplyDefaults()
+	state := ObsidianSyncState{
+		Enabled:   settings.Obsidian.Enabled,
+		VaultPath: strings.TrimSpace(settings.Obsidian.VaultPath),
+	}
+	if !settings.Obsidian.Enabled {
+		return state
+	}
+	store, err := NewFileStore(settings.Directory)
+	if err != nil {
+		state.Unavailable = true
+		state.Error = err.Error()
+		return state
+	}
+	if prior, err := store.ReadObsidianSyncState(ctx); err == nil {
+		state = prior
+		state.Enabled = settings.Obsidian.Enabled
+		state.VaultPath = strings.TrimSpace(settings.Obsidian.VaultPath)
+	}
+	plan, err := store.PlanObsidianSync(ctx, settings, false)
+	if err != nil {
+		state.Unavailable = true
+		state.Error = err.Error()
+		return state
+	}
+	state.VaultPath = plan.VaultPath
+	state.PendingWrites = plan.State.PendingWrites
+	state.CreatedNotes = plan.State.CreatedNotes
+	state.UpdatedNotes = plan.State.UpdatedNotes
+	state.UnchangedNotes = plan.State.UnchangedNotes
+	state.PreviewRequired = plan.State.PreviewRequired
+	if state.PendingWrites > 0 {
+		state.Approved = !state.PreviewRequired
+	}
+	state.Unavailable = false
+	state.Error = ""
+	return state
+}
+
+func (s *FileStore) ReadObsidianSyncState(ctx context.Context) (ObsidianSyncState, error) {
+	if err := ctx.Err(); err != nil {
+		return ObsidianSyncState{}, err
+	}
+	if s == nil {
+		return ObsidianSyncState{}, fmt.Errorf("memory store is nil")
+	}
+	data, err := os.ReadFile(filepath.Join(s.root, obsidianSyncStateRelPath))
+	if err != nil {
+		return ObsidianSyncState{}, err
+	}
+	var state ObsidianSyncState
+	if err := json.Unmarshal(data, &state); err != nil {
+		return ObsidianSyncState{}, err
+	}
+	return state, nil
+}
+
+func (s *FileStore) writeObsidianSyncState(ctx context.Context, state ObsidianSyncState) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if s == nil {
+		return fmt.Errorf("memory store is nil")
+	}
+	data, err := json.MarshalIndent(state, "", "  ")
+	if err != nil {
+		return err
+	}
+	data = append(data, '\n')
+	path := filepath.Join(s.root, obsidianSyncStateRelPath)
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0o600)
 }
 
 func RenderGeneratedSection(memories []Memory, settings Settings) string {
@@ -361,4 +618,64 @@ func quoteYAML(value string) string {
 
 func escapeMarkdownLine(value string) string {
 	return strings.ReplaceAll(strings.TrimSpace(value), "\n", " ")
+}
+
+func obsidianSyncStateFromPreviews(settings Settings, vaultRoot string, previews []NotePreview, approved bool) ObsidianSyncState {
+	state := ObsidianSyncState{
+		Enabled:   settings.Obsidian.Enabled,
+		VaultPath: vaultRoot,
+		Approved:  approved,
+	}
+	for _, preview := range previews {
+		switch {
+		case preview.WouldCreate:
+			state.CreatedNotes++
+		case preview.WouldUpdate:
+			state.UpdatedNotes++
+		default:
+			state.UnchangedNotes++
+		}
+	}
+	state.PendingWrites = state.CreatedNotes + state.UpdatedNotes
+	state.PreviewRequired = state.PendingWrites > 0 && settings.Obsidian.PreviewBeforeWrite && !approved
+	return state
+}
+
+func obsidianVaultRoot(settings Settings) (string, error) {
+	if !settings.Obsidian.Enabled {
+		return "", ErrObsidianSyncDisabled
+	}
+	vaultPath := strings.TrimSpace(settings.Obsidian.VaultPath)
+	if vaultPath == "" {
+		return "", ErrObsidianVaultPathRequired
+	}
+	root, err := ExpandDirectory(vaultPath)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Clean(root), nil
+}
+
+func obsidianSafeNotePath(vaultRoot, notePath string) (string, error) {
+	vaultRoot = filepath.Clean(vaultRoot)
+	notePath = strings.TrimSpace(notePath)
+	if notePath == "" {
+		return "", fmt.Errorf("empty Obsidian note path")
+	}
+	rel := filepath.Clean(filepath.FromSlash(notePath))
+	if filepath.IsAbs(rel) || rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
+		return "", fmt.Errorf("unsafe Obsidian note path %q", notePath)
+	}
+	rootAbs, err := filepath.Abs(vaultRoot)
+	if err != nil {
+		return "", err
+	}
+	noteAbs, err := filepath.Abs(filepath.Join(rootAbs, rel))
+	if err != nil {
+		return "", err
+	}
+	if noteAbs != rootAbs && !strings.HasPrefix(noteAbs, rootAbs+string(os.PathSeparator)) {
+		return "", fmt.Errorf("Obsidian note path escapes vault: %q", notePath)
+	}
+	return noteAbs, nil
 }

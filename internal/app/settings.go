@@ -251,6 +251,7 @@ type Settings struct {
 	memoryInboxDestination         string
 	memoryPromptTemplateChoice     string
 	memoryStoreStats               memory.StoreStats
+	memoryObsidianSyncState        memory.ObsidianSyncState
 
 	// form field backing variables — calendar
 	calendarWeekStart string
@@ -815,7 +816,9 @@ func (s *Settings) refreshMemoryStoreStats() {
 	if s.cfg != nil {
 		settings = s.cfg.Memories
 	}
-	s.memoryStoreStats = memory.StoreStatsForSettings(context.Background(), s.buildMemorySettingsConfig(settings))
+	memorySettings := s.buildMemorySettingsConfig(settings)
+	s.memoryStoreStats = memory.StoreStatsForSettings(context.Background(), memorySettings)
+	s.memoryObsidianSyncState = memory.ObsidianSyncStateForSettings(context.Background(), memorySettings)
 }
 
 func (s *Settings) memoryStoreStatsLine() string {
@@ -830,12 +833,43 @@ func (s *Settings) memoryStoreStatsLine() string {
 	return fmt.Sprintf("Memory records: total %d / stale %d / review %d", stats.Total, stats.Stale, stats.ReviewNeeded)
 }
 
+func (s *Settings) memoryObsidianSyncLine() string {
+	state := s.memoryObsidianSyncState
+	if !s.memoryObsidianEnabled {
+		return ""
+	}
+	if state.Unavailable {
+		detail := strings.TrimSpace(state.Error)
+		if detail == "" {
+			detail = "unavailable"
+		}
+		return "Obsidian writes: unavailable (" + render.Truncate(detail, 72) + ")"
+	}
+	approval := "approved"
+	if state.PreviewRequired {
+		approval = "needs preview approval"
+	} else if !state.Approved && state.PendingWrites > 0 {
+		approval = "preview optional"
+	}
+	lastRun := "never"
+	if !state.LastRun.IsZero() {
+		lastRun = state.LastRun.Format("2006-01-02 15:04")
+	}
+	return fmt.Sprintf("Obsidian writes: pending %d / applied %d / failed %d / last %s / %s",
+		state.PendingWrites,
+		state.AppliedWrites,
+		state.FailedWrites,
+		lastRun,
+		approval,
+	)
+}
+
 func (s *Settings) memoryStatusDescription() string {
 	folders := strings.Join(settingsParseCSV(s.memorySourceFolders, []string{"INBOX", "Sent"}), ", ")
 	if folders == "" {
 		folders = "INBOX, Sent"
 	}
-	return strings.Join([]string{
+	lines := []string{
 		fmt.Sprintf("Enabled: %s", settingsBoolWord(s.memoryEnabled)),
 		"Store: " + settingsMaybeUnset(firstNonEmptyString(s.memoryDirectory, memory.DefaultDirectory)),
 		"Immutable records: on",
@@ -862,7 +896,11 @@ func (s *Settings) memoryStatusDescription() string {
 		fmt.Sprintf("Prompts: %d exposed templates", len(s.memoryPromptTemplatesForSettings())),
 		s.memoryStoreStatsLine(),
 		s.memoryResearchStatusLine(),
-	}, "\n")
+	}
+	if syncLine := s.memoryObsidianSyncLine(); syncLine != "" {
+		lines = append(lines[:len(lines)-1], syncLine, lines[len(lines)-1])
+	}
+	return strings.Join(lines, "\n")
 }
 
 func (s *Settings) accountTypeDescription() string {

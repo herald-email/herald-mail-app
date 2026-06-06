@@ -550,6 +550,105 @@ func TestObsidianPreviewPreservesUserSectionsAndCanHideYAML(t *testing.T) {
 	}
 }
 
+func TestObsidianSyncPlanRequiresApprovalAndApplyPreservesUserSections(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	store, err := NewFileStore(root + "/memories")
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings := DefaultSettings()
+	settings.Directory = store.Root()
+	settings.Obsidian.Enabled = true
+	settings.Obsidian.VaultPath = root + "/vault"
+	settings.Obsidian.YAMLHeaders = false
+	settings.Obsidian.FrontmatterMode = FrontmatterNone
+	settings.Obsidian.PreviewBeforeWrite = true
+
+	mem := testMemory("Sergey asked for an update.")
+	mem.ObsidianTarget = "People/sergey@example.com.md"
+	if _, _, err := store.Append(ctx, mem); err != nil {
+		t.Fatal(err)
+	}
+	existing := "# Sergey\n\nUser-written notes stay here.\n\n<!-- HERALD:MEMORIES:BEGIN -->\nold generated\n<!-- HERALD:MEMORIES:END -->\n\nTail note.\n"
+	notePath := root + "/vault/People/sergey@example.com.md"
+	if err := os.MkdirAll(root+"/vault/People", 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(notePath, []byte(existing), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	plan, err := store.PlanObsidianSync(ctx, settings, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !plan.PreviewRequired || plan.State.PendingWrites != 1 || plan.State.UpdatedNotes != 1 {
+		t.Fatalf("plan state = %#v", plan.State)
+	}
+	if _, err := store.ApplyObsidianSync(ctx, plan); !errors.Is(err, ErrObsidianPreviewApprovalNeed) {
+		t.Fatalf("apply without approval error = %v", err)
+	}
+	unchanged, err := os.ReadFile(notePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(unchanged) != existing {
+		t.Fatalf("unapproved apply changed note:\n%s", unchanged)
+	}
+
+	approved, err := store.PlanObsidianSync(ctx, settings, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := store.ApplyObsidianSync(ctx, approved)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.State.AppliedWrites != 1 || result.State.FailedWrites != 0 || !result.State.Approved {
+		t.Fatalf("apply result = %#v", result.State)
+	}
+	written, err := os.ReadFile(notePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(written)
+	if !strings.Contains(text, "User-written notes stay here.") || !strings.Contains(text, "Tail note.") {
+		t.Fatalf("user sections not preserved:\n%s", text)
+	}
+	if strings.Contains(text, "old generated") || !strings.Contains(text, "Sergey asked for an update.") {
+		t.Fatalf("generated section not updated:\n%s", text)
+	}
+	state, err := store.ReadObsidianSyncState(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.LastRun.IsZero() || state.AppliedWrites != 1 || state.FailedWrites != 0 || !state.Approved {
+		t.Fatalf("persisted sync state = %#v", state)
+	}
+}
+
+func TestObsidianSyncPlanFiltersLowConfidenceAndRejectsUnsafeTargets(t *testing.T) {
+	settings := DefaultSettings()
+	settings.Obsidian.Enabled = true
+	settings.Obsidian.VaultPath = t.TempDir()
+	lowConfidence := testMemoryWithKind("Maybe follow up.", KindOpenQuestion, settings.Thresholds.ObsidianWrite-0.01)
+
+	plan, err := PlanObsidianSync(context.Background(), []Memory{lowConfidence}, settings, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plan.State.PendingWrites != 0 || len(plan.Previews) != 0 {
+		t.Fatalf("low confidence memory should not plan writes: %#v", plan)
+	}
+
+	unsafe := testMemory("Unsafe target.")
+	unsafe.ObsidianTarget = "../escape.md"
+	if _, err := PlanObsidianSync(context.Background(), []Memory{unsafe}, settings, true); err == nil {
+		t.Fatal("expected unsafe target to fail planning")
+	}
+}
+
 func testMemory(claim string) Memory {
 	return testMemoryWithKind(claim, KindOpenQuestion, 0.90)
 }
