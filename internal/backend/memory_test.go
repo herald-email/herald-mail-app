@@ -3,13 +3,45 @@ package backend
 import (
 	"context"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/herald-email/herald-mail-app/internal/ai"
 	"github.com/herald-email/herald-mail-app/internal/cache"
 	"github.com/herald-email/herald-mail-app/internal/memory"
 	"github.com/herald-email/herald-mail-app/internal/models"
 )
+
+type memorySchedulerStubAI struct{}
+
+func (s *memorySchedulerStubAI) Chat(_ []ai.ChatMessage) (string, error) { return "", nil }
+func (s *memorySchedulerStubAI) ChatWithTools(_ []ai.ChatMessage, _ []ai.Tool) (string, []ai.ToolCall, error) {
+	return "", nil, ai.ErrToolsNotSupported
+}
+func (s *memorySchedulerStubAI) Classify(_, _ string) (ai.Category, error) { return "", nil }
+func (s *memorySchedulerStubAI) Embed(_ string) ([]float32, error)         { return nil, nil }
+func (s *memorySchedulerStubAI) SetEmbeddingModel(_ string)                {}
+func (s *memorySchedulerStubAI) GenerateQuickReplies(_, _, _ string) ([]string, error) {
+	return nil, nil
+}
+func (s *memorySchedulerStubAI) EnrichContact(_ string, _ []string) (string, []string, error) {
+	return "", nil, nil
+}
+func (s *memorySchedulerStubAI) HasVisionModel() bool { return false }
+func (s *memorySchedulerStubAI) DescribeImage(_ context.Context, _ []byte, _ string) (string, error) {
+	return "", nil
+}
+func (s *memorySchedulerStubAI) Ping() error { return nil }
+
+type countingMemoryEmailSource struct {
+	calls int32
+}
+
+func (s *countingMemoryEmailSource) MemoryEmails(_ string, _ int) ([]memory.EmailSnapshot, error) {
+	atomic.AddInt32(&s.calls, 1)
+	return nil, nil
+}
 
 func TestLocalMemoryEmailSourceReadsCachedHeadersAndBodies(t *testing.T) {
 	store, err := cache.New(":memory:")
@@ -101,4 +133,89 @@ func TestDemoBackendMemoryReplyPrepReturnsSourceBackedNudges(t *testing.T) {
 	if prep.Nudges[0].Evidence[0].MessageID == "" {
 		t.Fatalf("nudge missing source evidence: %#v", prep.Nudges[0])
 	}
+}
+
+func TestLocalMemoryRefreshUsesBackgroundAndInteractiveAISchedulerPriorities(t *testing.T) {
+	store, err := memory.NewFileStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewFileStore: %v", err)
+	}
+	settings := memory.DefaultSettings()
+	settings.Directory = store.Root()
+	settings.Sources.Folders = []string{"INBOX"}
+	source := &countingMemoryEmailSource{}
+	classifier := ai.NewManagedClient(&memorySchedulerStubAI{}, ai.ManagedConfig{
+		MaxConcurrency:                  1,
+		QueueLimit:                      8,
+		PauseBackgroundWhileInteractive: true,
+	})
+	backend := &LocalBackend{
+		classifier:    classifier,
+		memoryService: memory.NewServiceWithStore(settings, store, source),
+	}
+
+	holdStarted := make(chan struct{})
+	releaseHold := make(chan struct{})
+	holdDone := make(chan struct{})
+	go func() {
+		_ = ai.Schedule(classifier, ai.PriorityBackground, ai.TaskKindEmbedding, "hold", func() error {
+			close(holdStarted)
+			<-releaseHold
+			return nil
+		})
+		close(holdDone)
+	}()
+	<-holdStarted
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	errCh := make(chan error, 2)
+	go func() {
+		_, err := backend.SearchMemories(ctx, memory.Query{Limit: 1})
+		errCh <- err
+	}()
+	waitForMemorySchedulerStatus(t, classifier, func(status ai.SchedulerStatus) bool {
+		return status.QueuedBackgroundKind == ai.TaskKindMemoryExtraction
+	})
+
+	go func() {
+		_, err := backend.BuildReplyMemoryContext(ctx, memory.ReplyPrepQuery{
+			Recipient: "sergey@example.com",
+			Subject:   "Interview follow-up",
+		})
+		errCh <- err
+	}()
+	waitForMemorySchedulerStatus(t, classifier, func(status ai.SchedulerStatus) bool {
+		return status.QueuedInteractiveKind == ai.TaskKindMemoryExtraction &&
+			status.QueuedBackgroundKind == ai.TaskKindMemoryExtraction
+	})
+
+	close(releaseHold)
+	<-holdDone
+	for i := 0; i < 2; i++ {
+		select {
+		case err := <-errCh:
+			if err != nil {
+				t.Fatalf("memory refresh call returned error: %v", err)
+			}
+		case <-ctx.Done():
+			t.Fatalf("timed out waiting for scheduled memory refresh calls: %v", ctx.Err())
+		}
+	}
+	if got := atomic.LoadInt32(&source.calls); got != 1 {
+		t.Fatalf("memory source calls = %d, want one winning refresh", got)
+	}
+}
+
+func waitForMemorySchedulerStatus(t *testing.T, reporter ai.StatusReporter, match func(ai.SchedulerStatus) bool) {
+	t.Helper()
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		status := reporter.AIStatus()
+		if match(status) {
+			return
+		}
+		time.Sleep(time.Millisecond)
+	}
+	t.Fatalf("timed out waiting for AI scheduler status")
 }

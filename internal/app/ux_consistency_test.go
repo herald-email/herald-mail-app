@@ -308,6 +308,19 @@ func TestRenderStatusBar_ShowsGlobalAIChip(t *testing.T) {
 	}
 }
 
+func TestRenderStatusBar_ShowsMemoryExtractionAIChip(t *testing.T) {
+	m := makeSizedModel(t, 120, 40)
+	m.classifier = &aiStatusStub{status: ai.SchedulerStatus{
+		ActiveKind:     ai.TaskKindMemoryExtraction,
+		ActivePriority: ai.PriorityBackground,
+	}}
+
+	status := stripANSI(m.renderStatusBar())
+	if !strings.Contains(status, "AI memory") {
+		t.Fatalf("expected status bar to show memory extraction AI chip, got %q", status)
+	}
+}
+
 func TestRenderStatusBar_ShowsTaggingAndEmbeddingProgress(t *testing.T) {
 	m := makeSizedModel(t, 120, 40)
 	m.classifying = true

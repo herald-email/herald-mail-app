@@ -137,6 +137,68 @@ func TestManagedClient_PrioritizesInteractiveWorkAheadOfQueuedBackground(t *test
 	}
 }
 
+func TestScheduleRoutesMemoryExtractionThroughManagedPriorityQueue(t *testing.T) {
+	started := make(chan string, 3)
+	releaseFirst := make(chan struct{})
+	client := NewManagedClient(&managedStubAI{}, ManagedConfig{
+		MaxConcurrency:                  1,
+		QueueLimit:                      8,
+		PauseBackgroundWhileInteractive: true,
+	})
+
+	done1 := make(chan struct{})
+	done2 := make(chan struct{})
+	done3 := make(chan struct{})
+	go func() {
+		_ = Schedule(client, PriorityBackground, TaskKindMemoryExtraction, "memory", func() error {
+			started <- "bg-1"
+			<-releaseFirst
+			return nil
+		})
+		close(done1)
+	}()
+
+	if first := <-started; first != "bg-1" {
+		t.Fatalf("first started = %q, want bg-1", first)
+	}
+
+	go func() {
+		_ = Schedule(client, PriorityBackground, TaskKindMemoryExtraction, "memory", func() error {
+			started <- "bg-2"
+			return nil
+		})
+		close(done2)
+	}()
+	time.Sleep(20 * time.Millisecond)
+	go func() {
+		_ = Schedule(client, PriorityInteractive, TaskKindMemoryExtraction, "memory", func() error {
+			started <- "interactive"
+			return nil
+		})
+		close(done3)
+	}()
+	time.Sleep(20 * time.Millisecond)
+
+	status := client.AIStatus()
+	if status.QueuedInteractiveKind != TaskKindMemoryExtraction {
+		t.Fatalf("queued interactive kind = %q, want memory extraction", status.QueuedInteractiveKind)
+	}
+
+	close(releaseFirst)
+
+	second := <-started
+	if second != "interactive" {
+		t.Fatalf("second started = %q, want interactive", second)
+	}
+	<-done1
+	<-done2
+	<-done3
+	third := <-started
+	if third != "bg-2" {
+		t.Fatalf("third started = %q, want bg-2", third)
+	}
+}
+
 func TestManagedSchedulerRoundRobinsBackgroundSources(t *testing.T) {
 	started := make(chan string, 4)
 	releaseFirst := make(chan struct{})

@@ -123,6 +123,8 @@ func (m *Model) renderAIStatusChip() string {
 		label = "search"
 	case ai.TaskKindChat:
 		label = "chat"
+	case ai.TaskKindMemoryExtraction:
+		label = "memory"
 	case "deferred":
 		label = "defer"
 	case "unavailable":

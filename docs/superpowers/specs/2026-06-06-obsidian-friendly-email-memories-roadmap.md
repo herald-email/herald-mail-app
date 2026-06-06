@@ -157,7 +157,7 @@ Research Mode should enrich dossiers with public information only when the user 
 The implementation should add a memory service behind the backend/agent boundary and reuse existing cache, contact, embedding, and Compose review capabilities. It should not create a second chat framework or bypass the existing Backend discipline.
 
 - [x] Add memory storage and retrieval behind backend-facing methods rather than direct SQLite access from Bubble Tea.
-- [ ] Add extraction jobs that run through the existing AI scheduler with interactive-before-background priority.
+- [x] Add extraction jobs that run through the existing AI scheduler with interactive-before-background priority.
 - [x] Reuse existing body-cache, classification, contact-enrichment, thread-header, and embedding-cache signals before fetching additional message bodies.
 - [x] Add memory-aware Gollem tools after the Gollem chat-agent runner is in place.
 - [x] Keep external research as a separate opt-in capability from local memory extraction.

@@ -13,6 +13,7 @@ const (
 	TaskKindImageDescription TaskKind = "image description"
 	TaskKindContactEnrich    TaskKind = "contact enrichment"
 	TaskKindClassification   TaskKind = "classification"
+	TaskKindMemoryExtraction TaskKind = "memory extraction"
 )
 
 type SchedulerStatus struct {

@@ -65,7 +65,8 @@ type LocalBackend struct {
 	messageService   *MessageService
 	messageServiceMu sync.Mutex
 	memoryService    *memory.Service
-	memoryRefresh    sync.Once
+	memoryRefreshMu  sync.Mutex
+	memoryRefreshRan bool
 	memoryRefreshErr error
 
 	calendarSyncMu   sync.Mutex
@@ -1713,9 +1714,9 @@ func (b *LocalBackend) SearchMemories(ctx context.Context, query memory.Query) (
 	if b == nil || b.memoryService == nil {
 		return nil, nil
 	}
-	b.ensureMemoryRefresh(ctx)
-	if b.memoryRefreshErr != nil {
-		logger.Warn("Herald Memories refresh failed before search: %v", b.memoryRefreshErr)
+	b.ensureMemoryRefresh(ctx, ai.PriorityBackground)
+	if err := b.memoryRefreshError(); err != nil {
+		logger.Warn("Herald Memories refresh failed before search: %v", err)
 	}
 	return b.memoryService.Search(ctx, query)
 }
@@ -1727,9 +1728,9 @@ func (b *LocalBackend) BuildReplyMemoryContext(ctx context.Context, query memory
 			GeneratedAt: time.Now(),
 		}, nil
 	}
-	b.ensureMemoryRefresh(ctx)
-	if b.memoryRefreshErr != nil {
-		logger.Warn("Herald Memories refresh failed before reply context: %v", b.memoryRefreshErr)
+	b.ensureMemoryRefresh(ctx, ai.PriorityInteractive)
+	if err := b.memoryRefreshError(); err != nil {
+		logger.Warn("Herald Memories refresh failed before reply context: %v", err)
 	}
 	return b.memoryService.BuildReplyPrep(ctx, query)
 }
@@ -1744,19 +1745,53 @@ func (b *LocalBackend) DismissMemoryNudge(ctx context.Context, req memory.NudgeD
 	return nil
 }
 
-func (b *LocalBackend) ensureMemoryRefresh(ctx context.Context) {
-	b.memoryRefresh.Do(func() {
-		if b.memoryService == nil {
-			return
+func (b *LocalBackend) ensureMemoryRefresh(ctx context.Context, priority ai.Priority) {
+	if b == nil || b.memoryService == nil {
+		return
+	}
+	b.memoryRefreshMu.Lock()
+	if b.memoryRefreshRan {
+		b.memoryRefreshMu.Unlock()
+		return
+	}
+	b.memoryRefreshMu.Unlock()
+
+	b.classifierMu.RLock()
+	classifier := b.classifier
+	b.classifierMu.RUnlock()
+	err := ai.Schedule(classifier, priority, ai.TaskKindMemoryExtraction, "memory", func() error {
+		b.memoryRefreshMu.Lock()
+		defer b.memoryRefreshMu.Unlock()
+		if b.memoryRefreshRan {
+			return b.memoryRefreshErr
 		}
-		result, err := b.memoryService.Refresh(ctx)
-		b.memoryRefreshErr = err
-		if err != nil {
-			logger.Warn("Herald Memories refresh failed: %v", err)
-			return
+		result, refreshErr := b.memoryService.Refresh(ctx)
+		b.memoryRefreshErr = refreshErr
+		b.memoryRefreshRan = true
+		if refreshErr != nil {
+			logger.Warn("Herald Memories refresh failed: %v", refreshErr)
+			return refreshErr
 		}
 		logger.Info("Herald Memories refresh: scanned=%d extracted=%d written=%d skipped=%d", result.ScannedEmails, result.Extracted, result.Written, result.Skipped)
+		return nil
 	})
+	if err != nil {
+		b.memoryRefreshMu.Lock()
+		if !b.memoryRefreshRan {
+			b.memoryRefreshErr = err
+			b.memoryRefreshRan = true
+		}
+		b.memoryRefreshMu.Unlock()
+	}
+}
+
+func (b *LocalBackend) memoryRefreshError() error {
+	if b == nil {
+		return nil
+	}
+	b.memoryRefreshMu.Lock()
+	defer b.memoryRefreshMu.Unlock()
+	return b.memoryRefreshErr
 }
 
 func (b *LocalBackend) cachedEmailsMatching(folder string, match func(*models.EmailData) bool) []*models.EmailData {

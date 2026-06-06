@@ -43,6 +43,10 @@ type sourceScopedClient interface {
 	withSourceID(sourceID string) AIClient
 }
 
+type scheduledWorkClient interface {
+	schedule(priority Priority, kind TaskKind, sourceID string, fn func() error) error
+}
+
 type managedTask struct {
 	priority Priority
 	kind     TaskKind
@@ -372,6 +376,22 @@ func WithSourceID(client AIClient, sourceID string) AIClient {
 	return client
 }
 
+// Schedule runs non-generative AI-adjacent work through the managed AI
+// scheduler when the client supports it. This lets local extraction and other
+// bounded jobs share the same priority and status lane as model calls.
+func Schedule(client AIClient, priority Priority, kind TaskKind, sourceID string, fn func() error) error {
+	if fn == nil {
+		return nil
+	}
+	if client == nil {
+		return fn()
+	}
+	if scheduler, ok := client.(scheduledWorkClient); ok {
+		return scheduler.schedule(priority, kind, sourceID, fn)
+	}
+	return fn()
+}
+
 func (c *ManagedClient) effectivePriority(defaultPriority Priority) Priority {
 	if c.priority != priorityUnset {
 		return c.priority
@@ -391,6 +411,19 @@ func (c *ManagedClient) do(priority Priority, kind TaskKind, fn func() error) er
 		return nil
 	}
 	return c.scheduler.submitWithSource(c.effectivePriority(priority), c.effectiveKind(kind), c.sourceID, fn)
+}
+
+func (c *ManagedClient) schedule(priority Priority, kind TaskKind, sourceID string, fn func() error) error {
+	if fn == nil {
+		return nil
+	}
+	if c == nil || c.scheduler == nil {
+		return fn()
+	}
+	if strings.TrimSpace(sourceID) == "" {
+		sourceID = c.sourceID
+	}
+	return c.scheduler.submitWithSource(c.effectivePriority(priority), c.effectiveKind(kind), sourceID, fn)
 }
 
 func (c *ManagedClient) AIStatus() SchedulerStatus {
