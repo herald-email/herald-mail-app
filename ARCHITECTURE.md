@@ -147,21 +147,22 @@ AI work now needs its own resource model because local Ollama capacity behaves v
 
 ### Gollem chat-agent replacement
 
-Chat is a UI-mode agent surface, not a daemon, MCP, or background automation surface in the first Gollem iteration. The existing right-side chat drawer remains the user-facing shell, but the hand-written Ollama `/api/chat` loop, legacy chat tool registry, and prose `<filter>` response contract are not architecture foundations; they should be removed once a Gollem runner can return a plain reply and typed UI intents.
+Chat is a UI-mode agent surface, not a daemon, MCP, or background automation surface in the first Gollem iteration. The existing right-side chat drawer remains the user-facing shell, while Gollem typed results replace the retired hand-written Ollama `/api/chat` loop, legacy chat tool registry, and prose `<filter>` response contract.
 
 The replacement boundary should live in an `internal/agent` package with a small runner interface that receives a TUI snapshot and returns a typed result. Bubble Tea owns all state mutation: the agent can propose a Timeline filter, search query, summary, or Compose edit, but `internal/app` applies those intents through existing Timeline search/filter and Compose AI review paths.
 
 **Agent runner contract**
 
-- [ ] `internal/app` builds a bounded `ChatAgentInput` snapshot with current folder, active tab, selected/visible message IDs, optional Compose draft state, and the user's latest chat message.
-- [ ] `internal/agent` owns Gollem agent construction, provider selection, typed tool definitions, structured result parsing, and provider error normalization.
-- [ ] `internal/backend` remains the source of email reads and searches; Gollem tools adapt to existing backend/search methods instead of opening separate IMAP, SQLite, daemon, or MCP paths.
-- [ ] `internal/app` applies typed `TimelineIntent` values through existing Timeline search and chat-filter state so result browsing, `Esc`, selection, and preview behavior stay consistent.
-- [ ] `internal/app` applies typed `ComposeIntent` values only through the existing Compose AI review/accept flow; chat never silently mutates drafts and cannot send mail in the first iteration.
-- [ ] The first agent tool set is read-only: `find_emails`, `get_email_context`, `summarize_email_set`, and `explain_people`.
-- [ ] The first provider set is Gollem-backed Ollama/local, Anthropic, Kimi, and Fireworks; Ollama is only a provider behind Gollem, not a separate chat runtime.
+- [x] `internal/app` builds a bounded `ChatAgentInput` snapshot with current folder, active tab, selected/visible message IDs, optional Compose draft state, bounded history, and the user's latest chat message.
+- [x] `internal/agent` owns Gollem agent construction, provider selection, typed tool definitions, structured result parsing, and provider error normalization.
+- [x] `internal/backend` remains the source of email reads and searches; Gollem tools adapt to existing backend/search methods instead of opening separate IMAP, SQLite, daemon, or MCP paths.
+- [x] `internal/app` applies typed `TimelineIntent` values through existing Timeline search and chat-filter state so result browsing, `Esc`, selection, and preview behavior stay consistent.
+- [x] `internal/app` applies typed `ComposeIntent` values only through the existing Compose AI review/accept flow; chat never silently mutates drafts and cannot send mail in the first iteration.
+- [x] The first agent tool set is read-only: `find_emails`, `get_email_context`, `summarize_email_set`, and `explain_people`.
+- [x] The first provider set is Gollem-backed Ollama/local, Anthropic, OpenAI, Kimi, and Fireworks; Ollama is only a provider behind Gollem for chat.
+- [x] The default configured chat path uses Gollem; explicit global AI disable keeps chat disabled instead of falling back to the old direct Ollama runtime.
 - [ ] Agent requests publish concise progress states such as `searching`, `reading`, `summarizing`, and `draft edit ready` so the chat drawer does not appear stuck during slow local or remote provider calls.
-- [ ] The first implementation does not add memory, autonomous daily summaries, calendar mutations, delete/archive, send mail, or MCP mirroring.
+- [x] The first implementation does not add memory, autonomous daily summaries, calendar mutations, delete/archive, send mail, or MCP mirroring.
 
 ### Inline image preview safety
 

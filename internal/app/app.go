@@ -15,6 +15,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/herald-email/herald-mail-app/internal/accountcheck"
+	"github.com/herald-email/herald-mail-app/internal/agent"
 	"github.com/herald-email/herald-mail-app/internal/ai"
 	"github.com/herald-email/herald-mail-app/internal/aicheck"
 	"github.com/herald-email/herald-mail-app/internal/backend"
@@ -321,16 +322,10 @@ type PreviewCacheReclaimMsg struct {
 	Err    error
 }
 
-// ChatResponseMsg carries an Ollama chat reply
-type ChatResponseMsg struct {
-	Content string
-	Err     error
-}
-
-// ChatFilterActivatedMsg is sent when the chat response contains a <filter> block.
-type ChatFilterActivatedMsg struct {
-	Emails []*models.EmailData
-	Label  string
+// ChatAgentResponseMsg carries a typed Gollem chat-agent result.
+type ChatAgentResponseMsg struct {
+	Result agent.ChatResult
+	Err    error
 }
 
 // SearchResultMsg carries search results back to the UI
@@ -721,7 +716,8 @@ type Model struct {
 	chatWrappedLines [][]string       // cached wrapText output per message; nil = invalid
 	chatWrappedWidth int              // width at which chatWrappedLines was built
 	chatInput        textinput.Model
-	chatWaiting      bool // waiting for Ollama response
+	chatWaiting      bool // waiting for chat response
+	chatAgent        agent.Runner
 
 	// AI classification
 	classifier      ai.AIClient
@@ -1176,6 +1172,7 @@ func (m *Model) SetConfig(cfg *config.Config) {
 	m.applyKeyboardConfig(cfg)
 	m.applyThemeConfig(cfg)
 	m.applyCalendarConfig(cfg)
+	m.applyChatAgentConfig(cfg)
 }
 
 func validateAccountSettingsCmd(msg SettingsSavedMsg, configPath string) tea.Cmd {
@@ -3165,43 +3162,22 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case ChatResponseMsg:
+	case ChatAgentResponseMsg:
 		m.chatWaiting = false
-		content := msg.Content
-		if msg.Err != nil {
-			content = "Error: " + msg.Err.Error()
-		}
-		// Check for a <filter> block before stripping it for display.
-		var filterCmd tea.Cmd
-		if ids, label, found := parseChatFilter(content); found {
-			// Build matched email list by MessageID.
-			idSet := make(map[string]bool, len(ids))
-			for _, id := range ids {
-				idSet[id] = true
-			}
-			var matched []*models.EmailData
-			for _, e := range m.timeline.emails {
-				if idSet[e.MessageID] {
-					matched = append(matched, e)
-				}
-			}
-			if len(matched) > 0 {
-				activateLabel := label
-				filterCmd = func() tea.Msg {
-					return ChatFilterActivatedMsg{Emails: matched, Label: activateLabel}
-				}
-			}
-			// Strip filter block for clean display.
-			content = stripChatFilter(content)
-		}
+		composeWasActive := m.activeTab == tabCompose
+		content := chatAgentAssistantContent(msg.Result, msg.Err)
 		m.chatMessages = append(m.chatMessages, ai.ChatMessage{
 			Role:    "assistant",
 			Content: content,
 		})
-		m.chatWrappedLines = nil // invalidate wrap cache
-		notifyCmd := m.notifyChatResultCmd(msg)
-		if filterCmd != nil {
-			return m, tea.Batch(notifyCmd, filterCmd)
+		m.chatWrappedLines = nil
+		notifyCmd := m.notifyChatResultCmd(content, msg.Err)
+		if msg.Err != nil {
+			return m, notifyCmd
+		}
+		m.applyChatAgentComposeIntent(msg.Result.Compose, composeWasActive)
+		if timelineCmd := m.applyChatAgentTimelineIntent(msg.Result.Timeline); timelineCmd != nil {
+			return m, tea.Batch(notifyCmd, timelineCmd)
 		}
 		return m, notifyCmd
 

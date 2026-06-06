@@ -773,8 +773,8 @@ func TestDefaultOpenAIModelsAndEmbeddingProvider(t *testing.T) {
 	c.OpenAI.APIKey = "sk-test"
 	c.applyDefaults()
 
-	if c.OpenAI.Model != "gpt-5.4-mini" {
-		t.Errorf("expected default OpenAI model %q, got %q", "gpt-5.4-mini", c.OpenAI.Model)
+	if c.OpenAI.Model != "gpt-5-mini" {
+		t.Errorf("expected default OpenAI model %q, got %q", "gpt-5-mini", c.OpenAI.Model)
 	}
 	if c.OpenAI.EmbeddingModel != "text-embedding-3-small" {
 		t.Errorf("expected default OpenAI embedding model %q, got %q", "text-embedding-3-small", c.OpenAI.EmbeddingModel)

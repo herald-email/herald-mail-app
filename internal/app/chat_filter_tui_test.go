@@ -21,33 +21,6 @@ func makeModelWithEmails() *Model {
 	return m
 }
 
-func TestChatFilterActivated(t *testing.T) {
-	m := makeModelWithEmails()
-
-	msg := ChatFilterActivatedMsg{
-		Emails: []*models.EmailData{
-			{MessageID: "msg-1", Subject: "Invoice Q1"},
-		},
-		Label: "invoices",
-	}
-
-	newM, _ := m.Update(msg)
-	updated := newM.(*Model)
-
-	if !updated.timeline.chatFilterMode {
-		t.Error("expected chatFilterMode=true after filter activated")
-	}
-	if len(updated.timeline.chatFilteredEmails) != 1 {
-		t.Errorf("expected 1 filtered email, got %d", len(updated.timeline.chatFilteredEmails))
-	}
-	if updated.timeline.chatFilterLabel != "invoices" {
-		t.Errorf("expected label 'invoices', got %q", updated.timeline.chatFilterLabel)
-	}
-	if updated.activeTab != tabTimeline {
-		t.Errorf("expected activeTab=tabTimeline, got %d", updated.activeTab)
-	}
-}
-
 func TestChatFilterClearedOnEsc(t *testing.T) {
 	m := makeModelWithEmails()
 	m.timeline.chatFilterMode = true

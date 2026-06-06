@@ -883,6 +883,18 @@ func TestOllamaStartupWarningMarksAIDownAndDisablesAIFunctionsWithoutBlocking(t 
 	}
 }
 
+func TestAIStatusChipShowsMissingOpenAIKey(t *testing.T) {
+	m := New(&stubBackend{}, nil, "user@example.test", nil, false)
+	cfg := &config.Config{}
+	cfg.AI.Provider = "openai"
+	cfg.OpenAI.Model = "gpt-5-mini"
+	m.SetConfig(cfg)
+
+	if chip := stripANSI(m.renderAIStatusChip()); !strings.Contains(chip, "AI no key") {
+		t.Fatalf("expected AI status chip to show missing key, got %q", chip)
+	}
+}
+
 func TestSettingsSaved_UnrelatedChangeKeepsStartupAIWarningDown(t *testing.T) {
 	m := New(&stubBackend{}, nil, "user@example.test", &stubClassifier{}, false)
 	original := ollamaAppConfig("http://ollama.test", "missing-chat", "nomic-embed-text")

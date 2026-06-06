@@ -413,7 +413,7 @@ func TestShortcutHelpTimelinePreviewIncludesBlankCompose(t *testing.T) {
 	}
 }
 
-func TestShortcutHelpOpensFromLogsChatAndConfirmation(t *testing.T) {
+func TestShortcutHelpOpensFromLogsAndConfirmation(t *testing.T) {
 	tests := []struct {
 		name  string
 		setup func(*Model)
@@ -425,15 +425,6 @@ func TestShortcutHelpOpensFromLogsChatAndConfirmation(t *testing.T) {
 				m.showLogs = true
 			},
 			want: "Logs",
-		},
-		{
-			name: "chat",
-			setup: func(m *Model) {
-				m.showChat = true
-				m.focusedPanel = panelChat
-				m.chatInput.Focus()
-			},
-			want: "Chat",
 		},
 		{
 			name: "delete confirmation",

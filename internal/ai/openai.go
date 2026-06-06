@@ -24,13 +24,13 @@ type OpenAICompatClient struct {
 
 // NewOpenAICompatClient creates an OpenAICompatClient.
 // baseURL defaults to "https://api.openai.com/v1" if empty.
-// model defaults to "gpt-5.4-mini" if empty.
+// model defaults to "gpt-5-mini" if empty.
 func NewOpenAICompatClient(apiKey, baseURL, model string) *OpenAICompatClient {
 	if baseURL == "" {
 		baseURL = "https://api.openai.com/v1"
 	}
 	if model == "" {
-		model = "gpt-5.4-mini"
+		model = "gpt-5-mini"
 	}
 	return &OpenAICompatClient{
 		apiKey:         apiKey,

@@ -58,6 +58,46 @@ func TestHandleOverlayKey_ChatEscapeRestoresTimelineFocus(t *testing.T) {
 	}
 }
 
+func TestChatToggleFocusesInputAndAcceptsTyping(t *testing.T) {
+	m := makeSizedModel(t, 140, 40)
+	m.activeTab = tabTimeline
+	m.loading = false
+
+	model, cmd := m.handleKeyMsg(keyRunes("g"))
+	if commandIsQuit(cmd) {
+		t.Fatal("opening chat returned quit command")
+	}
+
+	m = model.(*Model)
+	if !m.showChat {
+		t.Fatal("expected chat panel to open")
+	}
+	if m.focusedPanel != panelChat {
+		t.Fatalf("expected chat focus, got %d", m.focusedPanel)
+	}
+
+	for _, key := range []string{"h", "i", " ", "c", "q", "?"} {
+		model, cmd = m.handleKeyMsg(keyRunes(key))
+		if commandIsQuit(cmd) {
+			t.Fatalf("typing %q in chat returned quit command", key)
+		}
+		m = model.(*Model)
+	}
+
+	if !m.showChat {
+		t.Fatal("typing in chat should not close the panel")
+	}
+	if m.activeTab != tabTimeline {
+		t.Fatalf("typing in chat changed active tab to %d", m.activeTab)
+	}
+	if m.showHelp {
+		t.Fatal("typing ? in chat should not open shortcut help")
+	}
+	if got, want := m.chatInput.Value(), "hi cq?"; got != want {
+		t.Fatalf("chat input value=%q, want %q", got, want)
+	}
+}
+
 func TestHandleTabKey_SwitchingAwayFromComposeStartsDraftPersistence(t *testing.T) {
 	m := New(&stubBackend{}, nil, "", nil, false)
 	m.activeTab = tabCompose

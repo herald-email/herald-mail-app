@@ -54,7 +54,7 @@ High-level milestones. Detailed feature status is in each section below.
 - [ ] Multi-account support
 - [x] Legacy chat tool calling exists today, but is scheduled for Gollem replacement rather than expansion
 - [x] Legacy filtered timeline from chat results exists today, but is scheduled for typed Gollem Timeline intents
-- [ ] Gollem UI chat-agent replacement with typed search, summary, Timeline, and Compose intents
+- [x] Gollem UI chat-agent replacement with typed search, summary, Timeline, and Compose intents enabled as the default chat runtime
 - [ ] Obsidian-friendly email memories with source-backed tracks, contact/company/thread dossiers, Compose Radar nudges, and Markdown vault sync
 - [x] Multiple AI backends (Claude, OpenAI-compatible)
 - [x] External embedding provider/model selection for OpenAI-compatible vendors, including Settings > AI controls
@@ -192,60 +192,64 @@ A single persistent line at the bottom of the screen. Its content changes based 
 
 ### Chat Panel
 
-The chat panel is a right-side slide-out (`g` key, with `c` retained as a legacy alias outside Timeline) that will become Herald's UI-only email agent surface. The current hand-written Ollama `/api/chat` loop is legacy scaffolding, not the roadmap foundation; the next agent implementation should replace it with a Gollem runner that treats Ollama as only one possible local provider.
+The chat panel is a right-side slide-out (`g` key, with `c` retained as a legacy alias outside Timeline) that will become Herald's UI-only email agent surface. The current hand-written Ollama `/api/chat` loop is legacy scaffolding, not the roadmap foundation; the replacement path uses a Gollem runner that treats Ollama as only one possible local provider while explicit global AI disable keeps chat unavailable.
 
 - [x] Slide-out panel (`g` key, with `c` retained as a legacy alias outside Timeline)
 - [x] Conversation history (multiple turns)
 - [x] Markdown rendering of assistant responses (glamour)
 - [x] Context: currently open email available to the model
 - [x] Context: active folder and selection state passed to model
-- [x] Legacy in-process chat tools exist for search, sender stats, and threads, but are scheduled for replacement rather than expansion
-- [x] Legacy filtered timeline from chat result sets exists, but currently depends on a prose `<filter>` block contract
-- [ ] Replace the legacy Ollama chat loop with a Gollem-only chat runner before adding new chat capabilities
-- [ ] Remove the legacy chat tool registry and `<filter>` response parser once Gollem can return a plain assistant reply and a typed Timeline intent
-- [ ] Keep the chat drawer as the user-facing entry point while moving agent execution into an `internal/agent` boundary
-- [ ] Use typed Gollem outputs for `reply`, `timeline_intent`, `summary`, and `compose_intent` instead of prompt-injected control markup
-- [ ] Make chat a UI-mode feature only; do not add daemon, MCP, or background-agent entrypoints in the first Gollem iteration
-- [ ] Do not allow chat to send, delete, archive, or mutate calendar events in the first Gollem iteration
+- [x] Remove legacy in-process chat tools for search, sender stats, and threads from the chat runtime
+- [x] Remove prose `<filter>` block parsing from chat result handling
+- [x] Replace the legacy Ollama chat loop with a Gollem-only default chat runner before adding risky chat capabilities
+- [x] Remove the legacy chat tool registry and `<filter>` response parser once Gollem can return a plain assistant reply and a typed Timeline intent
+- [x] Keep the chat drawer as the user-facing entry point while moving agent execution into an `internal/agent` boundary
+- [x] Use typed Gollem outputs for `reply`, `timeline_intent`, `summary`, and `compose_intent` instead of prompt-injected control markup
+- [x] Make chat a UI-mode feature only; do not add daemon, MCP, or background-agent entrypoints in the first Gollem iteration
+- [x] Do not allow chat to send, delete, archive, or mutate calendar events in the first Gollem iteration
 
 #### Gollem replacement roadmap
 
 The next chat architecture uses Gollem agents and typed tools. The model can search, inspect, summarize, and propose UI intents, while Bubble Tea remains the only layer allowed to mutate Timeline or Compose state.
 
-- [ ] Add a Gollem provider factory for `ollama`, `anthropic`, `kimi`, and `fireworks`
-- [ ] Add `find_emails` with keyword, semantic, hybrid, current-folder, cross-folder, unread, sender, date, and result-limit parameters
-- [ ] Add `get_email_context` for bounded subject/sender/date/body-snippet context by message ID
-- [ ] Add `summarize_email_set` for search-result summaries with cited message IDs, involved people, dates, open questions, and action items
-- [ ] Add `explain_people` to identify senders, recipients, mentioned people, organizers, and likely owners from a bounded email set
-- [ ] Add `TimelineIntent` so chat can show explicit selections, keyword results, semantic results, or hybrid results in Timeline
-- [ ] Add `ComposeIntent` so chat can propose subject/body edits when Compose is active, routed through the existing review/accept flow
+- [x] Add a Gollem provider factory for `ollama`, `anthropic`, `kimi`, and `fireworks`
+- [x] Add `find_emails` with keyword, semantic, hybrid, current-folder, unread, sender, date-hint, and result-limit parameters
+- [ ] Extend `find_emails` with cross-folder search and semantic score disclosure in tool rows
+- [x] Add `get_email_context` for bounded subject/sender/date/body-snippet context by message ID
+- [x] Add `summarize_email_set` for search-result summaries with cited message IDs, involved people, dates, open questions, and action items
+- [x] Add `explain_people` to identify senders and likely owners from a bounded email set
+- [ ] Extend `explain_people` with recipients, mentioned people, and organizer inference when richer cached context is available
+- [x] Add `TimelineIntent` so chat can show explicit selections, keyword results, semantic results, or hybrid results in Timeline
+- [x] Add `ComposeIntent` so chat can propose subject/body edits when Compose is active, routed through the existing review/accept flow
 - [ ] Add progress states for `searching`, `reading`, `summarizing`, and `draft edit ready` so long-running chat requests do not look frozen
-- [ ] Add provider bakeoff tests for plain reply, one tool call, two-step search-plus-summary, typed Timeline intent, typed Compose intent, malformed args, and provider failure
+- [x] Add deterministic provider-contract tests for plain reply, one tool call, two-step search-plus-summary, typed Timeline intent, typed Compose intent, malformed args, and provider failure
+- [ ] Add live provider smoke results for Ollama/local, Anthropic, OpenAI, Kimi, and Fireworks before publishing provider recommendations
 
 #### Filtered timeline
 
 When the Gollem agent returns a Timeline intent, the TUI pushes those results into the Timeline tab as a live filtered view. The user can browse and act on the messages without leaving the chat flow, and `Esc` or "show all" restores the full timeline.
 
-- [ ] `explicit_ids` shows exactly the message IDs returned by the agent
-- [ ] `keyword`, `semantic`, and `hybrid` intents reuse the existing Timeline search pipeline instead of duplicating ranking logic in the agent
-- [ ] Result labels appear as compact Timeline state such as `Agent: onboarding issue`
-- [ ] Empty result sets render a useful empty state and keep the previous Timeline recoverable
+- [x] `explicit_ids` shows exactly the message IDs returned by the agent after local validation
+- [x] `keyword`, `semantic`, and `hybrid` intents reuse the existing Timeline search pipeline instead of duplicating ranking logic in the agent
+- [x] Result labels appear as compact Timeline state such as `Agent: onboarding issue`
+- [x] Empty explicit result sets show a bounded notice and keep the previous Timeline recoverable
 - [ ] Large result sets are capped, deterministic, and disclose how many messages were searched versus summarized
 
 #### Provider policy
 
-Gollem is the chat-agent framework. Ollama/local, Anthropic, Kimi, and Fireworks are providers behind Gollem, not separate Herald chat architectures.
+Gollem is the chat-agent framework. Ollama/local, Anthropic, OpenAI, Kimi, and Fireworks are providers behind Gollem, not separate Herald chat architectures.
 
 | Provider | Gollem route | First use |
 |---------|-----|-------------|
 | Ollama/local | Gollem OpenAI-compatible/Ollama provider | Offline local agent experiments |
 | Anthropic | Gollem Anthropic provider | Highest-quality remote reasoning and tool use |
+| OpenAI | Gollem OpenAI-compatible provider | Global OpenAI-configured chat and hosted model baseline |
 | Kimi | Gollem OpenAI-compatible provider | Long-context or Kimi-specific model experiments |
 | Fireworks | Gollem OpenAI-compatible provider | Hosted open-model and Kimi variants |
 
-- [ ] Config selects one Gollem chat provider and model for UI chat without changing the existing embedding provider contract
-- [ ] Ollama remains supported for local chat through Gollem only; the old direct Ollama chat loop is removed when replacement is ready
-- [ ] Provider-specific quirks are isolated in the Gollem provider factory, not scattered through Bubble Tea update logic
+- [x] Config selects one Gollem chat provider and model for UI chat without changing the existing embedding provider contract
+- [x] Ollama remains supported for local chat through Gollem only; the old direct Ollama chat loop is removed
+- [x] Provider-specific quirks are isolated in the Gollem provider factory, not scattered through Bubble Tea update logic
 
 ---
 
@@ -472,7 +476,7 @@ Received emails are converted from HTML to Markdown for display in the terminal.
 - [x] Inline image text placeholders (`[image: type  size]` in split view, `[Image: AI description]` when vision model available)
 - [x] Remote HTML image links render as readable OSC 8 links without auto-fetching remote image bytes
 - [x] Full-screen inline image viewing uses bounded iTerm2 or Kitty rendering when supported, or localhost OSC 8 links for local MIME image bytes in local TUI sessions
-- [ ] AI vision image descriptions — use a vision-capable model (e.g. gemma3:4b, gpt-4o, claude) to generate a one-line description for each inline image on demand. Show as `[Image: A promotional banner showing...]` instead of raw MIME type. Generate lazily when email is opened, cache in SQLite. Requires `HasVisionModel()` on the classifier.
+- [ ] AI vision image descriptions — use a vision-capable model (e.g. gemma3:4b, gpt-5-mini, claude) to generate a one-line description for each inline image on demand. Show as `[Image: A promotional banner showing...]` instead of raw MIME type. Generate lazily when email is opened, cache in SQLite. Requires `HasVisionModel()` on the classifier.
 - [x] Kitty graphics protocol support with Ghostty autodetection and `-image-protocol` override for non-iTerm2 terminals
 
 ---

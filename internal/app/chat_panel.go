@@ -1,19 +1,30 @@
 package app
 
 import (
+	"context"
 	"errors"
-	"fmt"
+	"sort"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/herald-email/herald-mail-app/internal/agent"
 	"github.com/herald-email/herald-mail-app/internal/ai"
 )
 
-const maxToolRounds = 5
+const (
+	chatAgentMaxVisibleIDs         = 50
+	chatAgentMaxSelectedIDs        = 50
+	chatAgentMaxHistoryTurns       = 20
+	chatAgentMaxUserMessageChars   = 4000
+	chatAgentMaxHistoryChars       = 2000
+	chatAgentMaxComposeHeaderChars = 1000
+	chatAgentMaxComposeBodyChars   = 8000
+)
 
-// submitChat sends the current chat input to the AI backend with email context,
-// using a multi-turn tool-calling loop when supported.
+var errChatAgentUnavailable = errors.New("Chat agent unavailable: AI provider is disabled or misconfigured")
+
+// submitChat sends the current chat input to the configured Gollem agent runner.
 func (m *Model) submitChat() tea.Cmd {
 	question := strings.TrimSpace(m.chatInput.Value())
 	if question == "" {
@@ -23,6 +34,7 @@ func (m *Model) submitChat() tea.Cmd {
 	m.chatWaiting = true
 
 	currentFolder := m.currentFolder // snapshot before goroutine
+	previousMessages := append([]ai.ChatMessage(nil), m.chatMessages...)
 
 	// Append user message to history
 	m.chatMessages = append(m.chatMessages, ai.ChatMessage{
@@ -31,85 +43,134 @@ func (m *Model) submitChat() tea.Cmd {
 	})
 	m.chatWrappedLines = nil // invalidate wrap cache
 
-	// Build system prompt with email context
-	var ctx strings.Builder
-	ctx.WriteString(fmt.Sprintf("You are an email assistant. The user is viewing folder: %s.\n", currentFolder))
-	if st, ok := m.folderStatus[currentFolder]; ok {
-		ctx.WriteString(fmt.Sprintf("Folder has %d total emails, %d unread.\n", st.Total, st.Unseen))
-	}
-	if len(m.timeline.emails) > 0 {
-		ctx.WriteString("Recent emails (newest first):\n")
-		limit := 20
-		if len(m.timeline.emails) < limit {
-			limit = len(m.timeline.emails)
-		}
-		for _, e := range m.timeline.emails[:limit] {
-			ctx.WriteString(fmt.Sprintf("  - [%s] From: %s | Subject: %s | Date: %s\n",
-				e.MessageID, e.Sender, e.Subject, e.Date.Format("2006-01-02")))
+	if runner := m.chatAgent; runner != nil {
+		input := m.buildChatAgentInput(question, currentFolder, previousMessages)
+		return func() tea.Msg {
+			result, err := runner.Run(context.Background(), input)
+			return ChatAgentResponseMsg{Result: result, Err: err}
 		}
 	}
-	ctx.WriteString("\nIf the user asks to show, filter, or find specific emails, include a <filter> block at the end of your response:\n")
-	ctx.WriteString("<filter>{\"ids\": [\"<message-id-1>\", \"<message-id-2>\"], \"label\": \"short description\"}</filter>\n")
-	ctx.WriteString("Only include a <filter> block when the user is explicitly asking to filter or navigate to specific emails.\n")
-
-	systemMsg := ai.ChatMessage{Role: "system", Content: ctx.String()}
-	messages := append([]ai.ChatMessage{systemMsg}, m.chatMessages...)
-
-	classifier := m.classifier
-	tools, dispatch := m.chatToolRegistryWithFolder(currentFolder)
 
 	return func() tea.Msg {
-		if classifier == nil {
-			return ChatResponseMsg{Err: fmt.Errorf("AI not configured")}
-		}
-
-		for round := 0; round < maxToolRounds; round++ {
-			response, calls, err := classifier.ChatWithTools(messages, tools)
-			if err != nil {
-				if errors.Is(err, ai.ErrToolsNotSupported) {
-					// Fall back to plain Chat()
-					reply, err2 := classifier.Chat(messages)
-					if err2 != nil {
-						return ChatResponseMsg{Err: err2}
-					}
-					return ChatResponseMsg{Content: reply}
-				}
-				return ChatResponseMsg{Err: err}
-			}
-
-			if len(calls) == 0 {
-				// Final text response
-				return ChatResponseMsg{Content: response}
-			}
-
-			// Append assistant turn with all tool calls (once per round)
-			messages = append(messages, ai.ChatMessage{
-				Role:      "assistant",
-				ToolCalls: calls,
-			})
-
-			// Execute tool calls and append one result message per call
-			for _, call := range calls {
-				result, dispErr := dispatch(call.Name, call.Arguments)
-				if dispErr != nil {
-					result = "Error: " + dispErr.Error()
-				}
-				messages = append(messages, ai.ChatMessage{
-					Role:       "tool",
-					ToolCallID: call.ID,
-					ToolName:   call.Name,
-					Content:    result,
-				})
-			}
-		}
-
-		return ChatResponseMsg{Content: "Max tool rounds reached without a final response."}
+		return ChatAgentResponseMsg{Err: errChatAgentUnavailable}
 	}
+}
+
+func (m *Model) buildChatAgentInput(question, currentFolder string, history []ai.ChatMessage) agent.ChatInput {
+	return agent.ChatInput{
+		UserMessage:     chatAgentBoundedText(question, chatAgentMaxUserMessageChars),
+		CurrentFolder:   currentFolder,
+		ActiveTab:       chatAgentTabName(m.activeTab),
+		VisibleIDs:      m.chatVisibleMessageIDs(chatAgentMaxVisibleIDs),
+		SelectedIDs:     m.chatSelectedMessageIDs(chatAgentMaxSelectedIDs),
+		ComposeSnapshot: m.chatComposeSnapshot(),
+		History:         chatAgentHistory(history, chatAgentMaxHistoryTurns),
+	}
+}
+
+func chatAgentTabName(tab int) string {
+	switch tab {
+	case tabTimeline:
+		return "timeline"
+	case tabCompose:
+		return "compose"
+	case tabContacts:
+		return "contacts"
+	case tabCalendar:
+		return "calendar"
+	default:
+		return ""
+	}
+}
+
+func (m *Model) chatVisibleMessageIDs(limit int) []string {
+	if limit <= 0 {
+		return nil
+	}
+	displayEmails := m.timelineDisplayEmails()
+	ids := make([]string, 0, min(len(displayEmails), limit))
+	for _, email := range displayEmails {
+		if email == nil || strings.TrimSpace(email.MessageID) == "" {
+			continue
+		}
+		ids = append(ids, email.MessageID)
+		if len(ids) >= limit {
+			break
+		}
+	}
+	return ids
+}
+
+func (m *Model) chatSelectedMessageIDs(limit int) []string {
+	if limit <= 0 || len(m.timeline.selectedMessageIDs) == 0 {
+		return nil
+	}
+	ids := make([]string, 0, len(m.timeline.selectedMessageIDs))
+	for id, selected := range m.timeline.selectedMessageIDs {
+		if selected && strings.TrimSpace(id) != "" {
+			ids = append(ids, id)
+		}
+	}
+	sort.Strings(ids)
+	if len(ids) > limit {
+		ids = ids[:limit]
+	}
+	return ids
+}
+
+func (m *Model) chatComposeSnapshot() *agent.ComposeSnapshot {
+	if m.activeTab != tabCompose {
+		return nil
+	}
+	return &agent.ComposeSnapshot{
+		To:      chatAgentBoundedText(m.composeTo.Value(), chatAgentMaxComposeHeaderChars),
+		CC:      chatAgentBoundedText(m.composeCC.Value(), chatAgentMaxComposeHeaderChars),
+		BCC:     chatAgentBoundedText(m.composeBCC.Value(), chatAgentMaxComposeHeaderChars),
+		Subject: chatAgentBoundedText(m.composeSubject.Value(), chatAgentMaxComposeHeaderChars),
+		Body:    chatAgentBoundedText(m.composeBody.Value(), chatAgentMaxComposeBodyChars),
+	}
+}
+
+func chatAgentHistory(messages []ai.ChatMessage, limit int) []agent.ChatTurn {
+	if limit <= 0 || len(messages) == 0 {
+		return nil
+	}
+	if len(messages) > limit {
+		messages = messages[len(messages)-limit:]
+	}
+	turns := make([]agent.ChatTurn, 0, len(messages))
+	for _, msg := range messages {
+		content := strings.TrimSpace(msg.Content)
+		if content == "" {
+			continue
+		}
+		turns = append(turns, agent.ChatTurn{
+			Role:    msg.Role,
+			Content: chatAgentBoundedText(content, chatAgentMaxHistoryChars),
+		})
+	}
+	return turns
+}
+
+func chatAgentBoundedText(value string, limit int) string {
+	value = strings.TrimSpace(value)
+	if limit <= 0 || value == "" {
+		return ""
+	}
+	runes := []rune(value)
+	if len(runes) <= limit {
+		return value
+	}
+	return string(runes[:limit]) + "...[truncated]"
 }
 
 // renderChatPanel renders the chat panel content (without border)
 func (m *Model) renderChatPanel() string {
 	w := chatPanelWidth
+	contentHeight := m.buildLayoutPlan(m.windowWidth, m.windowHeight).ContentHeight
+	if contentHeight < 5 {
+		contentHeight = 5
+	}
 	var sb strings.Builder
 
 	// Title
@@ -125,11 +186,11 @@ func (m *Model) renderChatPanel() string {
 	userStyle := lipgloss.NewStyle().Foreground(m.theme.Text.Primary.ForegroundColor()).Width(w)
 	aiStyle := lipgloss.NewStyle().Foreground(m.theme.Severity.Info.ForegroundColor()).Width(w)
 
-	// Calculate how many lines we have for history
-	// Total height = tableHeight; minus title(1) + divider(1) + divider2(1) + input(1) = 4
-	historyLines := m.windowHeight - 7 - 4 // same tableHeight formula minus chat chrome
-	if historyLines < 3 {
-		historyLines = 3
+	// Calculate history from the same inner panel height as the main layout:
+	// title + top divider + bottom divider + input occupy four rows.
+	historyLines := contentHeight - 4
+	if historyLines < 1 {
+		historyLines = 1
 	}
 
 	// Rebuild wrap cache if stale
@@ -173,13 +234,18 @@ func (m *Model) renderChatPanel() string {
 
 	// Input field
 	if m.chatWaiting {
-		waitStyle := lipgloss.NewStyle().Foreground(m.theme.Text.Dim.ForegroundColor())
+		waitStyle := lipgloss.NewStyle().Foreground(m.theme.Text.Dim.ForegroundColor()).Width(w)
 		sb.WriteString(waitStyle.Render("Thinking..."))
 	} else {
+		inputWidth := w - lipgloss.Width(m.chatInput.Prompt)
+		if inputWidth < 1 {
+			inputWidth = 1
+		}
+		m.chatInput.SetWidth(inputWidth)
 		sb.WriteString(m.chatInput.View())
 	}
 
-	return sb.String()
+	return fitPanelContentHeight(sb.String(), contentHeight)
 }
 
 // wrapLines splits text on newlines first, then word-wraps each paragraph to

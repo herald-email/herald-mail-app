@@ -8,6 +8,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/huh/v2"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/herald-email/herald-mail-app/internal/agent"
 	"github.com/herald-email/herald-mail-app/internal/aicheck"
 	"github.com/herald-email/herald-mail-app/internal/config"
 	"github.com/herald-email/herald-mail-app/internal/models"
@@ -2641,7 +2642,7 @@ func TestBuildConfig_OpenAIWritesEmbeddingProviderAndModel(t *testing.T) {
 	s.aiProvider = "openai"
 	s.openAIAPIKey = "sk-test"
 	s.openAIBaseURL = "https://openai-compatible.example/v1"
-	s.openAIModel = "gpt-5.4-mini"
+	s.openAIModel = "gpt-5-mini"
 	s.embeddingProvider = config.EmbeddingProviderOpenAI
 	s.openAIEmbeddingModel = "text-embedding-3-large"
 
@@ -2650,8 +2651,8 @@ func TestBuildConfig_OpenAIWritesEmbeddingProviderAndModel(t *testing.T) {
 	if cfg.AI.Provider != "openai" {
 		t.Errorf("AI.Provider = %q, want openai", cfg.AI.Provider)
 	}
-	if cfg.OpenAI.Model != "gpt-5.4-mini" {
-		t.Errorf("OpenAI.Model = %q, want gpt-5.4-mini", cfg.OpenAI.Model)
+	if cfg.OpenAI.Model != "gpt-5-mini" {
+		t.Errorf("OpenAI.Model = %q, want gpt-5-mini", cfg.OpenAI.Model)
 	}
 	if cfg.OpenAI.EmbeddingModel != "text-embedding-3-large" {
 		t.Errorf("OpenAI.EmbeddingModel = %q, want text-embedding-3-large", cfg.OpenAI.EmbeddingModel)
@@ -2661,6 +2662,92 @@ func TestBuildConfig_OpenAIWritesEmbeddingProviderAndModel(t *testing.T) {
 	}
 	if cfg.Semantic.Model != "text-embedding-3-large" {
 		t.Errorf("Semantic.Model = %q, want text-embedding-3-large", cfg.Semantic.Model)
+	}
+}
+
+func TestBuildConfig_OpenAIPreservesLongAPIKey(t *testing.T) {
+	longKey := "sk-" + strings.Repeat("a", 240)
+	s := NewSettings(SettingsModePanel, nil)
+	s.aiProvider = "openai"
+	s.openAIAPIKey = longKey
+	s.openAIBaseURL = defaultOpenAIBaseURL
+	s.openAIModel = defaultOpenAIModel
+	s.embeddingProvider = config.EmbeddingProviderOpenAI
+	s.openAIEmbeddingModel = defaultOpenAIEmbed
+
+	cfg := s.buildConfig()
+
+	if cfg.OpenAI.APIKey != longKey {
+		t.Fatalf("OpenAI.APIKey length = %d, want %d", len(cfg.OpenAI.APIKey), len(longKey))
+	}
+}
+
+func TestSettingsOpenAIRequiresAPIKeyBeforeSave(t *testing.T) {
+	existing := &config.Config{}
+	existing.AI.Provider = "openai"
+	existing.OpenAI.BaseURL = defaultOpenAIBaseURL
+	existing.OpenAI.Model = defaultOpenAIModel
+	existing.OpenAI.EmbeddingModel = defaultOpenAIEmbed
+	existing.Semantic.Provider = config.EmbeddingProviderOpenAI
+	existing.Semantic.Model = defaultOpenAIEmbed
+	s := NewSettingsWithPath(SettingsModePanel, existing, "/tmp/herald.yaml")
+	s.panelSection = settingsPanelSectionAI
+	s.buildForm()
+
+	s.consumeFormNavigationCmd(s.form.NextGroup(), 0)
+	if rendered := stripANSI(renderSettingsViewForTest(t, s, 100, 32)); !strings.Contains(rendered, "OpenAI API Key") {
+		t.Fatalf("expected OpenAI key field, got:\n%s", rendered)
+	}
+
+	updated, cmd := s.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	s = updated.(*Settings)
+	messages := settingsImmediateMessagesForTest(cmd)
+
+	for _, msg := range messages {
+		if _, ok := msg.(SettingsSavedMsg); ok {
+			t.Fatalf("blank OpenAI key should not save settings, got messages %#v", messages)
+		}
+	}
+	rendered := stripANSI(renderSettingsViewForTest(t, s, 100, 32))
+	if !strings.Contains(rendered, "OpenAI API Key is required") {
+		t.Fatalf("expected blank OpenAI key validation, got:\n%s", rendered)
+	}
+	if s.form.State == huh.StateCompleted {
+		t.Fatal("blank OpenAI key should keep the settings form open")
+	}
+}
+
+func TestSettingsOpenAISavePersistsPasswordInputValue(t *testing.T) {
+	existing := &config.Config{}
+	existing.AI.Provider = "openai"
+	existing.OpenAI.BaseURL = defaultOpenAIBaseURL
+	existing.OpenAI.Model = defaultOpenAIModel
+	existing.OpenAI.EmbeddingModel = defaultOpenAIEmbed
+	existing.Semantic.Provider = config.EmbeddingProviderOpenAI
+	existing.Semantic.Model = defaultOpenAIEmbed
+	s := NewSettingsWithPath(SettingsModePanel, existing, "/tmp/herald.yaml")
+	s.panelSection = settingsPanelSectionAI
+	s.buildForm()
+
+	longKey := "sk-" + strings.Repeat("p", 180)
+	s.consumeFormNavigationCmd(s.form.NextGroup(), 0)
+	if rendered := stripANSI(renderSettingsViewForTest(t, s, 100, 32)); !strings.Contains(rendered, "OpenAI API Key") {
+		t.Fatalf("expected OpenAI key field, got:\n%s", rendered)
+	}
+
+	s = updateSettingsForTest(t, s, tea.PasteMsg{Content: longKey})
+	if s.openAIAPIKey != longKey {
+		t.Fatalf("OpenAI key after paste length = %d, want %d", len(s.openAIAPIKey), len(longKey))
+	}
+
+	s.consumeFormNavigationCmd(s.form.NextGroup(), 0)
+	if s.openAIAPIKey != longKey {
+		t.Fatalf("hidden embedding API key field erased OpenAI key, length = %d, want %d", len(s.openAIAPIKey), len(longKey))
+	}
+
+	cfg := s.buildConfig()
+	if cfg.OpenAI.APIKey != longKey {
+		t.Fatalf("saved OpenAI key length = %d, want %d", len(cfg.OpenAI.APIKey), len(longKey))
 	}
 }
 
@@ -2691,6 +2778,7 @@ func TestBuildConfig_AIDisabledClearsAIBackends(t *testing.T) {
 	s.embedModel = defaultEmbeddingModel
 	s.claudeAPIKey = "sk-ant-test"
 	s.openAIAPIKey = "sk-test"
+	s.agentReasoningEffort = agent.ReasoningEffortHigh
 
 	cfg := s.buildConfig()
 
@@ -2702,6 +2790,28 @@ func TestBuildConfig_AIDisabledClearsAIBackends(t *testing.T) {
 	}
 	if cfg.Claude.APIKey != "" || cfg.OpenAI.APIKey != "" {
 		t.Errorf("expected external AI API keys cleared when AI is disabled")
+	}
+	if cfg.AI.Agent.ReasoningEffort != "" {
+		t.Errorf("expected chat-agent reasoning effort cleared when AI is disabled, got %q", cfg.AI.Agent.ReasoningEffort)
+	}
+}
+
+func TestBuildConfig_OpenAIWritesChatReasoningEffort(t *testing.T) {
+	s := NewSettings(SettingsModeWizard, nil)
+	s.aiProvider = "openai"
+	s.openAIModel = "gpt-5-mini"
+	s.agentReasoningEffort = agent.ReasoningEffortHigh
+
+	cfg := s.buildConfig()
+
+	if cfg.AI.Provider != "openai" {
+		t.Fatalf("AI.Provider = %q, want openai", cfg.AI.Provider)
+	}
+	if cfg.OpenAI.Model != "gpt-5-mini" {
+		t.Fatalf("OpenAI.Model = %q, want gpt-5-mini", cfg.OpenAI.Model)
+	}
+	if cfg.AI.Agent.ReasoningEffort != agent.ReasoningEffortHigh {
+		t.Fatalf("AI.Agent.ReasoningEffort = %q, want %q", cfg.AI.Agent.ReasoningEffort, agent.ReasoningEffortHigh)
 	}
 }
 

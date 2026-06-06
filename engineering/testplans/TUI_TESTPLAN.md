@@ -1157,6 +1157,32 @@ Check these states during every applicable lane:
 - Herald blocks deletion of the last configured mail source.
 - At `50x15`, the standard minimum-size guard appears and resizing larger restores the same Accounts state cleanly.
 
+### TC-18D — Gollem-only chat-agent runtime
+
+**Lane:** A, C
+**Sizes:** `220x50`, `80x24`, `50x15`
+
+**Steps:**
+1. Launch with the default demo or live config where `ai.provider` is configured and no `ai.agent` override is set, open chat with `g`, submit a simple mailbox question, and confirm the chat drawer routes through the Gollem agent runner.
+2. In an automated app harness, omit an injected runner and submit a chat message; confirm the app returns a typed `ChatAgentResponseMsg` error and never calls the legacy classifier chat path.
+3. In the same harness, set `ai.provider: disabled` and confirm `SetConfig` clears the runner; set `ai.provider: ollama` and confirm `SetConfig` installs the default Gollem runner without needing a separate agent opt-in.
+4. In the app harness, return `TimelineIntent{mode: explicit_ids}` with valid and invalid message IDs and confirm only validated messages appear in Timeline, preserving returned order and using the agent label.
+5. In the app harness, return `TimelineIntent{mode: keyword}` and confirm the existing Timeline search pipeline opens with the hidden keyword-only prefix, returns local search results, and ignores stale tokens.
+6. In the app harness, return an `EmailSummary` with people, action items, open questions, and cited message IDs; confirm the chat message displays all source-backed sections.
+7. In Compose, return a `ComposeIntent` and confirm the existing AI review/accept panel opens without mutating subject or body; repeat outside Compose and confirm a visible `Open Compose` notice.
+8. In agent tests, run provider-contract fake-mail cases for provider factory construction, tool calls, search-plus-summary, typed Timeline intent, typed Compose intent, malformed tool args, and provider failure.
+9. Submit an assistant reply that contains literal `<filter>...</filter>` text and confirm it renders as ordinary assistant text instead of mutating Timeline.
+10. Resize through `220x50`, `80x24`, and `50x15` with chat open.
+
+**Expect:**
+- Gollem is the only chat runtime; default configured AI routes chat through Gollem, while explicit `ai.provider: disabled` disables chat.
+- A configured runner receives bounded UI context including current folder, active tab, visible message IDs, selected message IDs, optional Compose draft snapshot, and bounded chat history.
+- Agent replies append to chat history and clear the waiting state.
+- Typed Timeline intents are locally validated before mutation; keyword, semantic, and hybrid modes reuse the existing search pipeline.
+- Typed Compose intents route through the existing Compose AI review state and never silently change a draft.
+- The legacy direct Ollama chat loop, chat tool registry, and `<filter>` parser are absent from the chat panel path.
+- At `50x15`, the minimum-size guard appears instead of clipped chat chrome, and resizing larger restores the chat layout.
+
 ### TC-24A — Theme selection and custom theme editing
 
 **Lane:** A

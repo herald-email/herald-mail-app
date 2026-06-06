@@ -105,6 +105,9 @@ func (m *Model) renderAIStatusChip() string {
 		if m.demoMode {
 			return ""
 		}
+		if m.aiMissingCredential() {
+			return m.theme.Text.Dim.Style().Render(fmt.Sprintf("%-10s", "AI no key"))
+		}
 		return m.theme.Text.Dim.Style().Render("AI: off")
 	}
 	status := m.schedulerStatus()
@@ -136,6 +139,20 @@ func (m *Model) renderAIStatusChip() string {
 		style = m.theme.Severity.Error.Style()
 	}
 	return style.Render(chip)
+}
+
+func (m *Model) aiMissingCredential() bool {
+	if m.cfg == nil {
+		return false
+	}
+	switch strings.ToLower(strings.TrimSpace(m.cfg.AI.Provider)) {
+	case "claude":
+		return strings.TrimSpace(m.cfg.Claude.APIKey) == ""
+	case "openai":
+		return strings.TrimSpace(m.cfg.OpenAI.APIKey) == ""
+	default:
+		return false
+	}
 }
 
 func (m *Model) renderTitleBar(width int) string {
@@ -521,7 +538,7 @@ func (m *Model) rawKeyHintsForWidth(w int, chrome ChromeState) string {
 	} else if m.pendingDeleteConfirm || m.pendingUnsubscribe {
 		hints = "[y] confirm  │  [n/Esc] cancel"
 	} else if chrome.FocusedPanel == panelChat && chrome.ShowChat {
-		hints = joinHintSegments("enter: send", "esc/tab: close chat", m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"))
+		hints = joinHintSegments("enter: send", "esc/tab: close chat", "ctrl+c: quit")
 	} else if chrome.ShowLogs {
 		hints = joinHintSegments(
 			fmt.Sprintf("%s/esc: close logs", displayShortcutKey(m.commandKey(keyboardScopeGlobal, CommandLogsToggle), keyDisplayHint)),

@@ -172,6 +172,7 @@ func (m *Model) handleOverlayKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool)
 			if !m.chatWaiting {
 				return m, m.submitChat(), true
 			}
+			return m, nil, true
 		case "esc":
 			m.showChat = false
 			m.chatInput.Blur()
@@ -179,11 +180,15 @@ func (m *Model) handleOverlayKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool)
 				m.updateTableDimensions(m.windowWidth, m.windowHeight)
 			}
 			m.setFocusedPanel(m.defaultFocusPanel())
+			return m, nil, true
 		case "tab":
 			m.chatInput.Blur()
 			m.setFocusedPanel(m.defaultFocusPanel())
+			return m, nil, true
 		}
-		return m, nil, true
+		var cmd tea.Cmd
+		m.chatInput, cmd = m.chatInput.Update(msg)
+		return m, cmd, true
 	}
 
 	return m, nil, false

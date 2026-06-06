@@ -74,12 +74,15 @@ func (m *Model) performSearchWithToken(query string, token int) tea.Cmd {
 		return func() tea.Msg { return SearchResultMsg{Query: "", Token: token} }
 	}
 	folder := m.currentFolder
+	keywordMode := strings.HasPrefix(query, "/k ")
 	bodyMode := strings.HasPrefix(query, "/b ")
 	crossFolder := strings.HasPrefix(query, "/*")
 	semanticMode := strings.HasPrefix(query, "?")
 
 	actualQuery := query
 	switch {
+	case keywordMode:
+		actualQuery = strings.TrimPrefix(query, "/k ")
 	case bodyMode:
 		actualQuery = strings.TrimPrefix(query, "/b ")
 	case crossFolder:
@@ -143,6 +146,9 @@ func (m *Model) performSearchWithToken(query string, token int) tea.Cmd {
 		var err error
 		source := "local"
 		switch {
+		case keywordMode:
+			source = "local"
+			emails, err = backend.SearchEmails(folder, actualQuery, false)
 		case semanticMode:
 			source = "semantic"
 			if classifier == nil {

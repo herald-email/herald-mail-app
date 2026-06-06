@@ -1,14 +1,8 @@
 package app
 
-import (
-	"encoding/json"
-	"testing"
-
-	"github.com/herald-email/herald-mail-app/internal/models"
-)
+import "github.com/herald-email/herald-mail-app/internal/models"
 
 // stubBackend is a minimal backend.Backend implementation for unit tests.
-// Only the methods called by chatToolRegistry dispatch are implemented.
 type stubBackend struct {
 	searchResult           []*models.EmailData
 	imapSearchResult       []*models.EmailData
@@ -236,74 +230,4 @@ func newStubModel(b *stubBackend) *Model {
 		currentFolder: "INBOX",
 	}
 	return m
-}
-
-func TestChatToolRegistry_FourTools(t *testing.T) {
-	m := newStubModel(&stubBackend{})
-	tools, _ := m.chatToolRegistry()
-	if len(tools) != 4 {
-		t.Fatalf("expected 4 tools, got %d", len(tools))
-	}
-	names := map[string]bool{}
-	for _, tool := range tools {
-		names[tool.Name] = true
-	}
-	expected := []string{"search_emails", "list_emails_by_sender", "get_thread", "get_sender_stats"}
-	for _, name := range expected {
-		if !names[name] {
-			t.Errorf("missing tool: %s", name)
-		}
-	}
-}
-
-func TestChatToolRegistry_DispatchUnknownTool(t *testing.T) {
-	m := newStubModel(&stubBackend{})
-	_, dispatch := m.chatToolRegistry()
-	_, err := dispatch("nonexistent_tool", json.RawMessage(`{}`))
-	if err == nil {
-		t.Fatal("expected error for unknown tool, got nil")
-	}
-}
-
-func TestChatToolRegistry_DispatchSearchEmails(t *testing.T) {
-	stub := &stubBackend{
-		searchResult: []*models.EmailData{
-			{MessageID: "msg1", Sender: "test@example.com", Subject: "Invoice #123"},
-		},
-	}
-	m := newStubModel(stub)
-	_, dispatch := m.chatToolRegistry()
-
-	result, err := dispatch("search_emails", json.RawMessage(`{"query":"invoice"}`))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if result == "" {
-		t.Error("expected non-empty result")
-	}
-	var emails []map[string]string
-	if err := json.Unmarshal([]byte(result), &emails); err != nil {
-		t.Fatalf("result is not valid JSON: %v", err)
-	}
-	if len(emails) != 1 {
-		t.Errorf("expected 1 email, got %d", len(emails))
-	}
-}
-
-func TestChatToolRegistry_DispatchGetSenderStats(t *testing.T) {
-	stub := &stubBackend{
-		statsResult: map[string]*models.SenderStats{
-			"sender@example.com": {TotalEmails: 5},
-		},
-	}
-	m := newStubModel(stub)
-	_, dispatch := m.chatToolRegistry()
-
-	result, err := dispatch("get_sender_stats", json.RawMessage(`{}`))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if result == "" {
-		t.Error("expected non-empty result")
-	}
 }

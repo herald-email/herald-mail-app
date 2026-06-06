@@ -36,6 +36,11 @@ ollama:
   embedding_model: "nomic-embed-text-v2-moe"
 semantic:
   enabled: false
+ai:
+  provider: ollama
+  agent:
+    provider: ollama
+    model: "gemma3:4b"
 ```
 
 ## Fields
@@ -95,14 +100,21 @@ semantic:
 | `claude.model` | Claude model. Default `claude-sonnet-4-6`. |
 | `openai.api_key` | OpenAI or compatible provider key. |
 | `openai.base_url` | API base URL. Default `https://api.openai.com/v1`. |
-| `openai.model` | OpenAI-compatible model. Default `gpt-4o`. |
+| `openai.model` | OpenAI-compatible model. Default `gpt-5-mini`. |
 | `ai.provider` | `ollama`, `claude`, `openai`, or `disabled`. Default `ollama`. |
 | `ai.local_max_concurrency` | Local AI concurrency. Default `1`. |
 | `ai.external_max_concurrency` | External AI concurrency. Default `4`. |
 | `ai.background_queue_limit` | Background AI queue limit. Default `64`. |
 | `ai.pause_background_while_interactive` | Pauses background AI while interactive tasks run. Default true. |
+| `ai.agent.provider` | Optional chat-agent provider override: `ollama`, `anthropic`, `openai`, `kimi`, or `fireworks`. Defaults to the global `ai.provider`; `claude` maps to Anthropic. |
+| `ai.agent.model` | Optional chat-agent model override. For Ollama, defaults to `ollama.model` when empty. For Anthropic, defaults to `claude.model`; for OpenAI, defaults to `openai.model`. |
+| `ai.agent.api_key` | Optional provider API key for remote Gollem chat-agent providers. Treat as credential. |
+| `ai.agent.base_url` | Optional provider base URL. Ollama defaults to `ollama.host`; OpenAI defaults to `openai.base_url`; Kimi and Fireworks use built-in OpenAI-compatible defaults when empty. |
+| `ai.agent.reasoning_effort` | Optional OpenAI chat-agent reasoning effort: `low`, `medium`, `high`, or `xhigh`. Default `low` for interactive chat speed. |
 
 Existing Ollama configs are checked at startup without blocking cached/offline mail. If a configured local model is unavailable, Herald shows `AI down`, disables AI actions, and lists the relevant `ollama pull <model>` commands in Settings > AI.
+
+The Gollem chat-agent config is UI-only in the first iteration and is the only chat runtime when AI is configured. It can search and summarize mail through read-only tools, project typed Timeline results, and propose Compose edits through the existing review flow; it cannot send, delete, archive, or mutate calendar events. Set `ai.provider: disabled` to disable chat and the other in-memory AI actions.
 
 ## Provider Presets
 

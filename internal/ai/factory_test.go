@@ -95,7 +95,7 @@ func TestNewFromConfigOpenAI(t *testing.T) {
 	cfg.AI.Provider = "openai"
 	cfg.OpenAI.APIKey = "sk-test"
 	cfg.OpenAI.BaseURL = "https://api.openai.com/v1"
-	cfg.OpenAI.Model = "gpt-5.4-mini"
+	cfg.OpenAI.Model = "gpt-5-mini"
 
 	client, err := NewFromConfig(cfg)
 	if err != nil {
@@ -129,7 +129,7 @@ func TestNewFromConfigOpenAIUsesConfiguredEmbeddingModel(t *testing.T) {
 	cfg.AI.Provider = "openai"
 	cfg.OpenAI.APIKey = "sk-test"
 	cfg.OpenAI.BaseURL = srv.URL
-	cfg.OpenAI.Model = "gpt-5.4-mini"
+	cfg.OpenAI.Model = "gpt-5-mini"
 	cfg.OpenAI.EmbeddingModel = "text-embedding-3-large"
 	cfg.Semantic.Provider = config.EmbeddingProviderOpenAI
 	cfg.Semantic.Model = "text-embedding-3-large"

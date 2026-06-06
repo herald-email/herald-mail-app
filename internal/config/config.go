@@ -80,6 +80,14 @@ type CalendarConfig struct {
 	SelectedCalendars []string `yaml:"selected_calendars,omitempty"`
 }
 
+type AgentConfig struct {
+	Provider        string `yaml:"provider,omitempty"` // ollama | anthropic | openai | kimi | fireworks
+	Model           string `yaml:"model,omitempty"`
+	APIKey          string `yaml:"api_key,omitempty"`
+	BaseURL         string `yaml:"base_url,omitempty"`
+	ReasoningEffort string `yaml:"reasoning_effort,omitempty"` // OpenAI/Gollem chat: low | medium | high | xhigh
+}
+
 type NotificationConfig struct {
 	Enabled                  bool `yaml:"enabled"`
 	NewMail                  bool `yaml:"new_mail"`
@@ -229,16 +237,17 @@ type Config struct {
 	OpenAI struct {
 		APIKey         string `yaml:"api_key"`
 		BaseURL        string `yaml:"base_url"`        // default: "https://api.openai.com/v1"
-		Model          string `yaml:"model"`           // default: "gpt-5.4-mini"
+		Model          string `yaml:"model"`           // default: "gpt-5-mini"
 		EmbeddingModel string `yaml:"embedding_model"` // default: "text-embedding-3-small"
 	} `yaml:"openai"`
 
 	AI struct {
-		Provider                        string `yaml:"provider"`                           // "ollama" | "claude" | "openai" | "disabled"; default: "ollama"
-		LocalMaxConcurrency             int    `yaml:"local_max_concurrency"`              // default: 1
-		ExternalMaxConcurrency          int    `yaml:"external_max_concurrency"`           // default: 4
-		BackgroundQueueLimit            int    `yaml:"background_queue_limit"`             // default: 64
-		PauseBackgroundWhileInteractive bool   `yaml:"pause_background_while_interactive"` // default: true
+		Provider                        string      `yaml:"provider"`                           // "ollama" | "claude" | "openai" | "disabled"; default: "ollama"
+		LocalMaxConcurrency             int         `yaml:"local_max_concurrency"`              // default: 1
+		ExternalMaxConcurrency          int         `yaml:"external_max_concurrency"`           // default: 4
+		BackgroundQueueLimit            int         `yaml:"background_queue_limit"`             // default: 64
+		PauseBackgroundWhileInteractive bool        `yaml:"pause_background_while_interactive"` // default: true
+		Agent                           AgentConfig `yaml:"agent,omitempty"`
 	} `yaml:"ai"`
 }
 
@@ -759,7 +768,7 @@ func (c *Config) applyDefaults() {
 		c.OpenAI.BaseURL = "https://api.openai.com/v1"
 	}
 	if c.OpenAI.Model == "" {
-		c.OpenAI.Model = "gpt-5.4-mini"
+		c.OpenAI.Model = "gpt-5-mini"
 	}
 	if c.OpenAI.EmbeddingModel == "" {
 		c.OpenAI.EmbeddingModel = defaultOpenAIEmbeddingModel
@@ -812,6 +821,12 @@ func (c *Config) applyDefaults() {
 	}
 	if c.Claude.Model == "" {
 		c.Claude.Model = "claude-sonnet-4-6"
+	}
+	if c.OpenAI.BaseURL == "" {
+		c.OpenAI.BaseURL = "https://api.openai.com/v1"
+	}
+	if c.OpenAI.Model == "" {
+		c.OpenAI.Model = "gpt-5-mini"
 	}
 	if c.Keyboard.Profile == "" {
 		c.Keyboard.Profile = "default"

@@ -30,7 +30,7 @@ func openAIEmbedOKResponse(vec []float32) openAIEmbedResponse {
 }
 
 func newTestOpenAIClient(srvURL string) *OpenAICompatClient {
-	return NewOpenAICompatClient("test-key", srvURL, "gpt-4o")
+	return NewOpenAICompatClient("test-key", srvURL, "gpt-5-mini")
 }
 
 func TestOpenAICompatClientChat(t *testing.T) {
@@ -117,7 +117,7 @@ func TestOpenAICompatClientDefaultsApplied(t *testing.T) {
 	if c.baseURL != "https://api.openai.com/v1" {
 		t.Errorf("unexpected baseURL: %q", c.baseURL)
 	}
-	if c.model != "gpt-5.4-mini" {
+	if c.model != "gpt-5-mini" {
 		t.Errorf("unexpected model: %q", c.model)
 	}
 	if c.embeddingModel != "text-embedding-3-small" {

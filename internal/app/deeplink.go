@@ -308,15 +308,15 @@ func (m *Model) notifyClassificationCompletionCmd() tea.Cmd {
 	})
 }
 
-func (m *Model) notifyChatResultCmd(msg ChatResponseMsg) tea.Cmd {
+func (m *Model) notifyChatResultCmd(content string, err error) tea.Cmd {
 	if !m.notificationEventEnabled(func(cfg notificationsConfigView) bool { return cfg.ChatResults }) {
 		return nil
 	}
 	title := "Herald chat result"
-	body := strings.TrimSpace(msg.Content)
-	if msg.Err != nil {
+	body := strings.TrimSpace(content)
+	if err != nil {
 		title = "Herald chat failed"
-		body = msg.Err.Error()
+		body = err.Error()
 	}
 	if body == "" {
 		body = "Chat finished."

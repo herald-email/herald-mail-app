@@ -9,6 +9,7 @@ import (
 
 	"charm.land/bubbles/v2/table"
 	tea "charm.land/bubbletea/v2"
+	"github.com/herald-email/herald-mail-app/internal/ai"
 	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
@@ -169,6 +170,30 @@ func TestChromeHeightBudget_MainViewFills80x24(t *testing.T) {
 		t.Fatalf("expected main view to fill 80x24 exactly, got %d lines:\n%s", len(lines), stripANSI(rendered))
 	}
 	assertFitsWidth(t, 80, rendered)
+}
+
+func TestChromeHeightBudget_ChatLongAnswerStaysInsideMainView(t *testing.T) {
+	m := makeSizedModel(t, 120, 24)
+	m.activeTab = tabTimeline
+	m.timeline.emails = mockEmails()
+	m.showChat = true
+	m.focusedPanel = panelChat
+	m.chatMessages = []ai.ChatMessage{
+		{Role: "user", Content: "hey. what can you do?"},
+		{Role: "assistant", Content: strings.Repeat("I can search mail, summarize threads, explain people, and draft replies with source-grounded context. ", 40)},
+	}
+	m.updateTimelineTable()
+	m.updateTableDimensions(120, 24)
+
+	rendered := m.renderMainView()
+	lines := strings.Split(stripANSI(rendered), "\n")
+	if len(lines) != 24 {
+		t.Fatalf("expected chat view to fill 120x24 exactly, got %d lines:\n%s", len(lines), stripANSI(rendered))
+	}
+	assertFitsWidth(t, 120, rendered)
+	if !strings.Contains(stripANSI(rendered), "> Ask about your emails") {
+		t.Fatalf("expected chat input to remain visible after long answer, got:\n%s", stripANSI(rendered))
+	}
 }
 
 func TestChromeHeightBudget_CalendarModeSwitchingFillsBottomChrome(t *testing.T) {

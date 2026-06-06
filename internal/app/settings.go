@@ -13,6 +13,7 @@ import (
 	"charm.land/huh/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/herald-email/herald-mail-app/internal/agent"
 	"github.com/herald-email/herald-mail-app/internal/aicheck"
 	"github.com/herald-email/herald-mail-app/internal/config"
 	"github.com/herald-email/herald-mail-app/internal/models"
@@ -50,9 +51,11 @@ const (
 
 	defaultOllamaHost     = "http://localhost:11434"
 	defaultOllamaModel    = "gemma3:4b"
+	defaultChatModel      = "gpt-5-mini"
+	defaultChatEffort     = agent.ReasoningEffortLow
 	defaultEmbeddingModel = "nomic-embed-text-v2-moe"
 	defaultOpenAIBaseURL  = "https://api.openai.com/v1"
-	defaultOpenAIModel    = "gpt-5.4-mini"
+	defaultOpenAIModel    = defaultChatModel
 	defaultOpenAIEmbed    = "text-embedding-3-small"
 	customModelChoice     = "custom"
 
@@ -190,6 +193,7 @@ type Settings struct {
 	openAIModel          string
 	openAIEmbeddingModel string
 	embeddingProvider    string
+	agentReasoningEffort string
 	ollamaHost           string
 	ollamaModel          string
 	ollamaModelChoice    string
@@ -239,6 +243,15 @@ func hideSettingsFieldWhen(field huh.Field, hide func() bool) huh.Field {
 	return &conditionalSettingsField{field: field, hide: hide}
 }
 
+func requiredSettingsValue(label string) func(string) error {
+	return func(value string) error {
+		if strings.TrimSpace(value) == "" {
+			return fmt.Errorf("%s is required", label)
+		}
+		return nil
+	}
+}
+
 func (f *conditionalSettingsField) hidden() bool {
 	return f != nil && f.hide != nil && f.hide()
 }
@@ -248,6 +261,9 @@ func (f *conditionalSettingsField) Init() tea.Cmd {
 }
 
 func (f *conditionalSettingsField) Update(msg tea.Msg) (huh.Model, tea.Cmd) {
+	if f.hidden() {
+		return f, nil
+	}
 	model, cmd := f.field.Update(msg)
 	if field, ok := model.(huh.Field); ok {
 		f.field = field
@@ -416,6 +432,10 @@ func NewSettingsWithPathAndOptions(mode SettingsMode, existing *config.Config, c
 		s.openAIEmbeddingModel = existing.OpenAI.EmbeddingModel
 		if s.openAIEmbeddingModel == "" && s.embeddingProvider == config.EmbeddingProviderOpenAI {
 			s.openAIEmbeddingModel = existing.EffectiveEmbeddingModel()
+		}
+		s.agentReasoningEffort = agent.NormalizeReasoningEffort(existing.AI.Agent.ReasoningEffort)
+		if s.agentReasoningEffort == "" {
+			s.agentReasoningEffort = defaultChatEffort
 		}
 
 		// Sync & cleanup fields
@@ -884,15 +904,24 @@ func (s *Settings) buildForm() {
 
 	// Group 3b — Claude settings (shown only when provider = claude)
 	claudeGroup := huh.NewGroup(
-		huh.NewInput().Title("Claude API Key").Inline(true).EchoMode(huh.EchoModePassword).Value(&s.claudeAPIKey),
+		huh.NewInput().Title("Claude API Key").Inline(true).EchoMode(huh.EchoModePassword).Value(&s.claudeAPIKey).Validate(requiredSettingsValue("Claude API Key")),
 		huh.NewInput().Title("Claude Model").Inline(true).Placeholder("claude-sonnet-4-6").Value(&s.claudeModel),
 	).WithHideFunc(func() bool { return s.aiProvider != "claude" })
 
 	// Group 3c — OpenAI settings (shown only when provider = openai)
 	openAIGroup := huh.NewGroup(
-		huh.NewInput().Title("OpenAI API Key").Inline(true).EchoMode(huh.EchoModePassword).Value(&s.openAIAPIKey),
+		huh.NewInput().Title("OpenAI API Key").Inline(true).EchoMode(huh.EchoModePassword).Value(&s.openAIAPIKey).Validate(requiredSettingsValue("OpenAI API Key")),
 		huh.NewInput().Title("OpenAI Base URL").Inline(true).Placeholder(defaultOpenAIBaseURL).Value(&s.openAIBaseURL),
-		huh.NewInput().Title("OpenAI Model").Inline(true).Placeholder(defaultOpenAIModel).Value(&s.openAIModel),
+		huh.NewInput().Title("OpenAI Model").Inline(true).Placeholder(defaultChatModel).Value(&s.openAIModel),
+		huh.NewSelect[string]().
+			Title("Chat Reasoning Effort").
+			Options(
+				huh.NewOption("Low (fastest)", agent.ReasoningEffortLow),
+				huh.NewOption("Medium", agent.ReasoningEffortMedium),
+				huh.NewOption("High", agent.ReasoningEffortHigh),
+				huh.NewOption("XHigh (slowest)", agent.ReasoningEffortXHigh),
+			).
+			Value(&s.agentReasoningEffort),
 	).WithHideFunc(func() bool { return s.aiProvider != "openai" })
 
 	externalEmbeddingGroup := huh.NewGroup(
@@ -904,7 +933,7 @@ func (s *Settings) buildForm() {
 			).
 			Value(&s.embeddingProvider),
 		hideSettingsFieldWhen(
-			huh.NewInput().Title("Embedding API Key").Inline(true).EchoMode(huh.EchoModePassword).Value(&s.openAIAPIKey),
+			huh.NewInput().Title("Embedding API Key").Inline(true).EchoMode(huh.EchoModePassword).Value(&s.openAIAPIKey).Validate(requiredSettingsValue("Embedding API Key")),
 			func() bool {
 				return s.aiProvider == "openai" || s.effectiveSettingsEmbeddingProvider() != config.EmbeddingProviderOpenAI
 			},
@@ -3159,6 +3188,13 @@ func (s *Settings) buildConfig() *config.Config {
 	default:
 		cfg.Semantic.Model = strings.TrimSpace(firstNonEmptyString(s.embedModel, defaultEmbeddingModel))
 	}
+	cfg.AI.Agent.ReasoningEffort = ""
+	if configAIProvider(s.aiProvider) == agent.ProviderOpenAI {
+		cfg.AI.Agent.ReasoningEffort = agent.NormalizeReasoningEffort(s.agentReasoningEffort)
+		if cfg.AI.Agent.ReasoningEffort == "" {
+			cfg.AI.Agent.ReasoningEffort = defaultChatEffort
+		}
+	}
 
 	switch s.aiProvider {
 	case aiProviderOllamaDefault:
@@ -3178,6 +3214,7 @@ func (s *Settings) buildConfig() *config.Config {
 		cfg.Semantic.Model = ""
 		cfg.Claude.APIKey = ""
 		cfg.OpenAI.APIKey = ""
+		cfg.AI.Agent = config.AgentConfig{}
 	}
 
 	// Sync & cleanup

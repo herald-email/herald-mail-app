@@ -3052,15 +3052,6 @@ func (m *Model) handleTimelineMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		}
 		return m, nil, true
 
-	case ChatFilterActivatedMsg:
-		m.finishTimelineRangeSelection()
-		m.timeline.chatFilterMode = true
-		m.timeline.chatFilteredEmails = msg.Emails
-		m.timeline.chatFilterLabel = msg.Label
-		m.activeTab = tabTimeline
-		m.updateTimelineTable()
-		return m, nil, true
-
 	case SearchResultMsg:
 		if m.timeline.searchMode && msg.Token != 0 && msg.Token != m.timeline.searchToken {
 			return m, nil, true

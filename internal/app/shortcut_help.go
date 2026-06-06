@@ -138,6 +138,9 @@ func (m *Model) shortcutAliasBelongsToTextInput() bool {
 }
 
 func (m *Model) questionMarkBelongsToTextInput() bool {
+	if m.showChat && m.focusedPanel == panelChat {
+		return true
+	}
 	if (m.activeTab == tabTimeline &&
 		m.timeline.searchMode &&
 		m.timeline.searchFocus == timelineSearchFocusInput) ||
