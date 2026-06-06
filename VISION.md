@@ -279,7 +279,7 @@ Herald Memories turns important email history into local, source-backed tracks t
 - [x] Expose memory configuration with strong defaults for vault targets, generated sections, Obsidian output profile, prompt templates, update rules, and safe research behavior
 - [x] Add opt-in Obsidian sync that writes and updates Markdown notes under configured `People/`, `Job search/`, and configured memory folders while preserving user edits
 - [x] Add explicit Research Mode for person/company enrichment that never sends private email content to external research queries by default
-- [ ] Add a daily memory briefing that updates track status, open questions, and stale threads as a diff rather than a full inbox recap
+- [x] Add a daily memory briefing that updates track status, open questions, and stale threads as a diff rather than a full inbox recap
 
 ---
 

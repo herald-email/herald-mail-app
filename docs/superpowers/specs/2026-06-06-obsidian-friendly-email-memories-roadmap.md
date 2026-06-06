@@ -68,7 +68,7 @@ Herald Memories should appear where context changes user behavior: chat, Compose
 - [x] Compose gains Compose Radar, a compact panel that shows at most three relevant nudges while writing.
 - [x] Contacts gains read-only person dossiers with relationship summary, recent messages, active tracks, open loops, linked notes, and source evidence.
 - [x] Job-search company dossiers mirror the Obsidian `Job search/{active,backlog,done}/{Company}/` structure.
-- [ ] Daily briefing output becomes a diff over changed tracks, stale loops, and newly resolved questions.
+- [x] Daily briefing output becomes a diff over changed tracks, stale loops, and newly resolved questions.
 
 ## Compose Radar
 
@@ -97,7 +97,7 @@ Obsidian sync is a product boundary, not just export. Herald should write Markdo
 - [x] Use frontmatter for machine-readable fields such as `last_contact`, `status`, `company`, `source`, `memory_updated`, and `herald_memory_id`.
 - [ ] Use note links to canonical notes rather than copying long summaries across multiple files.
 - [x] Offer a sync preview before first write and before destructive section rewrites.
-- [ ] Keep daily briefing output under a configured `Scheduled Task Artifacts/` path when enabled.
+- [x] Keep daily briefing output under a configured `Scheduled Task Artifacts/` path when enabled.
 
 ## Configuration And Defaults
 
@@ -138,7 +138,7 @@ Memory updates need predictable rules because stale or overwritten memory is wor
 - [ ] Dismissed Compose Radar nudges store dismissal scope and do not reappear unless new evidence materially changes the situation.
 - [ ] Deleted or missing source emails mark dependent memories as source-missing and block them from high-confidence Compose Radar nudges.
 - [ ] Manual user corrections override generated memory text while keeping source evidence and edit history.
-- [ ] Daily briefing updates are diffs: changed tracks, newly resolved loops, newly stale loops, failed syncs, and review-needed memories.
+- [x] Daily briefing updates are diffs: changed tracks, newly resolved loops, newly stale loops, failed syncs, and review-needed memories.
 
 ## Research Mode
 
@@ -179,7 +179,7 @@ The roadmap is ordered so the feature becomes useful before it becomes broad. Th
 - [x] Person dossier v1 appears inside Contacts detail as a bounded, source-backed, read-only section built from immutable local memory records.
 - [x] Company dossier v1 appears inside Contacts detail as a bounded, source-backed, read-only section for company/domain-backed tracks, open loops, vault links, and evidence.
 - [x] **M6: Research Mode** - add explicit person/company research, sourced research notes, freshness checks, and "research before reply."
-- [ ] **M7: Daily memory briefing** - produce a diff over changed tracks, resolved questions, stale loops, and vault hygiene items.
+- [x] **M7: Daily memory briefing** - produce a diff over changed tracks, resolved questions, stale loops, and vault hygiene items.
 - [ ] **M8: Hardening and privacy controls** - add forget, pin, correct, source audit, update-rule audit, retention settings, prompt reset, and deletion propagation.
 
 ## First Shippable Slice
@@ -215,6 +215,7 @@ Testing should start with deterministic fixtures and then graduate to tmux-visib
 - [x] Unit-test cache-backed extraction metadata for classifications, contacts, body-cache presence, and embedding-cache presence.
 - [x] Unit-test track status transitions for active, waiting, stale, resolved, backlog, and done.
 - [x] Unit-test evidence source-type validation and snippet bounding for email, sent replies, notes, calendar events, attachments, and research URLs.
+- [x] Unit-test daily briefing diff generation, configured Obsidian destination paths, failed syncs, and bounded non-recap rendering.
 - [ ] Unit-test deletion propagation and stale-memory behavior.
 - [x] Unit-test Obsidian Markdown generation with frontmatter and generated-section preservation.
 - [x] App-level tests prove Compose Radar retrieval does not mutate draft content without user action.
@@ -230,7 +231,7 @@ The first implementation should avoid autonomous behavior and broad private-data
 - [x] No external upload of private email bodies by default.
 - [x] No whole-mailbox unbounded summarization.
 - [x] No automatic rewrite of user-authored Obsidian sections.
-- [ ] No replacement for the existing scheduled task system until the daily memory briefing has proven value.
+- [x] No replacement for the existing scheduled task system until the daily memory briefing has proven value.
 - [ ] No MCP or daemon memory API until the UI-only path is stable.
 
 ## Execution Handoff

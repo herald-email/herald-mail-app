@@ -1302,6 +1302,24 @@ Check these states during every applicable lane:
 - Classification and embedding/cache signals adjust tags, review metadata, and confidence without copying full private email bodies into immutable memory records.
 - The refresh path reuses cached bodies and embedding metadata before fetching any additional message body from IMAP.
 
+### TC-18K — Herald Memories daily briefing diff
+
+**Lane:** G
+**Sizes:** code-focused
+
+**Steps:**
+1. Seed immutable memories for a changed job-search track, an unchanged older track, a newly resolved open loop, a track that becomes stale within the briefing window, a review-needed memory, and a source-missing memory.
+2. Seed Obsidian sync state with a recent failed write.
+3. Run the focused daily briefing tests.
+4. Render the Markdown briefing.
+
+**Expect:**
+- The briefing target path uses the configured daily destination, defaulting to `Scheduled Task Artifacts/Herald Memory Briefing <date>.md`.
+- The output is a diff: changed tracks, newly resolved loops, newly stale loops, failed syncs, and review-needed items appear, while unchanged older tracks are omitted.
+- Canonical Obsidian note links are used when memory targets exist instead of copying long dossier summaries into the briefing.
+- Evidence appears as compact source labels only; raw body snippets and attachment contents do not appear in the briefing.
+- Building the briefing reads immutable memory records and mutable sync state but does not append memory records, write Obsidian notes, send mail, or replace the existing scheduled-task system.
+
 ### TC-24A — Theme selection and custom theme editing
 
 **Lane:** A

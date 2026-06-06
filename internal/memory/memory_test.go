@@ -737,6 +737,132 @@ func TestAppendResearchNoteSavesSourcedFreshnessAndVaultTarget(t *testing.T) {
 	}
 }
 
+func TestDailyBriefingDiffUsesScheduledArtifactsAndOmitsRecaps(t *testing.T) {
+	now := testTime()
+	since := now.Add(-24 * time.Hour)
+	settings := DefaultSettings()
+	settings.UpdateRules.StaleAfterDays = 30
+	longPrivateSnippet := strings.Repeat("private body detail ", 60)
+
+	changed := lifecycleMemory("Cobalt Works interview", KindTrackStatus, StatusWaiting, now.Add(-2*time.Hour), "Job search/active/Cobalt Works/Memory.md")
+	changed.Evidence[0].Snippet = longPrivateSnippet
+	unchanged := lifecycleMemory("Old unchanged thread", KindTrackStatus, StatusActive, now.Add(-72*time.Hour), "Job search/active/Old Co/Memory.md")
+	unchanged.CreatedAt = now.Add(-72 * time.Hour)
+	unchanged.UpdatedAt = now.Add(-72 * time.Hour)
+	resolved := lifecycleMemory("Take-home availability", KindOpenQuestion, StatusResolved, now.Add(-1*time.Hour), "People/sergey@example.com.md")
+	newlyStale := lifecycleMemory("Quiet recruiter loop", KindOpenQuestion, StatusActive, now.Add(-30*24*time.Hour-time.Hour), "Job search/active/Quiet Co/Memory.md")
+	newlyStale.CreatedAt = newlyStale.LastActivityAt
+	newlyStale.UpdatedAt = newlyStale.LastActivityAt
+	review := lifecycleMemory("Conflicting timeline", KindTrackStatus, StatusConflict, now.Add(-3*time.Hour), "Job search/active/Cobalt Works/Memory.md")
+	review.Details.ReviewReason = "timeline conflict"
+	sourceMissing := lifecycleMemory("Deleted source", KindOpenQuestion, StatusSourceMissing, now.Add(-90*time.Minute), "People/old.md")
+
+	diff := BuildDailyBriefingDiff(
+		[]Memory{unchanged, changed, resolved, newlyStale, review, sourceMissing},
+		settings,
+		DailyBriefingQuery{
+			Since: since,
+			Now:   now,
+			SyncState: ObsidianSyncState{
+				FailedWrites: 1,
+				LastRun:      now.Add(-30 * time.Minute),
+				VaultPath:    "/tmp/vault",
+				Error:        "permission denied",
+			},
+		},
+	)
+
+	if diff.DestinationPath != "Scheduled Task Artifacts/Herald Memory Briefing 2026-06-06.md" {
+		t.Fatalf("destination = %q", diff.DestinationPath)
+	}
+	if !containsBriefingTrack(diff.ChangedTracks, "Cobalt Works interview") {
+		t.Fatalf("changed tracks = %#v, missing changed track", diff.ChangedTracks)
+	}
+	for _, item := range diff.ChangedTracks {
+		for _, evidence := range item.Evidence {
+			if evidence.Snippet != "" {
+				t.Fatalf("briefing evidence should not carry raw snippets: %#v", item.Evidence)
+			}
+		}
+	}
+	if containsBriefingTrack(diff.ChangedTracks, "Old unchanged thread") {
+		t.Fatalf("unchanged track leaked into diff: %#v", diff.ChangedTracks)
+	}
+	if !containsBriefingMemory(diff.NewlyResolved, "Take-home availability") {
+		t.Fatalf("newly resolved = %#v", diff.NewlyResolved)
+	}
+	if !containsBriefingTrack(diff.NewlyStale, "Quiet recruiter loop") {
+		t.Fatalf("newly stale = %#v", diff.NewlyStale)
+	}
+	if len(diff.FailedSyncs) != 1 || diff.FailedSyncs[0].Count != 1 {
+		t.Fatalf("failed syncs = %#v", diff.FailedSyncs)
+	}
+	if !containsBriefingMemory(diff.ReviewNeeded, "Conflicting timeline") || !containsBriefingMemory(diff.ReviewNeeded, "Deleted source") {
+		t.Fatalf("review needed = %#v", diff.ReviewNeeded)
+	}
+
+	rendered := RenderDailyBriefingMarkdown(diff, settings)
+	for _, want := range []string{
+		"## Changed Tracks",
+		"## Newly Resolved Loops",
+		"## Newly Stale Loops",
+		"## Failed Syncs",
+		"## Review Needed",
+		"[[Job search/active/Cobalt Works/Memory]]",
+		"permission denied",
+	} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("rendered briefing missing %q:\n%s", want, rendered)
+		}
+	}
+	for _, forbidden := range []string{"Old unchanged thread", "private body detail"} {
+		if strings.Contains(rendered, forbidden) {
+			t.Fatalf("rendered briefing should omit %q:\n%s", forbidden, rendered)
+		}
+	}
+}
+
+func TestFileStoreBuildDailyBriefingReadsImmutableRecordsAndSyncState(t *testing.T) {
+	ctx := context.Background()
+	now := testTime()
+	store, err := NewFileStoreWithClock(t.TempDir(), func() time.Time { return now })
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings := DefaultSettings()
+	settings.Directory = store.Root()
+	settings.Destinations.DailyBriefing = "Scheduled Task Artifacts/Herald"
+	mem := lifecycleMemory("Cobalt Works interview", KindTrackStatus, StatusWaiting, now.Add(-2*time.Hour), "Job search/active/Cobalt Works/Memory.md")
+	if _, _, err := store.Append(ctx, mem); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.writeObsidianSyncState(ctx, ObsidianSyncState{
+		FailedWrites: 2,
+		LastRun:      now.Add(-time.Hour),
+		VaultPath:    "/tmp/vault",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	diff, err := store.BuildDailyBriefing(ctx, settings, DailyBriefingQuery{Since: now.Add(-24 * time.Hour), Now: now})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if diff.DestinationPath != "Scheduled Task Artifacts/Herald/Herald Memory Briefing 2026-06-06.md" {
+		t.Fatalf("destination = %q", diff.DestinationPath)
+	}
+	if len(diff.ChangedTracks) != 1 || len(diff.FailedSyncs) != 1 || diff.FailedSyncs[0].Count != 2 {
+		t.Fatalf("diff = %#v", diff)
+	}
+	listed, err := store.List(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(listed) != 1 {
+		t.Fatalf("briefing should not append memory records, listed = %#v", listed)
+	}
+}
+
 func testMemory(claim string) Memory {
 	return testMemoryWithKind(claim, KindOpenQuestion, 0.90)
 }
@@ -816,6 +942,24 @@ func hasMemoryKind(memories []Memory, kind string) bool {
 func containsString(values []string, want string) bool {
 	for _, value := range values {
 		if value == want {
+			return true
+		}
+	}
+	return false
+}
+
+func containsBriefingTrack(items []DailyBriefingTrackItem, topic string) bool {
+	for _, item := range items {
+		if strings.Contains(item.Topic, topic) || strings.Contains(item.Summary, topic) {
+			return true
+		}
+	}
+	return false
+}
+
+func containsBriefingMemory(items []DailyBriefingMemoryItem, claim string) bool {
+	for _, item := range items {
+		if strings.Contains(item.Claim, claim) {
 			return true
 		}
 	}
