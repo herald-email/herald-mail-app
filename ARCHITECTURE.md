@@ -144,6 +144,24 @@ Successful live folder-list responses are persisted in the configured SQLite cac
 
 AI work now needs its own resource model because local Ollama capacity behaves very differently from external APIs. The UI must stay responsive even when embeddings, enrichment, classification, chat, and image description are all active, so the scheduler treats local AI as scarce machine capacity and explicitly prefers interactive work over background throughput.
 
+### Gollem chat-agent replacement
+
+Chat is a UI-mode agent surface, not a daemon, MCP, or background automation surface in the first Gollem iteration. The existing right-side chat drawer remains the user-facing shell, but the hand-written Ollama `/api/chat` loop, legacy chat tool registry, and prose `<filter>` response contract are not architecture foundations; they should be removed once a Gollem runner can return a plain reply and typed UI intents.
+
+The replacement boundary should live in an `internal/agent` package with a small runner interface that receives a TUI snapshot and returns a typed result. Bubble Tea owns all state mutation: the agent can propose a Timeline filter, search query, summary, or Compose edit, but `internal/app` applies those intents through existing Timeline search/filter and Compose AI review paths.
+
+**Agent runner contract**
+
+- [ ] `internal/app` builds a bounded `ChatAgentInput` snapshot with current folder, active tab, selected/visible message IDs, optional Compose draft state, and the user's latest chat message.
+- [ ] `internal/agent` owns Gollem agent construction, provider selection, typed tool definitions, structured result parsing, and provider error normalization.
+- [ ] `internal/backend` remains the source of email reads and searches; Gollem tools adapt to existing backend/search methods instead of opening separate IMAP, SQLite, daemon, or MCP paths.
+- [ ] `internal/app` applies typed `TimelineIntent` values through existing Timeline search and chat-filter state so result browsing, `Esc`, selection, and preview behavior stay consistent.
+- [ ] `internal/app` applies typed `ComposeIntent` values only through the existing Compose AI review/accept flow; chat never silently mutates drafts and cannot send mail in the first iteration.
+- [ ] The first agent tool set is read-only: `find_emails`, `get_email_context`, `summarize_email_set`, and `explain_people`.
+- [ ] The first provider set is Gollem-backed Ollama/local, Anthropic, Kimi, and Fireworks; Ollama is only a provider behind Gollem, not a separate chat runtime.
+- [ ] Agent requests publish concise progress states such as `searching`, `reading`, `summarizing`, and `draft edit ready` so the chat drawer does not appear stuck during slow local or remote provider calls.
+- [ ] The first implementation does not add memory, autonomous daily summaries, calendar mutations, delete/archive, send mail, or MCP mirroring.
+
 ### Inline image preview safety
 
 Timeline previews keep image bytes local to the TUI process. Split and full-screen previews render bounded iTerm2 OSC 1337 images or Kitty graphics images when auto-detected or selected with `-image-protocol`; otherwise local TUI sessions expose current MIME inline images through random, in-memory `127.0.0.1` URLs wrapped in OSC 8 links. Native raster overlays carry row geometry so Herald can crop and re-encode the visible image slice when a scroll position or split-preview panel boundary shows only part of the image; if cropping cannot be done safely, the overlay is suppressed rather than allowed to overflow. SSH sessions default to placeholders because a user's browser would not be on the same host, but explicit `-image-protocol=iterm2` or `-image-protocol=kitty` opts into raster output over SSH. Remote HTML image URLs render as readable placeholders and OSC 8 links by default; known tracker query params are stripped from placeholder hyperlink targets and the opt-in fetch URL while non-tracker params are preserved. Pressing `o` in the current Timeline preview fetches only the current message's remote images with bounded, no-cookie, no-referrer HTTP(S) requests, blocks local/private/link-local destinations and unsafe redirects, keeps bytes in memory only, and then sends revealed images through the same renderer/fallback path as MIME inline images.
