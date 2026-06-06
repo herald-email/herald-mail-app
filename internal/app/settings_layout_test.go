@@ -1,8 +1,10 @@
 package app
 
 import (
+	"context"
 	"strings"
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/huh/v2"
@@ -52,6 +54,21 @@ func assertSettingsPanelCanReachText(t *testing.T, s *Settings, want string) *Se
 	}
 	t.Fatalf("expected settings form to reach %q while tabbing through fields", want)
 	return s
+}
+
+func settingsLayoutTestMemory(id, status, freshness string, confidence float64) memory.Memory {
+	return memory.Memory{
+		ID:         id,
+		Kind:       memory.KindTrackStatus,
+		Claim:      "Memory " + id,
+		Status:     status,
+		Freshness:  freshness,
+		Confidence: confidence,
+		Evidence: []memory.Evidence{{
+			SourceType: memory.SourceEmail,
+			MessageID:  id + "@example.test",
+		}},
+	}
 }
 
 func TestSettingsWizardView_RendersHeraldChrome(t *testing.T) {
@@ -479,6 +496,40 @@ func TestSettingsPanelMemoriesCategoryShowsMemoryFieldsOnly(t *testing.T) {
 		if strings.Contains(normalized, notWant) {
 			t.Fatalf("expected Memories settings to skip unrelated field %q, got:\n%s", notWant, rendered)
 		}
+	}
+}
+
+func TestSettingsPanelMemoriesCategoryShowsStoreCounts(t *testing.T) {
+	dir := t.TempDir()
+	cfg := &config.Config{}
+	cfg.Memories = memory.DefaultSettings()
+	cfg.Memories.Directory = dir
+	cfg.Memories.UpdateRules.LowConfidenceDisposition = memory.LowConfidenceReview
+	cfg.Memories.UpdateRules.MatchThreshold = 0.80
+	store, err := memory.NewFileStoreWithClock(dir, func() time.Time {
+		return time.Date(2026, 6, 6, 12, 0, 0, 0, time.UTC)
+	})
+	if err != nil {
+		t.Fatalf("NewFileStoreWithClock: %v", err)
+	}
+	for _, candidate := range []memory.Memory{
+		settingsLayoutTestMemory("active", memory.StatusActive, memory.FreshnessFresh, 0.95),
+		settingsLayoutTestMemory("stale", memory.StatusStale, memory.FreshnessStale, 0.90),
+		settingsLayoutTestMemory("conflict", memory.StatusConflict, memory.FreshnessFresh, 0.92),
+		settingsLayoutTestMemory("low", memory.StatusActive, memory.FreshnessFresh, 0.50),
+	} {
+		if _, _, err := store.Append(context.Background(), candidate); err != nil {
+			t.Fatalf("Append(%s): %v", candidate.ID, err)
+		}
+	}
+
+	s := NewSettings(SettingsModePanel, cfg)
+	s = openSettingsPanelCategoryForTest(t, s, "Memories")
+
+	rendered := renderSettingsViewForTest(t, s, 120, 42)
+	normalized := strings.Join(strings.Fields(rendered), " ")
+	if !strings.Contains(normalized, "Memory records: total 4 / stale 1 / review 2") {
+		t.Fatalf("expected memory store counts in Settings, got:\n%s", rendered)
 	}
 }
 

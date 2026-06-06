@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -249,6 +250,7 @@ type Settings struct {
 	memoryDailyDestination         string
 	memoryInboxDestination         string
 	memoryPromptTemplateChoice     string
+	memoryStoreStats               memory.StoreStats
 
 	// form field backing variables — calendar
 	calendarWeekStart string
@@ -805,6 +807,29 @@ func (s *Settings) memoryResearchStatusLine() string {
 	return fmt.Sprintf("Safe external research: %s / private body web research: %s", external, privateBodies)
 }
 
+func (s *Settings) refreshMemoryStoreStats() {
+	if s == nil {
+		return
+	}
+	settings := memory.DefaultSettings()
+	if s.cfg != nil {
+		settings = s.cfg.Memories
+	}
+	s.memoryStoreStats = memory.StoreStatsForSettings(context.Background(), s.buildMemorySettingsConfig(settings))
+}
+
+func (s *Settings) memoryStoreStatsLine() string {
+	stats := s.memoryStoreStats
+	if stats.Unavailable {
+		detail := strings.TrimSpace(stats.Error)
+		if detail == "" {
+			detail = "unavailable"
+		}
+		return "Memory records: unavailable (" + render.Truncate(detail, 72) + ")"
+	}
+	return fmt.Sprintf("Memory records: total %d / stale %d / review %d", stats.Total, stats.Stale, stats.ReviewNeeded)
+}
+
 func (s *Settings) memoryStatusDescription() string {
 	folders := strings.Join(settingsParseCSV(s.memorySourceFolders, []string{"INBOX", "Sent"}), ", ")
 	if folders == "" {
@@ -835,6 +860,7 @@ func (s *Settings) memoryStatusDescription() string {
 			firstNonEmptyString(s.memoryMatchThresholdStr, "0.80"),
 		),
 		fmt.Sprintf("Prompts: %d exposed templates", len(s.memoryPromptTemplatesForSettings())),
+		s.memoryStoreStatsLine(),
 		s.memoryResearchStatusLine(),
 	}, "\n")
 }
@@ -1436,6 +1462,9 @@ func (s *Settings) buildForm() {
 			}),
 	).Title("Sync & Cleanup")
 
+	if s.mode == SettingsModePanel && s.panelSection == settingsPanelSectionMemories {
+		s.refreshMemoryStoreStats()
+	}
 	memoryGroup := huh.NewGroup(
 		huh.NewConfirm().
 			Title("Enable Herald Memories").

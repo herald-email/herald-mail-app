@@ -128,6 +128,48 @@ func TestFileStoreAppendIsImmutable(t *testing.T) {
 	}
 }
 
+func TestFileStoreStatsCountsStaleAndReviewNeededMemories(t *testing.T) {
+	settings := DefaultSettings()
+	settings.UpdateRules.LowConfidenceDisposition = LowConfidenceReview
+	settings.UpdateRules.MatchThreshold = 0.80
+	store, err := NewFileStoreWithClock(t.TempDir(), testTime)
+	if err != nil {
+		t.Fatalf("NewFileStoreWithClock: %v", err)
+	}
+	memories := []Memory{
+		testMemoryWithKind("active track", KindTrackStatus, 0.95),
+		testMemoryWithKind("stale track", KindTrackStatus, 0.90),
+		testMemoryWithKind("conflicting track", KindTrackStatus, 0.92),
+		testMemoryWithKind("low confidence track", KindCommitment, 0.50),
+	}
+	memories[1].Status = StatusStale
+	memories[1].Freshness = FreshnessStale
+	memories[2].Status = StatusConflict
+	for _, candidate := range memories {
+		if _, _, err := store.Append(context.Background(), candidate); err != nil {
+			t.Fatalf("Append(%s): %v", candidate.Claim, err)
+		}
+	}
+
+	stats, err := store.Stats(context.Background(), settings)
+	if err != nil {
+		t.Fatalf("Stats: %v", err)
+	}
+	if stats.Total != 4 || stats.Stale != 1 || stats.ReviewNeeded != 2 {
+		t.Fatalf("stats = %#v, want total=4 stale=1 review=2", stats)
+	}
+}
+
+func TestStoreStatsForSettingsTreatsMissingRecordsAsEmptyStore(t *testing.T) {
+	settings := DefaultSettings()
+	settings.Directory = t.TempDir()
+
+	stats := StoreStatsForSettings(context.Background(), settings)
+	if stats.Unavailable || stats.Total != 0 || stats.Stale != 0 || stats.ReviewNeeded != 0 {
+		t.Fatalf("stats = %#v, want available empty store", stats)
+	}
+}
+
 func TestExtractorBuildsJobSearchMemoriesFromInboxAndSent(t *testing.T) {
 	inbound := &models.EmailData{
 		MessageID: "msg-in",

@@ -1222,7 +1222,8 @@ Check these states during every applicable lane:
 
 **Expect:**
 - The Settings top-level menu includes `Memories`, and that category does not show unrelated account, AI, keyboard, theme, or signature fields.
-- `Settings > Memories` summarizes enabled state, immutable local store, current directory, vault path, source folders, prompt-template count, safe external research state, and the configured memory thresholds.
+- `Settings > Memories` summarizes enabled state, immutable local store, current directory, vault path, source folders, prompt-template count, safe external research state, configured memory thresholds, and read-only total/stale/review-needed memory counts.
+- Empty, missing, or unreadable memory stores do not block Settings; the status line shows zero counts or a bounded unavailable state.
 - Effective memory storage defaults to `~/.herald/memories` and remains append-only.
 - Defaults target `People/`, `Job search/`, `Scheduled Task Artifacts/`, and a configurable memory inbox with minimal Obsidian frontmatter plus conservative links/tags.
 - The Obsidian-friendly toggle can hide YAML headers while preserving generated-section metadata inside Herald markers.

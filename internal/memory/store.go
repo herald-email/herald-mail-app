@@ -19,6 +19,15 @@ type FileStore struct {
 	now  func() time.Time
 }
 
+type StoreStats struct {
+	Root         string `json:"root" yaml:"root"`
+	Total        int    `json:"total" yaml:"total"`
+	Stale        int    `json:"stale" yaml:"stale"`
+	ReviewNeeded int    `json:"review_needed" yaml:"review_needed"`
+	Unavailable  bool   `json:"unavailable,omitempty" yaml:"unavailable,omitempty"`
+	Error        string `json:"error,omitempty" yaml:"error,omitempty"`
+}
+
 func NewFileStore(root string) (*FileStore, error) {
 	expanded, err := ExpandDirectory(root)
 	if err != nil {
@@ -152,6 +161,42 @@ func (s *FileStore) List(ctx context.Context) ([]Memory, error) {
 	return memories, nil
 }
 
+func StoreStatsForSettings(ctx context.Context, settings Settings) StoreStats {
+	settings.ApplyDefaults()
+	store, err := NewFileStore(settings.Directory)
+	if err != nil {
+		return StoreStats{Unavailable: true, Error: err.Error()}
+	}
+	stats, err := store.Stats(ctx, settings)
+	if err != nil {
+		stats.Unavailable = true
+		stats.Error = err.Error()
+	}
+	return stats
+}
+
+func (s *FileStore) Stats(ctx context.Context, settings Settings) (StoreStats, error) {
+	stats := StoreStats{}
+	if s != nil {
+		stats.Root = s.root
+	}
+	memories, err := s.List(ctx)
+	if err != nil {
+		return stats, err
+	}
+	settings.ApplyDefaults()
+	stats.Total = len(memories)
+	for _, memory := range memories {
+		if memoryIsStale(memory) {
+			stats.Stale++
+		}
+		if memoryNeedsReview(memory, settings) {
+			stats.ReviewNeeded++
+		}
+	}
+	return stats, nil
+}
+
 func (s *FileStore) Search(ctx context.Context, q Query) ([]Memory, error) {
 	memories, err := s.List(ctx)
 	if err != nil {
@@ -171,6 +216,32 @@ func (s *FileStore) Search(ctx context.Context, q Query) ([]Memory, error) {
 		out = out[:limit]
 	}
 	return out, nil
+}
+
+func memoryIsStale(memory Memory) bool {
+	return strings.EqualFold(strings.TrimSpace(memory.Status), StatusStale) ||
+		strings.EqualFold(strings.TrimSpace(memory.Freshness), FreshnessStale)
+}
+
+func memoryNeedsReview(memory Memory, settings Settings) bool {
+	switch strings.ToLower(strings.TrimSpace(memory.Status)) {
+	case StatusConflict, StatusSourceMissing:
+		return true
+	}
+	if strings.TrimSpace(memory.Details.ReviewReason) != "" {
+		return true
+	}
+	if settings.UpdateRules.LowConfidenceDisposition == LowConfidenceReview {
+		threshold := settings.UpdateRules.MatchThreshold
+		if threshold <= 0 {
+			threshold = settings.Thresholds.Match
+		}
+		if threshold <= 0 {
+			threshold = 0.80
+		}
+		return memory.Confidence > 0 && memory.Confidence < threshold
+	}
+	return false
 }
 
 func ValidateMemory(memory Memory) error {
