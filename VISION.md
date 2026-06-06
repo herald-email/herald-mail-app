@@ -260,6 +260,7 @@ Herald Memories turns important email history into local, source-backed tracks t
 - [ ] Add memory-aware chat tools for contact history, company status, related replies, open loops, and "what should I remember before replying?"
 - [ ] Add Compose Radar as a compact compose context panel with at most three source-backed nudges for conflicts, callbacks, open loops, relationship context, and research updates
 - [ ] Add Contact and Company dossiers that combine local email memories, active tracks, Obsidian links, and optional web research
+- [ ] Expose memory configuration with strong defaults for vault targets, generated sections, Obsidian output profile, prompt templates, update rules, and safe research behavior
 - [ ] Add opt-in Obsidian sync that writes and updates Markdown notes under configured `People/`, `Job search/`, and `Scheduled Task Artifacts/` folders while preserving user edits
 - [ ] Add explicit Research Mode for person/company enrichment that never sends private email content to external research queries by default
 - [ ] Add a daily memory briefing that updates track status, open questions, and stale threads as a diff rather than a full inbox recap
