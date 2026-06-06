@@ -1231,6 +1231,24 @@ Check these states during every applicable lane:
 - Sync preview shows the destination path, generated section, frontmatter/link/tag mode, and source evidence before any write.
 - Applying a generated-section update preserves user-authored content outside stable Herald markers.
 
+### TC-18G — Herald Memories contact dossiers
+
+**Lane:** A, B, G
+**Sizes:** `220x50`, `80x24`, `50x15`
+
+**Steps:**
+1. Start demo or virtual-lab data that includes a contact with source-backed memories.
+2. Open Contacts and select that contact.
+3. Press Enter to open the contact detail.
+4. Capture the detail at `220x50` and `80x24`.
+5. At `50x15`, confirm the minimum-size guard appears instead of clipped dossier chrome.
+
+**Expect:**
+- The contact detail includes a bounded `Herald Memories` section with relationship summary, active track status, open loop, vault link, and source evidence labels when matching memories exist.
+- The dossier is read-only and does not write memory records, Obsidian notes, drafts, calendar events, or contact enrichment fields.
+- Recent email navigation and inline preview still work after the dossier appears.
+- Contacts without matching memories keep the existing detail layout without a noisy empty dossier block.
+
 ### TC-24A — Theme selection and custom theme editing
 
 **Lane:** A

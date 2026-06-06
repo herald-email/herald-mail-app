@@ -729,6 +729,7 @@ Site: <a href="https://herald-mail.app/">https://herald-mail.app/</a> · Docs: <
 		Messages: messages,
 		Contacts: []models.ContactData{
 			contact(1, "billing@northstar-cloud.example", "Northstar Cloud", "Northstar Cloud", []string{"cloud", "infrastructure", "budget"}, 4, 0, 12),
+			contact(9, "mina@cobalt-works.example", "Mina Park", "Cobalt Works", []string{"job search", "interview", "scheduling"}, 1, 1, 1),
 			contact(2, "mara@forgepoint.example", "Mara Vale", "Forgepoint Labs", []string{"code review", "storage migration", "release"}, 3, 2, 1),
 			contact(3, "newsletter@packetpress.example", "Packet Press", "Packet Press", []string{"systems", "newsletter", "latency"}, 2, 0, 3),
 			contact(4, "offers@trailpost.example", "Trailpost Travel", "Trailpost Travel", []string{"travel", "promotions"}, 2, 0, 4),

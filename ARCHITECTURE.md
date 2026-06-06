@@ -174,6 +174,7 @@ Herald Memories is a local-first relationship memory layer behind the backend an
 - [x] `DemoBackend` serves deterministic job-search memory fixtures without writing to the user's memory directory.
 - [x] `internal/agent` adds read-only Gollem tools for `search_memories`, `get_contact_history`, `get_company_tracks`, `get_open_loops`, and `get_reply_memory_context`.
 - [x] Compose Radar renders the reply-prep nudges inside Compose without mutating draft fields, sending mail, changing attachments, or bypassing the existing Compose AI review path.
+- [x] Contacts detail renders a read-only Herald Memories person dossier assembled from immutable memory records, including relationship summary, active tracks, open loops, vault links, and compact evidence labels.
 - [x] `Settings > Memories` reads aggregate memory counts from the immutable store as a bounded, read-only status check; unavailable stores never block editing configuration.
 - [ ] Memory extraction does not yet use semantic embeddings, classifications, calendar events, Contacts enrichment, Obsidian note ingestion, or external research.
 - [ ] Deletion and cache cleanup do not yet append source-missing/stale memory records for dependent evidence.

@@ -251,6 +251,42 @@ func TestReplyPrepIncludesTopicFallbackForSentReplies(t *testing.T) {
 	}
 }
 
+func TestBuildPersonDossierFromSourceBackedMemories(t *testing.T) {
+	settings := DefaultSettings()
+	settings.Thresholds.Dossier = 0.55
+	openLoop := testMemoryWithKind("Sergey asked whether the take-home follow-up is still on track.", KindOpenQuestion, 0.92)
+	openLoop.ObsidianTarget = "Job search/active/Example/Memory.md"
+	userReply := testMemoryWithKind("You last told Sergey you would send availability by Friday.", KindLastUserReply, 0.89)
+	trackStatus := testMemoryWithKind("Senior engineer interview is waiting on follow-up availability.", KindTrackStatus, 0.91)
+	lowConfidence := testMemoryWithKind("Maybe Sergey changed teams.", KindRelationshipContext, 0.20)
+	sourceMissing := testMemoryWithKind("Old source vanished.", KindOpenQuestion, 0.99)
+	sourceMissing.Status = StatusSourceMissing
+
+	dossier := BuildPersonDossier("Sergey", []Memory{lowConfidence, sourceMissing, openLoop, userReply, trackStatus}, settings, testTime())
+
+	if dossier.Kind != DossierKindPerson || dossier.Subject != "Sergey" {
+		t.Fatalf("dossier identity = %#v", dossier)
+	}
+	if !strings.Contains(dossier.RelationshipSummary, "send availability") {
+		t.Fatalf("relationship summary = %q", dossier.RelationshipSummary)
+	}
+	if len(dossier.ActiveTracks) != 1 || !strings.Contains(dossier.ActiveTracks[0].Topic, "Interview") {
+		t.Fatalf("active tracks = %#v", dossier.ActiveTracks)
+	}
+	if len(dossier.OpenLoops) != 1 || !strings.Contains(dossier.OpenLoops[0].Claim, "take-home") {
+		t.Fatalf("open loops = %#v", dossier.OpenLoops)
+	}
+	if len(dossier.VaultLinks) != 1 || dossier.VaultLinks[0] != "Job search/active/Example/Memory.md" {
+		t.Fatalf("vault links = %#v", dossier.VaultLinks)
+	}
+	if len(dossier.Evidence) == 0 || dossier.Evidence[0].MessageID == "" {
+		t.Fatalf("dossier evidence missing source labels: %#v", dossier.Evidence)
+	}
+	if strings.Contains(dossier.RelationshipSummary, "Maybe") {
+		t.Fatalf("low-confidence memory leaked into dossier: %#v", dossier)
+	}
+}
+
 func TestObsidianPreviewPreservesUserSectionsAndCanHideYAML(t *testing.T) {
 	settings := DefaultSettings()
 	settings.Obsidian.YAMLHeaders = false

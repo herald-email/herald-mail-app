@@ -1,9 +1,11 @@
 package app
 
 import (
+	"context"
 	"fmt"
 	"image/color"
 	"strings"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -11,6 +13,7 @@ import (
 	"github.com/herald-email/herald-mail-app/internal/ai"
 	"github.com/herald-email/herald-mail-app/internal/contacts"
 	"github.com/herald-email/herald-mail-app/internal/logger"
+	"github.com/herald-email/herald-mail-app/internal/memory"
 	"github.com/herald-email/herald-mail-app/internal/models"
 	emailrender "github.com/herald-email/herald-mail-app/internal/render"
 )
@@ -39,6 +42,118 @@ func (m *Model) loadContactDetail(contact models.ContactData) tea.Cmd {
 		}
 		return ContactDetailLoadedMsg{Emails: emails}
 	}
+}
+
+type contactMemorySource interface {
+	SearchMemories(context.Context, memory.Query) ([]memory.Memory, error)
+}
+
+func (m *Model) resetContactMemoryDossier() {
+	m.contactMemoryToken++
+	m.contactMemoryDossier = memory.Dossier{}
+	m.contactMemoryLoading = false
+	m.contactMemoryError = ""
+}
+
+func (m *Model) loadContactMemoryDossier(contact models.ContactData) tea.Cmd {
+	source, ok := m.backend.(contactMemorySource)
+	if !ok || source == nil {
+		m.resetContactMemoryDossier()
+		return nil
+	}
+	settings := memory.DefaultSettings()
+	if m.cfg != nil {
+		settings = m.cfg.Memories
+	}
+	settings.ApplyDefaults()
+	if !settings.Enabled {
+		m.resetContactMemoryDossier()
+		return nil
+	}
+	m.contactMemoryToken++
+	token := m.contactMemoryToken
+	m.contactMemoryDossier = memory.Dossier{}
+	m.contactMemoryLoading = true
+	m.contactMemoryError = ""
+	return func() tea.Msg {
+		memories, err := searchContactDossierMemories(context.Background(), source, contact, settings)
+		dossier := memory.BuildPersonDossier(contactDossierSubject(contact), memories, settings, time.Now())
+		return ContactMemoryDossierMsg{
+			Token:   token,
+			Email:   contact.Email,
+			Dossier: dossier,
+			Err:     err,
+		}
+	}
+}
+
+func searchContactDossierMemories(ctx context.Context, source contactMemorySource, contact models.ContactData, settings memory.Settings) ([]memory.Memory, error) {
+	minConfidence := settings.Thresholds.Dossier
+	limit := 12
+	queries := []memory.Query{}
+	people := memory.CompactStrings([]string{contact.Email, contact.DisplayName})
+	if len(people) > 0 {
+		queries = append(queries, memory.Query{
+			People:        people,
+			MinConfidence: minConfidence,
+			Limit:         limit,
+		})
+	}
+	if strings.TrimSpace(contact.Company) != "" {
+		queries = append(queries, memory.Query{
+			Company:       contact.Company,
+			MinConfidence: minConfidence,
+			Limit:         limit,
+		})
+	}
+	if domain := contactEmailDomain(contact.Email); domain != "" {
+		queries = append(queries, memory.Query{
+			Domain:        domain,
+			MinConfidence: minConfidence,
+			Limit:         limit,
+		})
+	}
+	if len(queries) == 0 {
+		return nil, nil
+	}
+	seen := make(map[string]bool)
+	out := make([]memory.Memory, 0)
+	for _, query := range queries {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		results, err := source.SearchMemories(ctx, query)
+		if err != nil {
+			return nil, err
+		}
+		for _, item := range results {
+			key := strings.TrimSpace(item.ID)
+			if key == "" {
+				key = memory.DeterministicID(item)
+			}
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+			out = append(out, item)
+		}
+	}
+	memory.SortMemoriesNewestFirst(out)
+	if len(out) > limit {
+		out = out[:limit]
+	}
+	return out, nil
+}
+
+func contactDossierSubject(contact models.ContactData) string {
+	return firstNonEmptyString(contact.DisplayName, contact.Email, contact.Company)
+}
+
+func contactEmailDomain(email string) string {
+	if at := strings.LastIndex(email, "@"); at >= 0 && at < len(email)-1 {
+		return strings.Trim(strings.ToLower(email[at+1:]), " >")
+	}
+	return ""
 }
 
 // applyContactSearch filters contactsFiltered based on the current search query and mode.
@@ -255,6 +370,7 @@ func (m *Model) handleContactsKey(msg tea.KeyPressMsg) (*Model, tea.Cmd) {
 		m.contactsIdx = 0
 		m.contactDetail = nil
 		m.contactDetailEmails = nil
+		m.resetContactMemoryDossier()
 		m.contactFocusPanel = 0
 	case key == "tab":
 		if m.contactDetail != nil {
@@ -294,7 +410,11 @@ func (m *Model) handleContactsKey(msg tea.KeyPressMsg) (*Model, tea.Cmd) {
 				m.contactDetail = &c
 				m.contactDetailEmails = nil
 				m.contactDetailIdx = 0
-				return m, m.loadContactDetail(c)
+				cmds := []tea.Cmd{m.loadContactDetail(c)}
+				if cmd := m.loadContactMemoryDossier(c); cmd != nil {
+					cmds = append(cmds, cmd)
+				}
+				return m, tea.Batch(cmds...)
 			}
 		} else {
 			// Open selected email inline in the contact detail panel
@@ -546,6 +666,10 @@ func (m *Model) renderContactsTab(width, height int) string {
 		boldStyle := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Chrome.TitleBar.ForegroundColor())
 		dimStyle := lipgloss.NewStyle().Foreground(m.theme.Text.Dim.ForegroundColor())
 		normalStyle := lipgloss.NewStyle().Foreground(m.theme.Text.Primary.ForegroundColor())
+		rightInnerW := rightW - 4
+		if rightInnerW < 1 {
+			rightInnerW = 1
+		}
 
 		displayName := c.DisplayName
 		if displayName == "" {
@@ -577,15 +701,14 @@ func (m *Model) renderContactsTab(width, height int) string {
 		}
 
 		rightSb.WriteString("\n")
+		if dossierLines := m.contactMemoryDossierLines(rightInnerW, contactMemoryDossierMaxLines(contentH)); len(dossierLines) > 0 {
+			rightSb.WriteString(strings.Join(dossierLines, "\n") + "\n\n")
+		}
 		rightSb.WriteString(boldStyle.Render("Recent Emails") + "\n")
 
 		if len(m.contactDetailEmails) == 0 {
 			rightSb.WriteString(dimStyle.Render("  Loading…") + "\n")
 		} else {
-			rightInnerW := rightW - 4
-			if rightInnerW < 1 {
-				rightInnerW = 1
-			}
 			// Line = "  "(2) + subj(maxSubjW) + "  "(2) + date(10) = maxSubjW+14.
 			maxSubjW := rightInnerW - 14
 			if maxSubjW < 10 {
@@ -610,4 +733,85 @@ func (m *Model) renderContactsTab(width, height int) string {
 	rightPanel := makePanel(rightBorderColor, rightW).Render(rightSb.String())
 
 	return lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, panelGap, rightPanel)
+}
+
+func contactMemoryDossierMaxLines(contentH int) int {
+	switch {
+	case contentH >= 24:
+		return 6
+	case contentH >= 17:
+		return 4
+	case contentH >= 13:
+		return 2
+	default:
+		return 0
+	}
+}
+
+func (m *Model) contactMemoryDossierLines(width, maxLines int) []string {
+	if maxLines <= 0 || width <= 0 {
+		return nil
+	}
+	boldStyle := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Chrome.TitleBar.ForegroundColor())
+	dimStyle := lipgloss.NewStyle().Foreground(m.theme.Text.Dim.ForegroundColor())
+	normalStyle := lipgloss.NewStyle().Foreground(m.theme.Text.Primary.ForegroundColor())
+	if m.contactMemoryLoading {
+		return []string{
+			boldStyle.Render(truncateVisual("Herald Memories", width)),
+			dimStyle.Render(truncateVisual("  Loading memories...", width)),
+		}
+	}
+	if m.contactMemoryError != "" {
+		return []string{
+			boldStyle.Render(truncateVisual("Herald Memories", width)),
+			dimStyle.Render(truncateVisual("  Memories unavailable: "+m.contactMemoryError, width)),
+		}
+	}
+	dossier := m.contactMemoryDossier
+	if !contactMemoryDossierHasContent(dossier) {
+		return nil
+	}
+	lines := []string{boldStyle.Render(truncateVisual("Herald Memories", width))}
+	if dossier.RelationshipSummary != "" {
+		lines = append(lines, normalStyle.Render(truncateVisual("  "+dossier.RelationshipSummary, width)))
+	}
+	if len(dossier.ActiveTracks) > 0 {
+		lines = append(lines, dimStyle.Render(truncateVisual("  Track: "+contactTrackLine(dossier.ActiveTracks[0]), width)))
+	}
+	if len(dossier.OpenLoops) > 0 {
+		lines = append(lines, dimStyle.Render(truncateVisual("  Open loop: "+contactMemorySummary(dossier.OpenLoops[0]), width)))
+	}
+	if len(dossier.VaultLinks) > 0 {
+		lines = append(lines, dimStyle.Render(truncateVisual("  Vault: "+dossier.VaultLinks[0], width)))
+	}
+	if len(dossier.Evidence) > 0 {
+		lines = append(lines, dimStyle.Render(truncateVisual("  Evidence: "+nudgeEvidenceLabel(dossier.Evidence[0]), width)))
+	}
+	if len(lines) > maxLines {
+		return lines[:maxLines]
+	}
+	return lines
+}
+
+func contactMemoryDossierHasContent(dossier memory.Dossier) bool {
+	return strings.TrimSpace(dossier.RelationshipSummary) != "" ||
+		len(dossier.RecentInteractions) > 0 ||
+		len(dossier.ActiveTracks) > 0 ||
+		len(dossier.OpenLoops) > 0 ||
+		len(dossier.VaultLinks) > 0 ||
+		len(dossier.ResearchNotes) > 0 ||
+		len(dossier.Evidence) > 0
+}
+
+func contactTrackLine(track memory.Track) string {
+	parts := memory.CompactStrings([]string{
+		track.Topic,
+		track.Status,
+		firstNonEmptyString(track.Company, track.Domain),
+	})
+	return strings.Join(parts, " - ")
+}
+
+func contactMemorySummary(mem memory.Memory) string {
+	return firstNonEmptyString(mem.Summary, mem.Claim, mem.Topic, mem.Kind)
 }

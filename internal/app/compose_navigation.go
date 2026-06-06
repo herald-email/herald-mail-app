@@ -179,6 +179,7 @@ func (m *Model) finishComposeExit(targetTab, targetPanel int, loadTarget bool, c
 		m.contactFocusPanel = 0
 		m.contactDetail = nil
 		m.contactDetailEmails = nil
+		m.resetContactMemoryDossier()
 		m.contactPreviewEmail = nil
 		m.contactPreviewBody = nil
 		m.contactPreviewLoading = false

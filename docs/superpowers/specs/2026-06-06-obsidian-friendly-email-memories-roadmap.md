@@ -56,7 +56,7 @@ The memory layer should be built from small, understandable objects with clear e
 - [x] `Memory` stores the claim, kind, confidence, freshness, source refs, and optional Obsidian target.
 - [x] `Memory` exposes inspectable details: generated summary, normalized source quote/snippet, source count, extraction prompt version, confidence, last updated time, and stale/revalidated state.
 - [ ] `Track` stores topic, people, company/domain, status, open loops, claims, commitments, last activity, and evidence refs.
-- [ ] `Dossier` stores relationship summary, recent interactions, active tracks, open loops, research notes, vault links, and freshness.
+- [x] `Dossier` stores relationship summary, recent interactions, active tracks, open loops, research notes, vault links, and freshness.
 - [ ] `Nudge` stores type, message, why it matters, source refs, user action state, and dismissal scope.
 - [ ] `Evidence` can point to email messages, sent replies, notes, calendar events, attachments, and research URLs without copying full private content.
 
@@ -66,7 +66,7 @@ Herald Memories should appear where context changes user behavior: chat, Compose
 
 - [x] Chat gains memory-aware read-only tools for contact history, company status, related replies, open loops, and "what should I remember before replying?"
 - [x] Compose gains Compose Radar, a compact panel that shows at most three relevant nudges while writing.
-- [ ] Contacts gains person dossiers with relationship summary, recent messages, active tracks, open loops, linked notes, and source evidence.
+- [x] Contacts gains read-only person dossiers with relationship summary, recent messages, active tracks, open loops, linked notes, and source evidence.
 - [ ] Job-search company dossiers mirror the Obsidian `Job search/{active,backlog,done}/{Company}/` structure.
 - [ ] Daily briefing output becomes a diff over changed tracks, stale loops, and newly resolved questions.
 
@@ -173,6 +173,7 @@ The roadmap is ordered so the feature becomes useful before it becomes broad. Th
 - [ ] **M3: Obsidian sync preview and settings** - configure vault path, memory destinations, Obsidian output profile, update cadence, prompt templates, confidence thresholds, generated sections, and write previews before saving.
 - [ ] **M4: Compose Radar v1** - surface source-backed nudges for job-search replies and high-confidence people callbacks, with open/dismiss/insert actions.
 - [ ] **M5: Dossier views** - enrich Contacts and company/thread detail views with relationship summaries, active tracks, open loops, vault links, and evidence.
+- [x] Person dossier v1 appears inside Contacts detail as a bounded, source-backed, read-only section built from immutable local memory records.
 - [ ] **M6: Research Mode** - add explicit person/company research, sourced research notes, freshness checks, and "research before reply."
 - [ ] **M7: Daily memory briefing** - produce a diff over changed tracks, resolved questions, stale loops, and vault hygiene items.
 - [ ] **M8: Hardening and privacy controls** - add forget, pin, correct, source audit, update-rule audit, retention settings, prompt reset, and deletion propagation.
@@ -212,7 +213,7 @@ Testing should start with deterministic fixtures and then graduate to tmux-visib
 - [x] Unit-test Obsidian Markdown generation with frontmatter and generated-section preservation.
 - [x] App-level tests prove Compose Radar retrieval does not mutate draft content without user action.
 - [x] Snapshot or tmux tests cover Compose Radar at `220x50`, `80x24`, and `50x15`.
-- [ ] Demo fixtures include enough job-search and relationship examples for docs screenshots and future VHS tapes.
+- [x] Demo fixtures include enough job-search and relationship examples for memory chat, Compose Radar, and Contacts dossier screenshots.
 
 ## Non-Goals For First Execution
 

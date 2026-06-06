@@ -55,7 +55,7 @@ High-level milestones. Detailed feature status is in each section below.
 - [x] Legacy chat tool calling exists today, but is scheduled for Gollem replacement rather than expansion
 - [x] Legacy filtered timeline from chat results exists today, but is scheduled for typed Gollem Timeline intents
 - [x] Gollem UI chat-agent replacement with typed search, summary, Timeline, and Compose intents enabled as the default chat runtime
-- [ ] Obsidian-friendly email memories with source-backed tracks, contact/company/thread dossiers, Compose Radar nudges, and Markdown vault sync
+- [ ] Obsidian-friendly email memories with source-backed tracks, contact dossiers, planned company/thread dossiers, Compose Radar nudges, and Markdown vault sync
 - [x] Multiple AI backends (Claude, OpenAI-compatible)
 - [x] External embedding provider/model selection for OpenAI-compatible vendors, including Settings > AI controls
 - [x] Compact AI setup presets with separate chat and embedding role assignments in first-run customization and Settings > AI
@@ -270,7 +270,8 @@ Herald Memories turns important email history into local, source-backed tracks t
 - [x] Store every memory with evidence pointers to email message refs, folders, dates, snippets, note paths, or research URLs
 - [x] Add memory-aware chat tools for contact history, company status, related replies, open loops, and "what should I remember before replying?"
 - [ ] Add Compose Radar as a compact compose context panel with at most three source-backed nudges for conflicts, callbacks, open loops, relationship context, and research updates
-- [ ] Add Contact and Company dossiers that combine local email memories, active tracks, Obsidian links, and optional web research
+- [x] Add Contact dossiers that combine local email memories, active tracks, Obsidian links, and source evidence
+- [ ] Add Company dossiers that combine local email memories, active tracks, Obsidian links, and optional web research
 - [x] Expose memory configuration with strong defaults for vault targets, generated sections, Obsidian output profile, prompt templates, update rules, and safe research behavior
 - [ ] Add opt-in Obsidian sync that writes and updates Markdown notes under configured `People/`, `Job search/`, and `Scheduled Task Artifacts/` folders while preserving user edits
 - [ ] Add explicit Research Mode for person/company enrichment that never sends private email content to external research queries by default

@@ -1,14 +1,37 @@
 package app
 
 import (
+	"context"
 	"strings"
 	"testing"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/herald-email/herald-mail-app/internal/memory"
 	"github.com/herald-email/herald-mail-app/internal/models"
 )
+
+type contactMemoryTestBackend struct {
+	stubBackend
+	memories    []memory.Memory
+	lastQueries []memory.Query
+}
+
+func (b *contactMemoryTestBackend) SearchMemories(_ context.Context, query memory.Query) ([]memory.Memory, error) {
+	b.lastQueries = append(b.lastQueries, query)
+	var out []memory.Memory
+	for _, item := range b.memories {
+		if memory.MemoryMatches(item, query) {
+			out = append(out, item)
+		}
+	}
+	memory.SortMemoriesNewestFirst(out)
+	if query.Limit > 0 && len(out) > query.Limit {
+		out = out[:query.Limit]
+	}
+	return out, nil
+}
 
 // TestContactsTab_RightPanelFits verifies that the Contacts tab two-panel layout
 // does not overflow the terminal width. Before the fix, rightW = width - leftW - 4
@@ -202,6 +225,124 @@ func TestContactsDetail_EmojiSubjectNoWrap(t *testing.T) {
 		if v := visibleWidth(line); v > 220 {
 			t.Errorf("line %d visible width=%d exceeds terminal width 220", i, v)
 		}
+	}
+}
+
+func TestContactsDetailShowsHeraldMemoryDossier(t *testing.T) {
+	now := time.Date(2026, 6, 6, 12, 0, 0, 0, time.UTC)
+	contact := models.ContactData{
+		Email:       "mina@cobalt-works.example",
+		DisplayName: "Mina Park",
+		Company:     "Cobalt Works",
+		EmailCount:  2,
+		SentCount:   1,
+	}
+	openLoop := memory.PrepareMemoryForAppend(memory.Memory{
+		ID:             "mem-cobalt-open-loop",
+		Kind:           memory.KindOpenQuestion,
+		Claim:          "Mina asked whether the Cobalt Works interview schedule still works.",
+		Summary:        "Mina asked whether the Cobalt Works interview schedule still works.",
+		Topic:          "Example: Thread with Cobalt Works",
+		People:         []string{"Mina Park", "mina@cobalt-works.example"},
+		Company:        "Cobalt Works",
+		Domain:         "cobalt-works.example",
+		Status:         memory.StatusWaiting,
+		Confidence:     0.93,
+		LastActivityAt: now,
+		ObsidianTarget: "Job search/active/Cobalt Works/Memory.md",
+		Evidence: []memory.Evidence{{
+			SourceType: memory.SourceEmail,
+			MessageID:  "demo-example-thread-with-cobalt-works@demo.local",
+			Folder:     "INBOX",
+			Date:       now,
+			Snippet:    "Does the interview schedule still work for you?",
+		}},
+	}, now)
+	trackStatus := memory.PrepareMemoryForAppend(memory.Memory{
+		ID:             "mem-cobalt-track",
+		Kind:           memory.KindTrackStatus,
+		Claim:          "Cobalt Works interview is waiting on scheduling follow-up.",
+		Summary:        "Cobalt Works interview is waiting on scheduling follow-up.",
+		Topic:          "Example: Thread with Cobalt Works",
+		People:         []string{"Mina Park", "mina@cobalt-works.example"},
+		Company:        "Cobalt Works",
+		Domain:         "cobalt-works.example",
+		Status:         memory.StatusWaiting,
+		Confidence:     0.90,
+		LastActivityAt: now.Add(-time.Hour),
+		Evidence: []memory.Evidence{{
+			SourceType: memory.SourceEmail,
+			MessageID:  "demo-cobalt-track",
+			Folder:     "INBOX",
+			Date:       now.Add(-time.Hour),
+		}},
+	}, now)
+	backend := &contactMemoryTestBackend{memories: []memory.Memory{openLoop, trackStatus}}
+	m := New(backend, nil, "", nil, false)
+	m.loading = false
+	m.windowWidth = 220
+	m.windowHeight = 50
+	m.activeTab = tabContacts
+	m.contactsFiltered = []models.ContactData{contact}
+	m.contactDetail = &contact
+	m.contactDetailEmails = []*models.EmailData{{
+		MessageID: "demo-example-thread-with-cobalt-works@demo.local",
+		Subject:   "Example: Thread with Cobalt Works",
+		Sender:    "Mina Park <mina@cobalt-works.example>",
+		Date:      now,
+	}}
+
+	cmd := m.loadContactMemoryDossier(contact)
+	if cmd == nil {
+		t.Fatal("expected contact memory dossier command")
+	}
+	updated, _ := m.Update(cmd())
+	m = updated.(*Model)
+
+	if len(backend.lastQueries) == 0 {
+		t.Fatal("expected memory search query for contact dossier")
+	}
+	rendered := m.renderContactsTab(220, 50)
+	stripped := stripANSIContacts(rendered)
+	for _, want := range []string{
+		"Herald Memories",
+		"Cobalt Works interview is waiting",
+		"Open loop: Mina asked whether",
+		"Job search/active/Cobalt Works/Memory.md",
+		"demo-example-thread-with-cobalt-works@demo.local",
+	} {
+		if !strings.Contains(stripped, want) {
+			t.Fatalf("expected %q in contact dossier render:\n%s", want, stripped)
+		}
+	}
+	for i, line := range strings.Split(rendered, "\n") {
+		if v := visibleWidth(line); v > 220 {
+			t.Fatalf("line %d visible width=%d exceeds terminal width 220", i, v)
+		}
+	}
+}
+
+func TestContactsDetailHidesEmptyMemoryDossier(t *testing.T) {
+	b := &stubBackend{}
+	m := New(b, nil, "", nil, false)
+	m.loading = false
+	m.activeTab = tabContacts
+	contact := models.ContactData{Email: "no-memory@example.com", DisplayName: "No Memory", EmailCount: 1}
+	m.contactsFiltered = []models.ContactData{contact}
+	m.contactDetail = &contact
+	m.contactDetailEmails = []*models.EmailData{{
+		MessageID: "msg-1",
+		Subject:   "Plain contact email",
+		Sender:    "no-memory@example.com",
+		Date:      time.Now(),
+	}}
+
+	rendered := stripANSIContacts(m.renderContactsTab(220, 50))
+	if strings.Contains(rendered, "Herald Memories") {
+		t.Fatalf("empty dossier should stay hidden:\n%s", rendered)
+	}
+	if !strings.Contains(rendered, "Recent Emails") {
+		t.Fatalf("existing contact detail recent emails should remain visible:\n%s", rendered)
 	}
 }
 

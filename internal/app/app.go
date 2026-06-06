@@ -445,6 +445,14 @@ type ContactsLoadedMsg struct{ Contacts []models.ContactData }
 // ContactDetailLoadedMsg carries recent emails for the selected contact detail panel.
 type ContactDetailLoadedMsg struct{ Emails []*models.EmailData }
 
+// ContactMemoryDossierMsg carries a read-only Herald Memories dossier for a contact.
+type ContactMemoryDossierMsg struct {
+	Token   int
+	Email   string
+	Dossier memory.Dossier
+	Err     error
+}
+
 type AppleContactsImportedMsg struct{ Count int }
 
 // StarResultMsg is returned after a star/unstar operation completes.
@@ -864,6 +872,11 @@ type Model struct {
 	contactDetailEmails []*models.EmailData
 	contactDetailIdx    int
 	contactFocusPanel   int // 0 = list, 1 = detail
+
+	contactMemoryDossier memory.Dossier
+	contactMemoryLoading bool
+	contactMemoryError   string
+	contactMemoryToken   int
 
 	// Inline email preview within Contacts tab
 	contactPreviewEmail   *models.EmailData
@@ -3367,6 +3380,21 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case ContactDetailLoadedMsg:
 		m.contactDetailEmails = msg.Emails
 		m.contactDetailIdx = 0
+		return m, nil
+
+	case ContactMemoryDossierMsg:
+		if msg.Token != m.contactMemoryToken {
+			return m, nil
+		}
+		if m.contactDetail == nil || !strings.EqualFold(strings.TrimSpace(msg.Email), strings.TrimSpace(m.contactDetail.Email)) {
+			return m, nil
+		}
+		m.contactMemoryLoading = false
+		m.contactMemoryDossier = msg.Dossier
+		m.contactMemoryError = ""
+		if msg.Err != nil {
+			m.contactMemoryError = msg.Err.Error()
+		}
 		return m, nil
 
 	case AppleContactsImportedMsg:
