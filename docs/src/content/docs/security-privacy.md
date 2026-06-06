@@ -3,7 +3,9 @@ title: Security & Privacy
 description: Understand what Herald stores locally and when data leaves your machine.
 ---
 
-Herald is designed around local-first email access. The TUI connects to your configured IMAP and SMTP servers, caches metadata and selected body text in SQLite, and uses local AI by default when AI is enabled.
+Herald is designed around local-first email access. The TUI connects to your configured IMAP and SMTP servers, caches metadata and selected body text in SQLite, and does not require AI for the core app.
+
+AI is optional. Mail sync, reading, compose, search, cleanup, Calendar, and settings work without Ollama or cloud model keys. When AI is enabled, Ollama is the local default; external providers are opt-in.
 
 ## Local files
 
@@ -35,7 +37,9 @@ Set `HERALD_LOG_DIR` to override the log directory.
 
 ## AI behavior
 
-Ollama runs locally and is the default path for classification, chat, quick replies, and semantic search. If you configure Claude or an OpenAI-compatible provider, prompts and relevant email context may be sent to that provider for the feature you invoke.
+Ollama runs locally and is the default path when you enable AI features. Semantic search, classification, chat, quick replies, and AI draft help require configured AI.
+
+If you configure Claude or an OpenAI-compatible provider, prompts and relevant email context may be sent to that provider for the feature you invoke. Herald does not send mail content to external AI providers unless you configure one and use an AI-backed feature.
 
 Semantic search stores embeddings in the local SQLite cache. Embeddings are tied to the configured embedding model so Herald can invalidate stale vectors when the model changes.
 

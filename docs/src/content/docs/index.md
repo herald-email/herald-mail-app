@@ -9,6 +9,10 @@ It combines a chronological Timeline, transient Markdown Compose, Contacts, Cale
 
 This manual is organized around the screens you use every day. Start with setup if you are new, then use the tab pages for precise behavior, controls, states, and privacy notes.
 
+## AI is optional
+
+AI is optional. Mail sync, reading, compose, search, cleanup, Calendar, and settings work without Ollama or cloud model keys. When AI is enabled, Ollama is the local default; external providers are opt-in. Semantic search, classification, chat, and AI draft help require configured AI.
+
 ## Fastest path
 
 ```sh

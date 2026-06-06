@@ -9,6 +9,9 @@
 
 ![Herald themed guided tour with keypress overlay](assets/demo/guided-tour-dark-pastel.gif)
 
+> [!IMPORTANT]
+> AI is optional. Mail sync, reading, compose, search, cleanup, Calendar, and settings work without Ollama or cloud model keys. When AI is enabled, Ollama is the local default; external providers are opt-in. Semantic search, classification, chat, and AI draft help require configured AI.
+
 Herald is keyboard-first, but it is not keyboard-only. Press `?` in browse and
 non-text contexts to open context-sensitive shortcut help; editable Compose
 fields keep literal `?` for writing. In modern
@@ -105,6 +108,7 @@ To test terminal image rendering, run demo mode in a Kitty-protocol terminal suc
 ### Prerequisites
 
 - An IMAP account and SMTP settings, unless you run demo mode.
+- No AI runtime is required for the core app. Configure Ollama only if you want local AI features, or opt into an external provider explicitly.
 - Recommended: a modern terminal with mouse events and OSC 8 hyperlinks for clickable navigation and hardened email links. Common OSC 8-capable terminals include iTerm2, Kitty, WezTerm, GNOME Terminal and other VTE-based terminals, and Windows Terminal; see the [full OSC 8 adoption list](https://github.com/Alhadis/OSC8-Adoption/) for current compatibility. For inline image rendering, use a Kitty-protocol terminal such as Ghostty on macOS or Kitty itself; iTerm2 is also supported through its inline image protocol. Other terminals still get safe text placeholders or local `open image` links when available.
 - For source builds only: Go 1.25 or newer and a C compiler such as `clang` or `gcc` for SQLite CGO support.
 
@@ -223,6 +227,10 @@ For a local binary with OAuth defaults built in, copy `.herald-dev.env.example` 
 ## Configuration
 
 Config file: `~/.herald/conf.yaml`
+
+The `ollama:` block is optional. Leave it out when you only want mail sync,
+reading, compose, search, cleanup, Calendar, and settings. Add it later for
+local semantic search, classification, chat, quick replies, or AI draft help.
 
 ```yaml
 credentials:

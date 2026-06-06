@@ -8,7 +8,8 @@ This page covers the shortest route to a usable Herald session. For every visibl
 ## Requirements
 
 - An IMAP account and SMTP settings, unless you run demo mode
-- Optional: Ollama for local AI features
+- No AI runtime is required for the core app. Mail sync, reading, compose, search, cleanup, Calendar, and settings work without Ollama or cloud model keys.
+- Optional: Ollama for local semantic search, classification, chat, quick replies, and AI draft help. External AI providers are opt-in.
 - Recommended: a modern terminal with mouse events and OSC 8 hyperlinks for clickable navigation and hardened email links. Common OSC 8-capable terminals include iTerm2, Kitty, WezTerm, GNOME Terminal and other VTE-based terminals, and Windows Terminal; see the [full OSC 8 adoption list](https://github.com/Alhadis/OSC8-Adoption/) for current compatibility. For inline image rendering, use a Kitty-protocol terminal such as Ghostty on macOS or Kitty itself; iTerm2 is also supported through its inline image protocol. Other terminals still get safe placeholders or local `open image` links when available.
 - For source builds only: Go 1.25 or newer and a C compiler such as `clang` or `gcc` for SQLite CGO support
 
@@ -96,6 +97,8 @@ herald --demo
 Use `./bin/herald` instead when running from a source checkout. `-experimental` remains available for future feature flags, but Gmail OAuth no longer requires it. `-debug` and `-verbose` both enable DEBUG-level file logging. Herald does not write logs to the terminal because that would corrupt the TUI.
 
 ## Example config
+
+The `ollama:` block is optional and can be omitted until you enable local AI.
 
 ```yaml
 credentials:
