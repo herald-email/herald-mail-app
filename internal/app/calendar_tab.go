@@ -1246,7 +1246,6 @@ func (m *Model) calendarEditFieldValueFromDraft(field calendarEditField) string 
 	default:
 		return ""
 	}
-	return ""
 }
 
 func (m *Model) openCalendarMeetingPrep() tea.Cmd {
