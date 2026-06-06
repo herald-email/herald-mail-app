@@ -649,7 +649,8 @@ func (m *Model) shortcutHelpSections() []shortcutHelpSection {
 	case m.focusedPanel == panelChat && m.showChat:
 		sections = append(sections, shortcutHelpSection{"Chat", []shortcutHelpEntry{
 			{"Enter", "send the current chat message"},
-			{"Esc / Tab", "close chat or return focus to the main pane"},
+			{"Esc", "close the chat drawer"},
+			{"Tab / Shift+Tab", "move focus between visible panels"},
 		}})
 	case m.activeTab == tabCompose:
 		sections = append(sections, m.composeShortcutHelpSection())

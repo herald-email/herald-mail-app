@@ -98,6 +98,90 @@ func TestChatToggleFocusesInputAndAcceptsTyping(t *testing.T) {
 	}
 }
 
+func TestChatFocusedTabCyclesPanelsWithoutClosingDrawer(t *testing.T) {
+	m := makeSizedModel(t, 220, 50)
+	m.activeTab = tabTimeline
+	m.loading = false
+	m.showSidebar = true
+	m.showChat = true
+	m.timeline.emails = mockEmails()
+	m.updateTimelineTable()
+	m.setFocusedPanel(panelChat)
+
+	model, _, handled := m.handleOverlayKey(tea.KeyPressMsg{Code: tea.KeyTab})
+	if !handled {
+		t.Fatal("expected chat Tab to be handled")
+	}
+	updated := model.(*Model)
+	if !updated.showChat {
+		t.Fatal("Tab should leave the chat drawer open")
+	}
+	if updated.focusedPanel != panelSidebar {
+		t.Fatalf("Tab focused panel = %d, want sidebar", updated.focusedPanel)
+	}
+	if updated.chatInput.Focused() {
+		t.Fatal("chat input should blur after Tab moves focus away")
+	}
+}
+
+func TestChatFocusedShiftTabCyclesPanelsBackwardWithoutClosingDrawer(t *testing.T) {
+	m := makeSizedModel(t, 220, 50)
+	m.activeTab = tabTimeline
+	m.loading = false
+	m.showSidebar = true
+	m.showChat = true
+	m.timeline.emails = mockEmails()
+	m.updateTimelineTable()
+	m.setFocusedPanel(panelChat)
+
+	model, _, handled := m.handleOverlayKey(tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift})
+	if !handled {
+		t.Fatal("expected chat Shift+Tab to be handled")
+	}
+	updated := model.(*Model)
+	if !updated.showChat {
+		t.Fatal("Shift+Tab should leave the chat drawer open")
+	}
+	if updated.focusedPanel != panelTimeline {
+		t.Fatalf("Shift+Tab focused panel = %d, want timeline", updated.focusedPanel)
+	}
+	if updated.chatInput.Focused() {
+		t.Fatal("chat input should blur after Shift+Tab moves focus away")
+	}
+}
+
+func TestChatShortcutHelpSeparatesCloseAndPanelCycling(t *testing.T) {
+	m := makeSizedModel(t, 220, 50)
+	m.activeTab = tabTimeline
+	m.loading = false
+	m.showChat = true
+	m.setFocusedPanel(panelChat)
+
+	sections := m.shortcutHelpSections()
+	var chatEntries []shortcutHelpEntry
+	for _, section := range sections {
+		if section.Title == "Chat" {
+			chatEntries = section.Entries
+			break
+		}
+	}
+	if len(chatEntries) == 0 {
+		t.Fatalf("shortcut help sections = %#v, want Chat section", sections)
+	}
+	help := ""
+	for _, entry := range chatEntries {
+		help += entry.Key + ": " + entry.Desc + "\n"
+	}
+	for _, want := range []string{"Esc: close the chat drawer", "Tab / Shift+Tab: move focus between visible panels"} {
+		if !strings.Contains(help, want) {
+			t.Fatalf("chat help missing %q:\n%s", want, help)
+		}
+	}
+	if strings.Contains(help, "Esc / Tab") {
+		t.Fatalf("chat help should not conflate Esc and Tab:\n%s", help)
+	}
+}
+
 func TestHandleTabKey_SwitchingAwayFromComposeStartsDraftPersistence(t *testing.T) {
 	m := New(&stubBackend{}, nil, "", nil, false)
 	m.activeTab = tabCompose

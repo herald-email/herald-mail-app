@@ -3816,7 +3816,10 @@ func (m *Model) renderMainView() string {
 		mainContent = m.renderTimelineView()
 	}
 	if plan.ChatVisible {
-		chatView := m.baseStyle.Width(chatPanelWidth + 2).Render(m.renderChatPanel())
+		chatView := m.baseStyle.
+			Width(chatPanelWidth + 2).
+			BorderForeground(m.theme.PanelBorderColor(m.focusedPanel == panelChat)).
+			Render(m.renderChatPanel())
 		content.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, mainContent, panelGap, chatView) + "\n")
 	} else {
 		content.WriteString(mainContent + "\n")

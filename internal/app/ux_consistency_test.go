@@ -540,8 +540,13 @@ func TestRenderKeyHints_PrefersChatControlsOverTimelineHints(t *testing.T) {
 	m.updateTableDimensions(220, 50)
 
 	hints := stripANSI(m.renderKeyHints())
-	if !strings.Contains(hints, "enter: send") {
-		t.Fatalf("expected chat controls when chat is visible, got %q", hints)
+	for _, want := range []string{"enter: send", "esc: close chat", "tab: next panel", "shift+tab: prev panel"} {
+		if !strings.Contains(hints, want) {
+			t.Fatalf("expected chat hints to contain %q, got %q", want, hints)
+		}
+	}
+	if strings.Contains(hints, "esc/tab: close chat") {
+		t.Fatalf("expected chat hints to separate Esc and Tab behavior, got %q", hints)
 	}
 	if strings.Contains(hints, "R: sender") {
 		t.Fatalf("expected timeline hints to be hidden while chat is visible, got %q", hints)

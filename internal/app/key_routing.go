@@ -181,9 +181,11 @@ func (m *Model) handleOverlayKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool)
 			}
 			m.setFocusedPanel(m.defaultFocusPanel())
 			return m, nil, true
-		case "tab":
-			m.chatInput.Blur()
-			m.setFocusedPanel(m.defaultFocusPanel())
+		case "tab", "ctrl+i":
+			m.cyclePanel(true)
+			return m, nil, true
+		case "shift+tab":
+			m.cyclePanel(false)
 			return m, nil, true
 		}
 		var cmd tea.Cmd
