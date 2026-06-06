@@ -720,6 +720,52 @@ func TestBuildCompanyDossierMirrorsJobSearchVaultTracks(t *testing.T) {
 	}
 }
 
+func TestBuildThreadDossierUsesCanonicalLinksAndSourceEvidence(t *testing.T) {
+	settings := DefaultSettings()
+	settings.Thresholds.Dossier = 0.55
+	now := testTime()
+	active := lifecycleMemory("Example: Thread with Cobalt Works", KindTrackStatus, StatusWaiting, now.Add(-30*time.Minute), "Job search/active/Cobalt Works/Memory.md")
+	active.Company = "Cobalt Works"
+	active.Domain = "cobalt-works.example"
+	active.People = []string{"Mina Park", "mina@cobalt-works.example"}
+	openLoop := lifecycleMemory("Example: Thread with Cobalt Works", KindOpenQuestion, StatusWaiting, now.Add(-20*time.Minute), "Job search/active/Cobalt Works/Memory.md")
+	openLoop.Claim = "Mina asked whether the interview schedule still works."
+	openLoop.Summary = "Mina asked whether the interview schedule still works."
+	openLoop.Company = "Cobalt Works"
+	openLoop.Domain = "cobalt-works.example"
+	openLoop.People = active.People
+	relatedNote := lifecycleMemory("Example: Thread with Cobalt Works", KindRelationshipContext, StatusActive, now.Add(-10*time.Minute), "People/Mina Park.md")
+	relatedNote.Company = "Cobalt Works"
+	relatedNote.Domain = "cobalt-works.example"
+	relatedNote.People = active.People
+	relatedNote.Links = []string{"People/Mina Park.md"}
+	lowConfidence := lifecycleMemory("Example: Thread with Cobalt Works rumor", KindRelationshipContext, StatusActive, now, "People/Rumor.md")
+	lowConfidence.Confidence = 0.20
+
+	dossier := BuildThreadDossier("Example: Thread with Cobalt Works", []Memory{lowConfidence, relatedNote, openLoop, active}, settings, now)
+
+	if dossier.Kind != DossierKindThread || dossier.Subject != "Example: Thread with Cobalt Works" {
+		t.Fatalf("dossier identity = %#v", dossier)
+	}
+	if len(dossier.ActiveTracks) != 1 || !strings.Contains(dossier.ActiveTracks[0].Topic, "Cobalt Works") {
+		t.Fatalf("active tracks = %#v", dossier.ActiveTracks)
+	}
+	if len(dossier.OpenLoops) != 1 || !strings.Contains(dossier.OpenLoops[0].Claim, "schedule") {
+		t.Fatalf("open loops = %#v", dossier.OpenLoops)
+	}
+	for _, want := range []string{"Job search/active/Cobalt Works/Memory.md", "People/Mina Park.md"} {
+		if !containsString(dossier.VaultLinks, want) {
+			t.Fatalf("vault links = %#v, missing %q", dossier.VaultLinks, want)
+		}
+	}
+	if len(dossier.Evidence) == 0 || dossier.Evidence[0].MessageID == "" {
+		t.Fatalf("thread dossier missing source evidence: %#v", dossier.Evidence)
+	}
+	if strings.Contains(dossier.RelationshipSummary, "rumor") {
+		t.Fatalf("low-confidence memory leaked into thread dossier: %#v", dossier)
+	}
+}
+
 func TestBuildTracksFromMemoriesDerivesLifecycleStatuses(t *testing.T) {
 	settings := DefaultSettings()
 	settings.UpdateRules.StaleAfterDays = 30

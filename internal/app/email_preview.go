@@ -390,6 +390,17 @@ func (m *Model) renderEmailPreviewFrame() emailPreviewRender {
 		}
 		selectionRowOffset += len(threadContextLines)
 	}
+	threadMemoryLines := m.timelineThreadMemoryDossierLines(innerW, 6)
+	if len(threadMemoryLines) > 0 {
+		maxBodyLines -= len(threadMemoryLines)
+		if maxBodyLines < 1 {
+			maxBodyLines = 1
+		}
+		for _, line := range renderPreviewSelectableLines(m.theme, threadMemoryLines, previewSelectionTimeline, m.previewSelection, selectionRowOffset) {
+			sb.WriteString(line + "\n")
+		}
+		selectionRowOffset += len(threadMemoryLines)
+	}
 	if m.timeline.bodyLoading || !bodyMatchesSelected {
 		sb.WriteString(dimStyle.Render("Loading…"))
 	} else if m.timeline.body != nil {
@@ -591,6 +602,18 @@ func (m *Model) renderFullScreenEmail() string {
 		}
 		bodyStartRow += len(threadContextLines)
 		selectionRowOffset += len(threadContextLines)
+	}
+	threadMemoryLines := m.timelineThreadMemoryDossierLines(innerW, 6)
+	if len(threadMemoryLines) > 0 {
+		maxBodyLines -= len(threadMemoryLines)
+		if maxBodyLines < 1 {
+			maxBodyLines = 1
+		}
+		for _, line := range renderPreviewSelectableLines(m.theme, threadMemoryLines, previewSelectionTimeline, m.previewSelection, selectionRowOffset) {
+			sb.WriteString(line + "\n")
+		}
+		bodyStartRow += len(threadMemoryLines)
+		selectionRowOffset += len(threadMemoryLines)
 	}
 
 	if m.timeline.bodyLoading {
@@ -880,10 +903,11 @@ func (m *Model) maybeUpdatePreview() tea.Cmd {
 	m.timeline.quickReplies = nil
 	m.timeline.quickRepliesAIFetched = false
 	loadCmd := m.loadEmailBodyForRefCmd(email.MessageRef())
+	memoryCmd := m.loadTimelineThreadMemoryDossier(email)
 	if clearCmd != nil {
-		return tea.Sequence(clearCmd, loadCmd)
+		return tea.Sequence(clearCmd, tea.Batch(loadCmd, memoryCmd))
 	}
-	return loadCmd
+	return tea.Batch(loadCmd, memoryCmd)
 }
 
 func (m *Model) loadEmailBodyCmd(messageID, folder string, uid uint32) tea.Cmd {

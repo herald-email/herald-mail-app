@@ -473,6 +473,7 @@ func (m *Model) clearTimelinePreviewIfDeleted(ids map[string]bool) {
 	m.timeline.fullScreen = false
 	m.timeline.bodyWrappedLines = nil
 	m.timeline.bodyWrappedWidth = 0
+	m.resetTimelineThreadMemoryDossier()
 	m.timeline.bodyScrollOffset = 0
 	m.timeline.selectedAttachment = 0
 	m.timeline.attachmentSavePrompt = false

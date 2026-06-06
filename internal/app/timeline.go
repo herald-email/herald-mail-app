@@ -1393,6 +1393,7 @@ func (m *Model) clearTimelinePreview() {
 	m.timeline.bodyLoading = false
 	m.timeline.bodyWrappedLines = nil
 	m.clearTimelinePreviewDocumentCache()
+	m.resetTimelineThreadMemoryDossier()
 	m.timeline.bodyScrollOffset = 0
 	m.clearPreviewSelection()
 	m.setFocusedPanel(panelTimeline)
@@ -2436,10 +2437,11 @@ func (m *Model) openTimelineEmail(email *models.EmailData) tea.Cmd {
 	m.timeline.quickRepliesAIFetched = false
 	m.updateTableDimensions(m.windowWidth, m.windowHeight)
 	loadCmd := m.loadEmailBodyForRefCmd(email.MessageRef())
+	memoryCmd := m.loadTimelineThreadMemoryDossier(email)
 	if clearCmd != nil {
-		return tea.Sequence(clearCmd, loadCmd)
+		return tea.Sequence(clearCmd, tea.Batch(loadCmd, memoryCmd))
 	}
-	return loadCmd
+	return tea.Batch(loadCmd, memoryCmd)
 }
 
 func (m *Model) openTimelineQuickReply() tea.Cmd {
@@ -2977,6 +2979,21 @@ func (m *Model) handleTimelineMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		m.clearTimelinePreviewDocumentCache()
 		if len(cmds) > 0 {
 			return m, tea.Batch(cmds...), true
+		}
+		return m, nil, true
+
+	case ThreadMemoryDossierMsg:
+		if msg.Token != m.threadMemoryToken {
+			return m, nil, true
+		}
+		if m.timeline.selectedEmail == nil || strings.TrimSpace(msg.MessageID) != strings.TrimSpace(m.timeline.selectedEmail.MessageID) {
+			return m, nil, true
+		}
+		m.threadMemoryLoading = false
+		m.threadMemoryDossier = msg.Dossier
+		m.threadMemoryError = ""
+		if msg.Err != nil {
+			m.threadMemoryError = msg.Err.Error()
 		}
 		return m, nil, true
 

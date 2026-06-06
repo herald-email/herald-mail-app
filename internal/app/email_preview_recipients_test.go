@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/herald-email/herald-mail-app/internal/memory"
 	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
@@ -65,6 +66,88 @@ func TestTimelineSplitPreviewShowsLoadedToAndCcHeaders(t *testing.T) {
 	}
 	if strings.Contains(rendered, "Bcc:") {
 		t.Fatalf("preview header must not expose Bcc, got:\n%s", rendered)
+	}
+}
+
+func TestTimelinePreviewShowsHeraldThreadMemoryDossier(t *testing.T) {
+	now := time.Date(2026, 6, 6, 12, 0, 0, 0, time.UTC)
+	email := recipientHeaderEmail()
+	email.MessageID = "demo-example-thread-with-cobalt-works@demo.local"
+	email.Date = now
+	openLoop := memory.PrepareMemoryForAppend(memory.Memory{
+		ID:             "mem-thread-open-loop",
+		Kind:           memory.KindOpenQuestion,
+		Claim:          "Mina asked whether the Cobalt Works interview schedule still works.",
+		Summary:        "Mina asked whether the Cobalt Works interview schedule still works.",
+		Topic:          "Example: Thread with Cobalt Works",
+		People:         []string{"Mina Park", "mina@cobalt-works.example"},
+		Company:        "Cobalt Works",
+		Domain:         "cobalt-works.example",
+		Status:         memory.StatusWaiting,
+		Confidence:     0.93,
+		LastActivityAt: now,
+		ObsidianTarget: "Job search/active/Cobalt Works/Memory.md",
+		Evidence: []memory.Evidence{{
+			SourceType: memory.SourceEmail,
+			MessageID:  email.MessageID,
+			Folder:     "INBOX",
+			Date:       now,
+			Snippet:    "Does the interview schedule still work for you?",
+		}},
+	}, now)
+	trackStatus := memory.PrepareMemoryForAppend(memory.Memory{
+		ID:             "mem-thread-track",
+		Kind:           memory.KindTrackStatus,
+		Claim:          "Cobalt Works interview is waiting on scheduling follow-up.",
+		Summary:        "Cobalt Works interview is waiting on scheduling follow-up.",
+		Topic:          "Example: Thread with Cobalt Works",
+		People:         []string{"Mina Park", "mina@cobalt-works.example"},
+		Company:        "Cobalt Works",
+		Domain:         "cobalt-works.example",
+		Status:         memory.StatusWaiting,
+		Confidence:     0.90,
+		LastActivityAt: now.Add(-time.Hour),
+		Evidence: []memory.Evidence{{
+			SourceType: memory.SourceEmail,
+			MessageID:  "demo-cobalt-track",
+			Folder:     "INBOX",
+			Date:       now.Add(-time.Hour),
+		}},
+	}, now)
+	backend := &contactMemoryTestBackend{memories: []memory.Memory{openLoop, trackStatus}}
+	m := makeSizedModel(t, 140, 40)
+	m.backend = backend
+	m.activeTab = tabTimeline
+	m.timeline.previewWidth = 96
+	m.timeline.selectedEmail = email
+	m.timeline.bodyMessageID = email.MessageID
+	m.timeline.body = recipientHeaderBody()
+
+	cmd := m.loadTimelineThreadMemoryDossier(email)
+	if cmd == nil {
+		t.Fatal("expected thread memory dossier command")
+	}
+	model, _, handled := m.handleTimelineMsg(cmd())
+	if !handled {
+		t.Fatal("expected ThreadMemoryDossierMsg to be handled")
+	}
+	m = model.(*Model)
+	if len(backend.lastQueries) == 0 || backend.lastQueries[0].Topic != "Example: Thread with Cobalt Works" {
+		t.Fatalf("thread memory queries = %#v", backend.lastQueries)
+	}
+
+	rendered := stripANSI(m.renderEmailPreview())
+	for _, want := range []string{
+		"Herald Memories",
+		"Thread: Example: Thread with Cobalt Works",
+		"Track: Example: Thread with Cobalt Works",
+		"Open loop: Mina asked whether",
+		"Vault: Job search/active/Cobalt Works/Memory.md",
+		email.MessageID,
+	} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("expected %q in thread memory preview:\n%s", want, rendered)
+		}
 	}
 }
 

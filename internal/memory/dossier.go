@@ -8,6 +8,7 @@ import (
 const (
 	DossierKindPerson  = "person"
 	DossierKindCompany = "company"
+	DossierKindThread  = "thread"
 
 	defaultDossierMemoryLimit = 12
 	defaultDossierTrackLimit  = 4
@@ -35,6 +36,14 @@ func BuildCompanyDossier(subject string, memories []Memory, settings Settings, n
 	return BuildDossierFromMemories(DossierBuildOptions{
 		Subject: subject,
 		Kind:    DossierKindCompany,
+		Now:     now,
+	}, memories, settings)
+}
+
+func BuildThreadDossier(subject string, memories []Memory, settings Settings, now time.Time) Dossier {
+	return BuildDossierFromMemories(DossierBuildOptions{
+		Subject: subject,
+		Kind:    DossierKindThread,
 		Now:     now,
 	}, memories, settings)
 }

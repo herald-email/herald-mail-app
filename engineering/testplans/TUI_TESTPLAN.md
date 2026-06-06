@@ -1237,7 +1237,7 @@ Check these states during every applicable lane:
 - Applying a generated-section update requires an explicit approved write flow, writes only within the configured vault, and preserves user-authored content outside stable Herald markers.
 - `Settings > Memories` shows Obsidian write state: pending writes, last applied writes, failed writes, last run, and whether the latest flow was approved or still needs preview approval.
 
-### TC-18G — Herald Memories contact dossiers
+### TC-18G — Herald Memories dossier views
 
 **Lane:** A, B, G
 **Sizes:** `220x50`, `80x24`, `50x15`
@@ -1246,12 +1246,15 @@ Check these states during every applicable lane:
 1. Start demo or virtual-lab data that includes a contact with source-backed memories.
 2. Open Contacts and select that contact.
 3. Press Enter to open the contact detail.
-4. Capture the detail at `220x50` and `80x24`.
-5. At `50x15`, confirm the minimum-size guard appears instead of clipped dossier chrome.
+4. Return to Timeline, select a message from a remembered thread, and open the email preview.
+5. Capture the contact detail and email preview at `220x50` and `80x24`.
+6. At `50x15`, confirm the minimum-size guard appears instead of clipped dossier chrome.
 
 **Expect:**
 - The contact detail includes a bounded `Herald Memories` section with relationship summary, active track status, open loop, vault link, and source evidence labels when matching memories exist.
 - When the contact has company or domain-backed job-search memories, the detail also includes a bounded company dossier line with company track status, Obsidian job-search path, and source evidence.
+- The email preview includes a bounded thread dossier for the selected subject with thread summary, active track, open loop, canonical vault link, and source evidence when matching memories exist.
+- Thread dossier output uses note links or vault paths instead of copying long generated summaries across multiple files or surfaces.
 - The dossier is read-only and does not write memory records, Obsidian notes, drafts, calendar events, or contact enrichment fields.
 - Recent email navigation and inline preview still work after the dossier appears.
 - Contacts without matching memories keep the existing detail layout without a noisy empty dossier block.

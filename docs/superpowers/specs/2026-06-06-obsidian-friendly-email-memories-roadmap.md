@@ -68,6 +68,7 @@ Herald Memories should appear where context changes user behavior: chat, Compose
 - [x] Compose gains Compose Radar, a compact panel that shows at most three relevant nudges while writing.
 - [x] Contacts gains read-only person dossiers with relationship summary, recent messages, active tracks, open loops, linked notes, and source evidence.
 - [x] Job-search company dossiers mirror the Obsidian `Job search/{active,backlog,done}/{Company}/` structure.
+- [x] Email preview gains a read-only thread dossier with active track, open loop, vault link, and source evidence for the selected thread.
 - [x] Daily briefing output becomes a diff over changed tracks, stale loops, and newly resolved questions.
 
 ## Compose Radar
@@ -95,7 +96,7 @@ Obsidian sync is a product boundary, not just export. Herald should write Markdo
 - [x] Support generated sections inside existing people and company notes using stable markers.
 - [x] Preserve user-edited content outside generated sections.
 - [x] Use frontmatter for machine-readable fields such as `last_contact`, `status`, `company`, `source`, `memory_updated`, and `herald_memory_id`.
-- [ ] Use note links to canonical notes rather than copying long summaries across multiple files.
+- [x] Use note links to canonical notes rather than copying long summaries across multiple files.
 - [x] Offer a sync preview before first write and before destructive section rewrites.
 - [x] Keep daily briefing output under a configured `Scheduled Task Artifacts/` path when enabled.
 
@@ -175,9 +176,10 @@ The roadmap is ordered so the feature becomes useful before it becomes broad. Th
 - [x] **M4: Compose Radar v1** - surface source-backed nudges for job-search replies and high-confidence people callbacks, with open/dismiss/insert actions.
 - [x] Compose Radar refreshes reply-prep nudges after relevant draft context changes without letting stale results replace newer context.
 - [x] Compose Radar nudges carry typed conflict/callback/open-loop/relationship/research/draft-risk states plus action-state and dismissal-scope metadata.
-- [ ] **M5: Dossier views** - enrich Contacts and company/thread detail views with relationship summaries, active tracks, open loops, vault links, and evidence.
+- [x] **M5: Dossier views** - enrich Contacts and company/thread detail views with relationship summaries, active tracks, open loops, vault links, and evidence.
 - [x] Person dossier v1 appears inside Contacts detail as a bounded, source-backed, read-only section built from immutable local memory records.
 - [x] Company dossier v1 appears inside Contacts detail as a bounded, source-backed, read-only section for company/domain-backed tracks, open loops, vault links, and evidence.
+- [x] Thread dossier v1 appears in email preview as a bounded, source-backed, read-only section for the selected thread, using canonical note links instead of copying full dossier summaries.
 - [x] **M6: Research Mode** - add explicit person/company research, sourced research notes, freshness checks, and "research before reply."
 - [x] **M7: Daily memory briefing** - produce a diff over changed tracks, resolved questions, stale loops, and vault hygiene items.
 - [x] **M8: Hardening and privacy controls** - add forget, pin, correct, source audit, update-rule audit, retention settings, prompt reset, and deletion propagation.

@@ -460,6 +460,15 @@ type ContactMemoryDossierMsg struct {
 	Err            error
 }
 
+// ThreadMemoryDossierMsg carries a read-only Herald Memories dossier for a timeline preview thread.
+type ThreadMemoryDossierMsg struct {
+	Token     int
+	MessageID string
+	Subject   string
+	Dossier   memory.Dossier
+	Err       error
+}
+
 type AppleContactsImportedMsg struct{ Count int }
 
 // StarResultMsg is returned after a star/unstar operation completes.
@@ -861,6 +870,12 @@ type Model struct {
 	previewPrewarmTotal      int
 	previewPrewarmWarmed     int
 	previewPrewarmSkipped    int
+	threadMemoryDossier      memory.Dossier
+	threadMemoryLoading      bool
+	threadMemoryError        string
+	threadMemoryToken        int
+	threadMemoryMessageID    string
+	threadMemorySubject      string
 
 	// Demo mode — set when DemoBackend is detected; shows [DEMO] in status bar
 	demoMode           bool
@@ -1695,6 +1710,7 @@ func (m *Model) resetMailboxStateForFolder(folder string) {
 	m.timeline.body = nil
 	m.timeline.bodyMessageID = ""
 	m.timeline.bodyLoading = false
+	m.resetTimelineThreadMemoryDossier()
 	m.timeline.selectedMessageIDs = make(map[string]bool)
 	m.timeline.searchResults = nil
 	m.timeline.searchMode = false

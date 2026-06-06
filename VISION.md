@@ -55,7 +55,7 @@ High-level milestones. Detailed feature status is in each section below.
 - [x] Legacy chat tool calling exists today, but is scheduled for Gollem replacement rather than expansion
 - [x] Legacy filtered timeline from chat results exists today, but is scheduled for typed Gollem Timeline intents
 - [x] Gollem UI chat-agent replacement with typed search, summary, Timeline, and Compose intents enabled as the default chat runtime
-- [ ] Obsidian-friendly email memories with source-backed tracks, contact dossiers, planned company/thread dossiers, Compose Radar nudges, and Markdown vault sync
+- [x] Obsidian-friendly email memories with source-backed tracks, contact/company/thread dossiers, Compose Radar nudges, and Markdown vault sync
 - [x] Multiple AI backends (Claude, OpenAI-compatible)
 - [x] External embedding provider/model selection for OpenAI-compatible vendors, including Settings > AI controls
 - [x] Compact AI setup presets with separate chat and embedding role assignments in first-run customization and Settings > AI
@@ -276,6 +276,7 @@ Herald Memories turns important email history into local, source-backed tracks t
 - [x] Add explicit local Compose Radar actions for open source, dismiss, insert, resolve, save memory, and research person/company intent
 - [x] Add Contact dossiers that combine local email memories, active tracks, Obsidian links, and source evidence
 - [x] Add Company dossiers that combine local email memories, active tracks, Obsidian links, and optional web research placeholders
+- [x] Add Thread dossiers in email preview that combine local email memories, active tracks, open loops, canonical note links, and source evidence
 - [x] Expose memory configuration with strong defaults for vault targets, generated sections, Obsidian output profile, prompt templates, update rules, and safe research behavior
 - [x] Add opt-in Obsidian sync that writes and updates Markdown notes under configured `People/`, `Job search/`, and configured memory folders while preserving user edits
 - [x] Add explicit Research Mode for person/company enrichment that never sends private email content to external research queries by default
