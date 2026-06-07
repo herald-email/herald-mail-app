@@ -5,11 +5,13 @@ import (
 	"errors"
 	"sort"
 	"strings"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/herald-email/herald-mail-app/internal/agent"
 	"github.com/herald-email/herald-mail-app/internal/ai"
+	"github.com/herald-email/herald-mail-app/internal/logger"
 )
 
 const (
@@ -45,8 +47,11 @@ func (m *Model) submitChat() tea.Cmd {
 
 	if runner := m.chatAgent; runner != nil {
 		input := m.buildChatAgentInput(question, currentFolder, previousMessages)
+		logger.Debug("Chat submit: folder=%s tab=%s question_chars=%d history_turns=%d visible_ids=%d selected_ids=%d compose_snapshot=%t", currentFolder, input.ActiveTab, len([]rune(input.UserMessage)), len(input.History), len(input.VisibleIDs), len(input.SelectedIDs), input.ComposeSnapshot != nil)
 		return func() tea.Msg {
+			started := time.Now()
 			result, err := runner.Run(context.Background(), input)
+			logger.Debug("Chat response received: duration=%s error=%t reply_chars=%d timeline_intent=%t summary=%t compose_intent=%t", time.Since(started).Round(time.Millisecond), err != nil, len([]rune(result.Reply)), result.Timeline != nil, result.Summary != nil, result.Compose != nil)
 			return ChatAgentResponseMsg{Result: result, Err: err}
 		}
 	}

@@ -42,11 +42,9 @@ func TestGollemRunnerReturnsTypedReply(t *testing.T) {
 	}
 }
 
-func TestGollemRunnerFallsBackToPlainTextWhenTypedResultFails(t *testing.T) {
+func TestGollemRunnerParsesJSONTextReplyWithoutFallback(t *testing.T) {
 	model := core.NewTestModel(
-		core.TextResponse("plain answer"),
-		core.TextResponse("plain answer after repair"),
-		core.TextResponse("plain answer from fallback"),
+		core.TextResponse(`{"reply":"I found the answer."}`),
 	)
 	runner := NewGollemRunner(model)
 
@@ -57,8 +55,26 @@ func TestGollemRunnerFallsBackToPlainTextWhenTypedResultFails(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Run returned error: %v", err)
 	}
-	if result.Reply != "plain answer from fallback" {
-		t.Fatalf("Reply = %q, want fallback text", result.Reply)
+	if result.Reply != "I found the answer." {
+		t.Fatalf("Reply = %q", result.Reply)
+	}
+}
+
+func TestGollemRunnerUsesPlainTextFromFirstStructuredAttempt(t *testing.T) {
+	model := core.NewTestModel(
+		core.TextResponse("plain answer"),
+	)
+	runner := NewGollemRunner(model)
+
+	result, err := runner.Run(context.Background(), ChatInput{
+		UserMessage:   "say hello",
+		CurrentFolder: "INBOX",
+	})
+	if err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
+	if result.Reply != "plain answer" {
+		t.Fatalf("Reply = %q, want first text response", result.Reply)
 	}
 }
 
@@ -73,6 +89,21 @@ func TestSystemPromptKeepsUIChatBriefAndReadOnly(t *testing.T) {
 		if !strings.Contains(prompt, want) {
 			t.Fatalf("system prompt missing %q:\n%s", want, prompt)
 		}
+	}
+}
+
+func TestSystemPromptRequiresStructuredReplyObject(t *testing.T) {
+	prompt := systemPrompt()
+	for _, want := range []string{
+		"Return a JSON object",
+		"set reply",
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("system prompt missing %q:\n%s", want, prompt)
+		}
+	}
+	if strings.Contains(prompt, "return only a helpful reply") {
+		t.Fatalf("system prompt invites plain-text output that triggers result validation fallback:\n%s", prompt)
 	}
 }
 

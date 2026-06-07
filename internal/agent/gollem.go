@@ -2,12 +2,16 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/fugue-labs/gollem/core"
 	"github.com/fugue-labs/gollem/provider/anthropic"
 	"github.com/fugue-labs/gollem/provider/openai"
+	"github.com/herald-email/herald-mail-app/internal/logger"
 )
 
 const (
@@ -36,9 +40,10 @@ type ProviderConfig struct {
 }
 
 type GollemRunner struct {
-	agent *core.Agent[ChatResult]
-	model core.Model
-	tools []core.Tool
+	agent     *core.Agent[ChatResult]
+	model     core.Model
+	tools     []core.Tool
+	telemetry *chatAgentTelemetry
 }
 
 func NewGollemRunner(model core.Model, opts ...core.AgentOption[ChatResult]) *GollemRunner {
@@ -46,17 +51,24 @@ func NewGollemRunner(model core.Model, opts ...core.AgentOption[ChatResult]) *Go
 }
 
 func newGollemRunner(model core.Model, tools []core.Tool, opts ...core.AgentOption[ChatResult]) *GollemRunner {
+	modelName := ""
+	if model != nil {
+		modelName = model.ModelName()
+	}
+	telemetry := newChatAgentTelemetry(modelName, len(tools))
 	options := append([]core.AgentOption[ChatResult]{
 		core.WithSystemPrompt[ChatResult](systemPrompt()),
-		core.WithMaxRetries[ChatResult](1),
+		core.WithMaxRetries[ChatResult](0),
+		core.WithHooks[ChatResult](telemetry.hook()),
 	}, opts...)
 	if len(tools) > 0 {
 		options = append(options, core.WithTools[ChatResult](tools...))
 	}
 	return &GollemRunner{
-		agent: core.NewAgent[ChatResult](model, options...),
-		model: model,
-		tools: tools,
+		agent:     core.NewAgent[ChatResult](model, options...),
+		model:     model,
+		tools:     tools,
+		telemetry: telemetry,
 	}
 }
 
@@ -111,8 +123,13 @@ func (r *GollemRunner) Run(ctx context.Context, input ChatInput) (ChatResult, er
 	}
 	result, err := r.agent.Run(ctx, buildPrompt(input), core.WithRunDeps(input))
 	if err != nil {
+		if isStructuredOutputError(err) {
+			if fallbackText := r.telemetry.consumeStructuredFallbackText(); fallbackText != "" {
+				return chatResultFromFallbackText(fallbackText), nil
+			}
+		}
 		if reply, fallbackErr := r.runTextFallback(ctx, input, err); fallbackErr == nil {
-			return ChatResult{Reply: reply}, nil
+			return chatResultFromFallbackText(reply), nil
 		}
 		return ChatResult{}, err
 	}
@@ -120,11 +137,13 @@ func (r *GollemRunner) Run(ctx context.Context, input ChatInput) (ChatResult, er
 }
 
 func (r *GollemRunner) runTextFallback(ctx context.Context, input ChatInput, originalErr error) (string, error) {
-	if !isResultValidationError(originalErr) || r.model == nil {
+	if !isStructuredOutputError(originalErr) || r.model == nil {
 		return "", originalErr
 	}
+	modelName := r.model.ModelName()
 	options := []core.AgentOption[string]{
 		core.WithSystemPrompt[string](systemPrompt()),
+		core.WithHooks[string](newChatAgentTelemetry(modelName, len(r.tools)).hook()),
 	}
 	if len(r.tools) > 0 {
 		options = append(options, core.WithTools[string](r.tools...))
@@ -140,11 +159,174 @@ func (r *GollemRunner) runTextFallback(ctx context.Context, input ChatInput, ori
 	return reply, nil
 }
 
-func isResultValidationError(err error) bool {
+func chatResultFromFallbackText(text string) ChatResult {
+	text = strings.TrimSpace(text)
+	if result, ok := tryParseChatResult(text); ok {
+		return result
+	}
+	return ChatResult{Reply: text}
+}
+
+func tryParseChatResult(text string) (ChatResult, bool) {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return ChatResult{}, false
+	}
+	if strings.HasPrefix(text, "```") {
+		text = strings.TrimSpace(strings.TrimPrefix(text, "```json"))
+		text = strings.TrimSpace(strings.TrimPrefix(text, "```"))
+		text = strings.TrimSpace(strings.TrimSuffix(text, "```"))
+	}
+	var result ChatResult
+	if err := json.Unmarshal([]byte(text), &result); err != nil {
+		return ChatResult{}, false
+	}
+	if strings.TrimSpace(result.Reply) == "" && result.Timeline == nil && result.Summary == nil && result.Compose == nil {
+		return ChatResult{}, false
+	}
+	return result, true
+}
+
+type chatAgentTelemetry struct {
+	modelName string
+	toolCount int
+
+	mu                     sync.Mutex
+	runStarts              map[string]time.Time
+	modelStarts            map[string]time.Time
+	toolStarts             map[string]time.Time
+	lastTextByRun          map[string]string
+	structuredFallbackText string
+}
+
+func newChatAgentTelemetry(modelName string, toolCount int) *chatAgentTelemetry {
+	return &chatAgentTelemetry{
+		modelName:     modelName,
+		toolCount:     toolCount,
+		runStarts:     map[string]time.Time{},
+		modelStarts:   map[string]time.Time{},
+		toolStarts:    map[string]time.Time{},
+		lastTextByRun: map[string]string{},
+	}
+}
+
+func (t *chatAgentTelemetry) consumeStructuredFallbackText() string {
+	if t == nil {
+		return ""
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	text := t.structuredFallbackText
+	t.structuredFallbackText = ""
+	return text
+}
+
+func (t *chatAgentTelemetry) hook() core.Hook {
+	key := func(runID string, n int) string {
+		return runID + ":" + fmt.Sprint(n)
+	}
+
+	return core.Hook{
+		OnRunStart: func(_ context.Context, rc *core.RunContext, prompt string) {
+			started := time.Now()
+			t.mu.Lock()
+			t.runStarts[rc.RunID] = started
+			t.mu.Unlock()
+			logger.Debug("Chat agent run started: run=%s model=%s tools=%d prompt_chars=%d", rc.RunID, t.modelName, t.toolCount, len([]rune(prompt)))
+		},
+		OnRunEnd: func(_ context.Context, rc *core.RunContext, _ []core.ModelMessage, err error) {
+			t.mu.Lock()
+			started, ok := t.runStarts[rc.RunID]
+			if err != nil && isStructuredOutputError(err) {
+				t.structuredFallbackText = t.lastTextByRun[rc.RunID]
+			}
+			delete(t.runStarts, rc.RunID)
+			delete(t.lastTextByRun, rc.RunID)
+			t.mu.Unlock()
+			duration := time.Duration(0)
+			if ok {
+				duration = time.Since(started)
+			}
+			logger.Debug("Chat agent run completed: run=%s model=%s duration=%s error=%t", rc.RunID, t.modelName, duration.Round(time.Millisecond), err != nil)
+		},
+		OnTurnStart: func(_ context.Context, rc *core.RunContext, turnNumber int) {
+			logger.Debug("Chat agent turn started: run=%s turn=%d", rc.RunID, turnNumber)
+		},
+		OnModelRequest: func(_ context.Context, rc *core.RunContext, messages []core.ModelMessage) {
+			t.mu.Lock()
+			t.modelStarts[key(rc.RunID, rc.RunStep)] = time.Now()
+			t.mu.Unlock()
+			logger.Debug("Chat agent model request started: run=%s turn=%d messages=%d", rc.RunID, rc.RunStep, len(messages))
+		},
+		OnModelResponse: func(_ context.Context, rc *core.RunContext, response *core.ModelResponse) {
+			t.mu.Lock()
+			started, ok := t.modelStarts[key(rc.RunID, rc.RunStep)]
+			delete(t.modelStarts, key(rc.RunID, rc.RunStep))
+			t.mu.Unlock()
+			duration := time.Duration(0)
+			if ok {
+				duration = time.Since(started)
+			}
+			inputTokens := 0
+			outputTokens := 0
+			finishReason := ""
+			hasToolCalls := false
+			hasText := false
+			if response != nil {
+				inputTokens = response.Usage.InputTokens
+				outputTokens = response.Usage.OutputTokens
+				finishReason = string(response.FinishReason)
+				hasToolCalls = len(response.ToolCalls()) > 0
+				text := strings.TrimSpace(response.TextContent())
+				hasText = text != ""
+				if hasText {
+					t.mu.Lock()
+					t.lastTextByRun[rc.RunID] = text
+					t.mu.Unlock()
+				}
+			}
+			logger.Debug("Chat agent model response completed: run=%s turn=%d model=%s duration=%s input_tokens=%d output_tokens=%d has_tool_calls=%t has_text=%t finish=%s", rc.RunID, rc.RunStep, t.modelName, duration.Round(time.Millisecond), inputTokens, outputTokens, hasToolCalls, hasText, finishReason)
+		},
+		OnToolStart: func(_ context.Context, rc *core.RunContext, toolCallID string, toolName string, _ string) {
+			t.mu.Lock()
+			t.toolStarts[rc.RunID+":"+toolCallID] = time.Now()
+			t.mu.Unlock()
+			logger.Debug("Chat agent tool started: run=%s tool=%s", rc.RunID, toolName)
+		},
+		OnToolEnd: func(_ context.Context, rc *core.RunContext, toolCallID string, toolName string, _ string, err error) {
+			t.mu.Lock()
+			toolKey := rc.RunID + ":" + toolCallID
+			started, ok := t.toolStarts[toolKey]
+			delete(t.toolStarts, toolKey)
+			t.mu.Unlock()
+			duration := time.Duration(0)
+			if ok {
+				duration = time.Since(started)
+			}
+			logger.Debug("Chat agent tool completed: run=%s tool=%s duration=%s error=%t", rc.RunID, toolName, duration.Round(time.Millisecond), err != nil)
+		},
+		OnTurnEnd: func(_ context.Context, rc *core.RunContext, turnNumber int, response *core.ModelResponse) {
+			hasToolCalls := false
+			hasText := false
+			if response != nil {
+				hasToolCalls = len(response.ToolCalls()) > 0
+				hasText = strings.TrimSpace(response.TextContent()) != ""
+			}
+			logger.Debug("Chat agent turn completed: run=%s turn=%d has_tool_calls=%t has_text=%t", rc.RunID, turnNumber, hasToolCalls, hasText)
+		},
+		OnOutputValidation: func(_ context.Context, rc *core.RunContext, passed bool, err error) {
+			logger.Debug("Chat agent output validation: run=%s passed=%t error=%t", rc.RunID, passed, err != nil)
+		},
+	}
+}
+
+func isStructuredOutputError(err error) bool {
 	if err == nil {
 		return false
 	}
-	return strings.Contains(strings.ToLower(err.Error()), "result validation")
+	message := strings.ToLower(err.Error())
+	return strings.Contains(message, "result validation") ||
+		strings.Contains(message, "failed to parse text output")
 }
 
 func BuildModel(cfg ProviderConfig) (core.Model, error) {
@@ -209,7 +391,8 @@ func systemPrompt() string {
 		"Do not send email, delete email, archive email, or mutate calendar events.",
 		"When answering from Herald Memories, cite source evidence and distinguish email, Obsidian, public research, and inference.",
 		"No evidence means no factual memory answer.",
-		"When no UI action is needed, return only a helpful reply.",
+		"Return a JSON object matching the ChatResult schema.",
+		"When no UI action is needed, set reply to the helpful answer and omit timeline, summary, and compose.",
 	}, "\n")
 }
 

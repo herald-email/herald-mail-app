@@ -6,6 +6,7 @@ import (
 
 	"github.com/herald-email/herald-mail-app/internal/agent"
 	"github.com/herald-email/herald-mail-app/internal/config"
+	"github.com/herald-email/herald-mail-app/internal/logger"
 )
 
 func (m *Model) applyChatAgentConfig(cfg *config.Config) {
@@ -26,6 +27,7 @@ func (m *Model) applyChatAgentConfig(cfg *config.Config) {
 			MaxContextChars: 1200,
 		}
 		if memorySource, ok := m.backend.(agent.MemoryToolSource); ok {
+			logger.Debug("Chat agent configured: provider=%s model=%s email_tools=true memory_tools=true max_email_results=%d max_memory_results=%d", providerCfg.Provider, providerCfg.Model, emailOptions.MaxResults, 12)
 			m.chatAgent = agent.NewGollemRunnerWithEmailAndMemoryToolsAndOptions(model, m.backend, emailOptions, memorySource, agent.MemoryToolOptions{
 				MaxResults:      12,
 				ChatMinScore:    cfg.Memories.Thresholds.ChatRetrieval,
@@ -33,9 +35,11 @@ func (m *Model) applyChatAgentConfig(cfg *config.Config) {
 			}, runnerOptions...)
 			return
 		}
+		logger.Debug("Chat agent configured: provider=%s model=%s email_tools=true memory_tools=false max_email_results=%d", providerCfg.Provider, providerCfg.Model, emailOptions.MaxResults)
 		m.chatAgent = agent.NewGollemRunnerWithEmailToolsAndOptions(model, m.backend, emailOptions, runnerOptions...)
 		return
 	}
+	logger.Debug("Chat agent configured: provider=%s model=%s email_tools=false memory_tools=false", providerCfg.Provider, providerCfg.Model)
 	m.chatAgent = agent.NewGollemRunner(model, runnerOptions...)
 }
 
