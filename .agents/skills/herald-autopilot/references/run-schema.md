@@ -138,11 +138,11 @@ The queue should track:
 
 ## Future Compatibility
 
-Later phases can add:
+Later phases can add or, for the approved `two-candidate-worktree-trial`, experimentally populate:
 
 - multiple candidates per task
 - challenger worktrees
 - Pareto frontier metadata
 - cross-run learned prompt updates
 
-Do not rename existing fields for that phase. Add new names under `candidates`, `pareto`, or `optimizer`.
+Do not rename existing fields for that phase. Add new names under `candidates`, `pareto`, or `optimizer`, and keep candidate-specific evidence separate from the top-level selected-run evidence.

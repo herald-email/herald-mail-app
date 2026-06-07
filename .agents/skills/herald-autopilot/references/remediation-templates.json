@@ -133,6 +133,9 @@
     "title": "User-review follow-up settings hints template",
     "aliases": [
       "template-user-review-followup-settings-hints-feedback",
+      "user-review-follow-up-settings-hints-template",
+      "user-review-follow-up-settings-hints-template-d8172ef566",
+      "user-review-follow-up-settings-hints",
       "user-review-followup-settings-hints",
       "user-review-followup",
       "settings-hints-feedback",
@@ -147,6 +150,26 @@
       "Before handoff, rerun the focused app/package test plus a user-facing capture or transcript that proves the reviewed settings or bottom hints path now matches the follow-up."
     ],
     "approval_prompt": "Approve keeping the user-review follow-up settings hints template as a default GEPA retry aid."
+  },
+  "docs-build": {
+    "title": "Docs build remediation template",
+    "aliases": [
+      "template-docs-build-remediation-guidance",
+      "template-docs-build-remediation-guidance-f50055c9cb",
+      "docs-build-remediation",
+      "worktree-docs-build",
+      "astro-docs-build",
+      "npm-run-build-docs",
+      "npm run build docs"
+    ],
+    "why": "Recent docs runs showed that fresh worktrees do not inherit ignored docs dependencies, so a docs build failure can be an environment bootstrap issue rather than bad authored docs.",
+    "checklist": [
+      "Treat a docs build failure in a fresh worktree as an environment-preflight signal before changing docs output, product copy, or verification expectations.",
+      "If the failure says a local docs binary such as `astro` is missing, run `npm ci` in that worktree's `docs/` directory and record it as `docs-preflight` evidence.",
+      "Rerun the exact docs build command from the worktree and preserve both the failing log and the green retry log in the evidence manifest.",
+      "When docs build is paired with docs-copy, drift, or product-truth checks, rerun the paired checks after dependency bootstrap so environment recovery does not hide authored-doc regressions."
+    ],
+    "approval_prompt": "Approve turning the `docs-build` lesson from this run into a reusable GEPA workflow template."
   },
   "commit-hook-make-test": {
     "title": "Commit-hook make test remediation template",

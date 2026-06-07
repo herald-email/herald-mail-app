@@ -17,7 +17,8 @@ This section describes the current behavior that future sessions should treat as
 
 - [x] `herald-autopilot` is a repo-local skill under `.agents/skills/` for one Herald task per invocation.
 - [x] The workflow bootstraps a durable run folder under `.superpowers/autopilot/runs/<run-id>/` before doing significant work.
-- [x] The workflow uses a single worktree and a single candidate branch in v1.
+- [x] Normal bug and feature runs use a single worktree and a single candidate branch in v1.
+- [x] Explicit GEPA improvement passes can now run the approved `two-candidate-worktree-trial` as a bounded exception with two sibling candidate worktrees, one shared acceptance contract, and one selected handoff branch.
 - [x] The workflow treats a branch in the main checkout as insufficient isolation for implementation work; tracked-file edits belong in `.worktrees/...` unless the user explicitly opts out.
 - [x] The workflow records evidence, reflections, scores, and a human-readable report.
 - [x] The default finish line is branch + worktree + report, not push, PR, or merge.
@@ -30,7 +31,7 @@ This section describes the current behavior that future sessions should treat as
 - [x] GitHub issue-backed runs now preserve issue references in commits and PR/merge bodies so GitHub can cross-reference or auto-close completed issues.
 - [x] Requested commit, merge, push, and PR steps can now be recorded in run metadata, and final reports now include a visible self-reflection section with approval-ready workflow suggestions.
 - [x] Post-publish self-reflection suggestions can now sync into a visible pending-approval queue with stable queue keys and batch-approval commands.
-- [x] Repeated failure classes can now match reusable remediation templates, and self-reflection reports surface those checklists directly for `focused-tests`, `app-tests`, `app-package-tests`, `diff-check`, `input-routing-safety`, `demo-key-overlay`, `user-repro-after-commit`, `degradation-review`, `user-review-followup-settings-hints`, and `commit-hook-make-test`.
+- [x] Repeated failure classes can now match reusable remediation templates, and self-reflection reports surface those checklists directly for `focused-tests`, `app-tests`, `app-package-tests`, `diff-check`, `input-routing-safety`, `demo-key-overlay`, `user-repro-after-commit`, `degradation-review`, `user-review-followup-settings-hints`, `docs-build`, and `commit-hook-make-test`.
 - [x] Docs, SSH, and media-heavy runs can now execute a first-class preflight step that records prerequisites and prepared resources before baseline verification starts.
 - [x] Run metadata and evidence manifests now use serialized helper writes so nearby workflow steps do not clobber each other.
 - [x] TUI-facing runs can now close a first-class visual-evidence gate that requires matched before/after PNG plus ANSI captures at `220x50`, `80x24`, and `50x15`.
@@ -66,6 +67,8 @@ This section records the current bootstrap milestone so later sessions can compa
 - [x] Incorporated the approved demo key overlay GEPA item by adding a reusable template for package-boundary, demo launch, media-regeneration, and text-entry evidence checks.
 - [x] Incorporated the approved user-review/settings-hints and commit-hook `make test` GEPA items as reusable remediation templates.
 - [x] Incorporated the approved remediation-template adoption measurement by adding a durable JSON/Markdown report plus optimizer brief, ledger, and improvement-log evidence.
+- [x] Incorporated the approved docs-build GEPA item by adding a reusable remediation template for fresh-worktree docs dependency bootstrap and green retry evidence.
+- [x] Incorporated the approved two-candidate worktree trial by adding a bounded GEPA-only comparison contract that keeps normal autopilot runs single-candidate.
 
 ## Run Patterns Observed
 
@@ -97,7 +100,8 @@ This section is generated from the optimizer state under `.superpowers/autopilot
 
 This section should stay honest about what still hurts. Items remain unchecked until the weakness is materially addressed and validated in later runs.
 
-- [ ] v1 still does not explore challenger worktrees; lightweight Pareto frontier data exists, but candidate worktree comparison is not implemented yet.
+- [x] v1 now has an explicit two-candidate worktree trial for GEPA improvement passes; ordinary bug and feature runs still stay single-candidate.
+- [ ] Candidate worktree comparison is not automatic and still requires explicit user approval before use.
 - [ ] The workflow does not self-edit its own prompts or policies based on accumulated traces.
 - [ ] Cross-run learning is still mediated by this ledger and human judgment rather than automated frontier selection.
 - [ ] Verification routing is documented, but its real cost and false-positive rate are not yet measured across multiple tasks.
@@ -114,7 +118,8 @@ This section should stay honest about what still hurts. Items remain unchecked u
 
 This section ranks the most valuable next improvements so a future session can start from a crisp backlog. Keep the list short and ordered by likely payoff, not by novelty.
 
-- [ ] Add challenger worktrees for the highest-risk tasks and compare candidates on verification completeness, retry count, and handoff readiness.
+- [x] Add a bounded challenger-worktree trial for explicit GEPA improvement passes and compare candidates on verification completeness, retry count, implementation simplicity, and handoff readiness.
+- [ ] Decide, after real trial evidence, whether challenger worktrees should ever become default for selected high-risk tasks.
 - [x] Derived a lightweight Pareto frontier from recent runs so later candidate selection is grounded in actual repo experience.
 - [ ] Auto-summarize recent run folders into this ledger after each meaningful task; helper summaries exist, but ledger updates are not automatic after every task.
 - [ ] Measure verification cost by surface so the skill can choose between focused and broad gates more intelligently.
@@ -123,6 +128,7 @@ This section ranks the most valuable next improvements so a future session can s
 - [x] Added a user-reproduced post-handoff failure template so exact user repro commands become first-class retry gates after an automated handoff misses reality.
 - [x] Added a demo key overlay remediation template so demo-key and media-heavy overlay retries reuse focused import, launch, regeneration, and text-entry checks.
 - [x] Added user-review settings/hints and commit-hook `make test` remediation templates so approved follow-up lessons become reusable workflow behavior.
+- [x] Added docs-build remediation guidance so worktree-local `npm ci` bootstrap and retry evidence are reusable workflow behavior.
 - [x] Added remediation-template adoption measurement so GEPA can see which eligible published reflections matched reusable templates and which retry-bearing runs still did not.
 - [x] Added workflow preflight plus serialized artifact writes to catch environment blockers before feature-level verification begins.
 - [x] Added a pending-approval queue that consolidates post-publish self-reflection suggestions across runs so the user can batch-approve GEPA changes.
@@ -139,7 +145,8 @@ This section ranks the most valuable next improvements so a future session can s
 This section is the handoff bridge for future sessions. Each prompt should be phrased so you can point me here later and immediately continue improving the workflow.
 
 - [ ] "Improve GEPA by reducing verification cost for code-only tasks while keeping handoff confidence high."
-- [ ] "Improve GEPA by adding challenger worktrees for tasks with repeated reflection failures."
+- [x] "Improve GEPA by adding a bounded two-candidate worktree trial for explicitly approved improvement passes."
+- [ ] "Improve GEPA by deciding whether challenger worktrees should become default for tasks with repeated reflection failures."
 - [ ] "Improve GEPA by summarizing the last three runs and updating the ranked experiment list."
 - [ ] "Improve GEPA by tightening the run schema and removing fields we never actually use."
 - [ ] "Improve GEPA by adding an issue-reference validator before commit, PR, or merge handoff."

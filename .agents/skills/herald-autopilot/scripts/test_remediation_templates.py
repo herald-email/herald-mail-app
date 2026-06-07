@@ -54,6 +54,29 @@ class RemediationTemplateTests(unittest.TestCase):
         self.assertIn("settings", checklist)
         self.assertIn("bottom hints", checklist)
 
+    def test_user_review_follow_up_queue_title_matches_existing_template(self) -> None:
+        templates = load_remediation_templates(REPO_ROOT)
+
+        key, template = match_remediation_template("user-review-follow-up-settings-hints-template", templates)
+
+        self.assertEqual(key, "user-review-followup-settings-hints")
+        self.assertIsNotNone(template)
+        checklist = " ".join(template["checklist"])
+        self.assertIn("user follow-up", checklist)
+        self.assertIn("visible text", checklist)
+
+    def test_docs_build_alias_matches_docs_build_template(self) -> None:
+        templates = load_remediation_templates(REPO_ROOT)
+
+        key, template = match_remediation_template("template-docs-build-remediation-guidance", templates)
+
+        self.assertEqual(key, "docs-build")
+        self.assertIsNotNone(template)
+        checklist = " ".join(template["checklist"])
+        self.assertIn("fresh worktree", checklist)
+        self.assertIn("npm ci", checklist)
+        self.assertIn("green retry", checklist)
+
     def test_commit_hook_make_test_alias_matches_template(self) -> None:
         templates = load_remediation_templates(REPO_ROOT)
 

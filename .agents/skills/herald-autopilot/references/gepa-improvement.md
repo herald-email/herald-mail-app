@@ -48,6 +48,10 @@ These scripts are additive and safe to run repeatedly:
 - `measure_template_adoption.py`
 - `sync_evolution_ledger.py`
 
+## Approved Two-Candidate Trial
+
+Use `two-candidate-worktree-trial.md` when the approved top experiment is `two-candidate-worktree-trial`. The trial is intentionally bounded: two sibling candidate worktrees, one shared acceptance contract, identical verification where possible, and exactly one selected handoff branch.
+
 ## v2 Scope
 
 This layer supports:
@@ -57,9 +61,11 @@ This layer supports:
 - repeated failure and risk pattern extraction
 - a generated improvement brief
 - auto-synced ledger snapshots
+- an explicitly requested two-candidate worktree trial for GEPA improvement work
 
 This layer does not yet support:
 
 - autonomous prompt mutation
 - automatic challenger worktrees
+- automatic candidate selection
 - self-directed execution without an explicit user request

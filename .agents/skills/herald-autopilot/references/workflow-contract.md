@@ -21,6 +21,7 @@ Each run should move through these states in order unless it is blocked:
 - Branch pattern: `codex/autopilot-<slug>-<timestamp>`
 - Worktree root: `.worktrees/`
 - Worktree path: `.worktrees/<run-id>-<slug>`
+- Approved GEPA two-candidate trials use sibling worktrees with `-candidate-a-` and `-candidate-b-` in the path and matching `-a` / `-b` branch suffixes.
 
 ## User Interaction Policy
 
@@ -76,11 +77,12 @@ Use `docs/superpowers/gepa-pending-approvals.md` as the curated approval backlog
 ## GEPA-Compatible v1 Rules
 
 - One active candidate per run
+- Explicit `two-candidate-worktree-trial` GEPA improvement passes are the only approved exception to the one-candidate rule; they must keep ordinary run metadata backward compatible and record comparisons under additive candidate metadata.
 - Same-worktree retries only
 - Run environment preflight before implementation whenever the task touches docs, SSH, or long-running media workflows
 - Every run should close the degradation-review gate before implementation so release drift is explicit instead of accidental
 - Required failures generate explicit natural-language feedback
-- Repeated failure classes should converge on reusable remediation templates instead of bespoke retry reasoning every time, including demo key overlay failures, user-reproduced post-handoff failures, user-review settings/hint follow-ups, and commit-hook `make test` environment failures
+- Repeated failure classes should converge on reusable remediation templates instead of bespoke retry reasoning every time, including demo key overlay failures, user-reproduced post-handoff failures, user-review settings/hint follow-ups, docs-build dependency bootstrap failures, and commit-hook `make test` environment failures
 - TUI-facing runs should record canonical visual evidence at `220x50`, `80x24`, and `50x15` before they can claim handoff readiness
 - Shortcut-sensitive TUI runs should prove aliases and hotkeys stay out of `compose`, `prompt`, and `editor` text-entry surfaces before they can claim handoff readiness
 - `run.json` and `evidence/manifest.json` updates should be serialized so adjacent helpers cannot clobber each other

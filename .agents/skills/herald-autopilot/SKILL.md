@@ -33,6 +33,7 @@ Read these before you start:
 
 If the task touches the TUI, also read and follow [`../tui-test/SKILL.md`](../tui-test/SKILL.md) for the tmux-driven visual checks.
 If the user explicitly asks to improve GEPA itself, also read [`references/gepa-improvement.md`](references/gepa-improvement.md).
+If the user explicitly approves or requests `two-candidate-worktree-trial`, also read [`references/two-candidate-worktree-trial.md`](references/two-candidate-worktree-trial.md).
 
 ## Default Contract
 
@@ -364,4 +365,4 @@ When the user later asks to improve GEPA itself:
 6. Append an entry to the GEPA improvement log so the workflow has a durable improvement history suitable for future article writing.
 7. Update the evolution doc with what changed, what improved, what still hurts, and what to try next.
 
-v1 is intentionally a reflective single-run system. Do not introduce challenger worktrees or Pareto frontier selection unless the user asks for the next phase.
+Normal v1 bug and feature runs remain a reflective single-candidate system. The approved `two-candidate-worktree-trial` is available only for explicit GEPA improvement passes, must follow `references/two-candidate-worktree-trial.md`, and must record candidate comparison additively without changing existing run-field meanings.
