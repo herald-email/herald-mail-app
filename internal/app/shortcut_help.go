@@ -649,6 +649,10 @@ func (m *Model) shortcutHelpSections() []shortcutHelpSection {
 	case m.focusedPanel == panelChat && m.showChat:
 		sections = append(sections, shortcutHelpSection{"Chat", []shortcutHelpEntry{
 			{"Enter", "send the current chat message"},
+			{"Up / Down", "scroll the chat transcript by one line"},
+			{"PgUp / PgDn", "scroll the chat transcript by one page"},
+			{"Home / End", "jump to the oldest or newest chat transcript line"},
+			{"/clear / /clean", "reset the chat conversation"},
 			{"Esc", "close the chat drawer"},
 			{"Tab / Shift+Tab", "move focus between visible panels"},
 		}})

@@ -338,10 +338,11 @@ type PreviewCacheReclaimMsg struct {
 
 // ChatAgentResponseMsg carries a typed Gollem chat-agent result.
 type ChatAgentResponseMsg struct {
-	Result    agent.ChatResult
-	Err       error
-	StartedAt time.Time
-	Elapsed   time.Duration
+	Result     agent.ChatResult
+	Err        error
+	Generation int
+	StartedAt  time.Time
+	Elapsed    time.Duration
 }
 
 type ChatElapsedTickMsg struct {
@@ -759,6 +760,8 @@ type Model struct {
 	chatMessageTimes []chatMessageTiming
 	chatWrappedLines [][]string // cached wrapText output per message; nil = invalid
 	chatWrappedWidth int        // width at which chatWrappedLines was built
+	chatScrollOffset int        // transcript lines hidden below the viewport; 0 = bottom
+	chatGeneration   int        // increments on reset so stale responses cannot repopulate chat
 	chatInput        textinput.Model
 	chatWaiting      bool // waiting for chat response
 	chatStartedAt    time.Time
@@ -3246,6 +3249,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case ChatAgentResponseMsg:
+		if msg.Generation != m.chatGeneration {
+			return m, nil
+		}
 		m.chatWaiting = false
 		m.chatStartedAt = time.Time{}
 		composeWasActive := m.activeTab == tabCompose
@@ -3265,6 +3271,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		})
 		m.chatMessageTimes = append(m.chatMessageTimes, timing)
 		m.chatWrappedLines = nil
+		m.chatScrollOffset = 0
 		notifyCmd := m.notifyChatResultCmd(content, msg.Err)
 		if msg.Err != nil {
 			return m, notifyCmd

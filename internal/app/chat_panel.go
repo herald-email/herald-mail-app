@@ -33,13 +33,20 @@ func (m *Model) submitChat() tea.Cmd {
 	if question == "" {
 		return nil
 	}
+	if isChatResetCommand(question) {
+		m.chatInput.SetValue("")
+		m.resetChatConversation()
+		return nil
+	}
 	m.chatInput.SetValue("")
 	m.chatWaiting = true
 	startedAt := time.Now()
 	m.chatStartedAt = startedAt
+	m.chatScrollOffset = 0
 
 	currentFolder := m.currentFolder // snapshot before goroutine
 	previousMessages := append([]ai.ChatMessage(nil), m.chatMessages...)
+	generation := m.chatGeneration
 
 	// Append user message to history
 	m.ensureChatMessageTiming()
@@ -57,13 +64,33 @@ func (m *Model) submitChat() tea.Cmd {
 			started := time.Now()
 			result, err := runner.Run(context.Background(), input)
 			logger.Debug("Chat response received: duration=%s error=%t reply_chars=%d timeline_intent=%t summary=%t compose_intent=%t", time.Since(started).Round(time.Millisecond), err != nil, len([]rune(result.Reply)), result.Timeline != nil, result.Summary != nil, result.Compose != nil)
-			return ChatAgentResponseMsg{Result: result, Err: err, StartedAt: startedAt, Elapsed: time.Since(startedAt)}
+			return ChatAgentResponseMsg{Result: result, Err: err, Generation: generation, StartedAt: startedAt, Elapsed: time.Since(startedAt)}
 		}
 	}
 
 	return func() tea.Msg {
-		return ChatAgentResponseMsg{Err: errChatAgentUnavailable, StartedAt: startedAt, Elapsed: time.Since(startedAt)}
+		return ChatAgentResponseMsg{Err: errChatAgentUnavailable, Generation: generation, StartedAt: startedAt, Elapsed: time.Since(startedAt)}
 	}
+}
+
+func isChatResetCommand(value string) bool {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "/clear", "/clean":
+		return true
+	default:
+		return false
+	}
+}
+
+func (m *Model) resetChatConversation() {
+	m.chatGeneration++
+	m.chatWaiting = false
+	m.chatMessages = nil
+	m.chatMessageTimes = nil
+	m.chatWrappedLines = nil
+	m.chatWrappedWidth = 0
+	m.chatScrollOffset = 0
+	m.chatStartedAt = time.Time{}
 }
 
 func (m *Model) buildChatAgentInput(question, currentFolder string, history []ai.ChatMessage) agent.ChatInput {
@@ -221,10 +248,7 @@ func (m *Model) chatWaitingLabel() string {
 // renderChatPanel renders the chat panel content (without border)
 func (m *Model) renderChatPanel() string {
 	w := m.effectiveChatPanelWidth(m.windowWidth)
-	contentHeight := m.buildLayoutPlan(m.windowWidth, m.windowHeight).ContentHeight
-	if contentHeight < 5 {
-		contentHeight = 5
-	}
+	contentHeight := m.chatPanelContentHeight()
 	var sb strings.Builder
 
 	// Title
@@ -240,23 +264,10 @@ func (m *Model) renderChatPanel() string {
 	userStyle := lipgloss.NewStyle().Foreground(m.theme.Text.Primary.ForegroundColor()).Width(w)
 	aiStyle := lipgloss.NewStyle().Foreground(m.theme.Severity.Info.ForegroundColor()).Width(w)
 
-	// Calculate history from the same inner panel height as the main layout:
-	// title + top divider + bottom divider + input occupy four rows.
-	historyLines := contentHeight - 4
-	if historyLines < 1 {
-		historyLines = 1
-	}
+	historyLines := chatHistoryLineCapacity(contentHeight)
 
 	// Rebuild wrap cache if stale
-	if m.chatWrappedLines == nil || m.chatWrappedWidth != w {
-		m.ensureChatMessageTiming()
-		m.chatWrappedLines = make([][]string, len(m.chatMessages))
-		for i, msg := range m.chatMessages {
-			prefix := m.chatMessagePrefix(i, msg)
-			m.chatWrappedLines[i] = wrapText(prefix+msg.Content, w)
-		}
-		m.chatWrappedWidth = w
-	}
+	m.ensureChatWrappedLines(w)
 
 	// Collect rendered message lines (newest-last)
 	var msgLines []string
@@ -270,10 +281,19 @@ func (m *Model) renderChatPanel() string {
 		}
 		msgLines = append(msgLines, "")
 	}
-	// Show only the last historyLines
-	if len(msgLines) > historyLines {
-		msgLines = msgLines[len(msgLines)-historyLines:]
+
+	maxScroll := chatMaxScrollOffset(len(msgLines), historyLines)
+	m.chatScrollOffset = clampInt(m.chatScrollOffset, 0, maxScroll)
+	start := len(msgLines) - historyLines - m.chatScrollOffset
+	if start < 0 {
+		start = 0
 	}
+	end := start + historyLines
+	if end > len(msgLines) {
+		end = len(msgLines)
+	}
+	msgLines = msgLines[start:end]
+
 	// Pad to fill space
 	for len(msgLines) < historyLines {
 		msgLines = append([]string{msgStyle.Render("")}, msgLines...)
@@ -298,6 +318,78 @@ func (m *Model) renderChatPanel() string {
 	}
 
 	return fitPanelContentHeight(sb.String(), contentHeight)
+}
+
+func (m *Model) chatPanelContentHeight() int {
+	contentHeight := m.buildLayoutPlan(m.windowWidth, m.windowHeight).ContentHeight
+	if contentHeight < 5 {
+		contentHeight = 5
+	}
+	return contentHeight
+}
+
+func chatHistoryLineCapacity(contentHeight int) int {
+	// Title, top divider, bottom divider, and input/thinking row occupy four rows.
+	if lines := contentHeight - 4; lines >= 1 {
+		return lines
+	}
+	return 1
+}
+
+func (m *Model) ensureChatWrappedLines(width int) {
+	if m.chatWrappedLines != nil && m.chatWrappedWidth == width && len(m.chatWrappedLines) == len(m.chatMessages) {
+		return
+	}
+	m.ensureChatMessageTiming()
+	m.chatWrappedLines = make([][]string, len(m.chatMessages))
+	for i, msg := range m.chatMessages {
+		prefix := m.chatMessagePrefix(i, msg)
+		m.chatWrappedLines[i] = wrapText(prefix+msg.Content, width)
+	}
+	m.chatWrappedWidth = width
+}
+
+func chatMaxScrollOffset(totalLines, visibleLines int) int {
+	if totalLines <= visibleLines {
+		return 0
+	}
+	return totalLines - visibleLines
+}
+
+func (m *Model) chatHistoryLineCount(width int) int {
+	m.ensureChatWrappedLines(width)
+	total := 0
+	for _, lines := range m.chatWrappedLines {
+		total += len(lines) + 1
+	}
+	return total
+}
+
+func (m *Model) chatHistoryPageStep() int {
+	if step := chatHistoryLineCapacity(m.chatPanelContentHeight()) - 1; step >= 1 {
+		return step
+	}
+	return 1
+}
+
+func (m *Model) scrollChatHistory(delta int) {
+	if delta == 0 {
+		return
+	}
+	w := m.effectiveChatPanelWidth(m.windowWidth)
+	visibleLines := chatHistoryLineCapacity(m.chatPanelContentHeight())
+	maxScroll := chatMaxScrollOffset(m.chatHistoryLineCount(w), visibleLines)
+	m.chatScrollOffset = clampInt(m.chatScrollOffset+delta, 0, maxScroll)
+}
+
+func (m *Model) jumpChatHistory(top bool) {
+	if !top {
+		m.chatScrollOffset = 0
+		return
+	}
+	w := m.effectiveChatPanelWidth(m.windowWidth)
+	visibleLines := chatHistoryLineCapacity(m.chatPanelContentHeight())
+	m.chatScrollOffset = chatMaxScrollOffset(m.chatHistoryLineCount(w), visibleLines)
 }
 
 // wrapLines splits text on newlines first, then word-wraps each paragraph to

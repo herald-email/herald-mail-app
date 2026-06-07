@@ -167,7 +167,7 @@ func (m *Model) handleOverlayKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool)
 	}
 
 	if m.focusedPanel == panelChat && m.showChat {
-		switch msg.String() {
+		switch shortcutKey(msg) {
 		case "enter":
 			if !m.chatWaiting {
 				cmd := m.submitChat()
@@ -193,6 +193,24 @@ func (m *Model) handleOverlayKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool)
 			return m, nil, true
 		case "shift+tab":
 			m.cyclePanel(false)
+			return m, nil, true
+		case "up":
+			m.scrollChatHistory(1)
+			return m, nil, true
+		case "down":
+			m.scrollChatHistory(-1)
+			return m, nil, true
+		case "pgup":
+			m.scrollChatHistory(m.chatHistoryPageStep())
+			return m, nil, true
+		case "pgdown":
+			m.scrollChatHistory(-m.chatHistoryPageStep())
+			return m, nil, true
+		case "home":
+			m.jumpChatHistory(true)
+			return m, nil, true
+		case "end":
+			m.jumpChatHistory(false)
 			return m, nil, true
 		}
 		var cmd tea.Cmd

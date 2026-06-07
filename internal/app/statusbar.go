@@ -540,7 +540,7 @@ func (m *Model) rawKeyHintsForWidth(w int, chrome ChromeState) string {
 	} else if m.pendingDeleteConfirm || m.pendingUnsubscribe {
 		hints = "[y] confirm  │  [n/Esc] cancel"
 	} else if chrome.FocusedPanel == panelChat && chrome.ShowChat {
-		hints = joinHintSegments("enter: send", "esc: close chat", "tab: next panel", "shift+tab: prev panel", "ctrl+c: quit")
+		hints = joinHintSegments("enter: send", "pgup/pgdn: scroll", "/clear: reset", "esc: close chat", "tab: next panel", "shift+tab: prev panel", "ctrl+c: quit")
 	} else if chrome.ShowLogs {
 		hints = joinHintSegments(
 			fmt.Sprintf("%s/esc: close logs", displayShortcutKey(m.commandKey(keyboardScopeGlobal, CommandLogsToggle), keyDisplayHint)),

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"charm.land/bubbles/v2/textarea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/herald-email/herald-mail-app/internal/agent"
 	"github.com/herald-email/herald-mail-app/internal/ai"
 	"github.com/herald-email/herald-mail-app/internal/config"
@@ -126,6 +127,73 @@ func TestSubmitChatIgnoresEmptyInputWithAgentRunner(t *testing.T) {
 	}
 }
 
+func TestSubmitChatClearCommandResetsConversationWithoutCallingAgent(t *testing.T) {
+	for _, command := range []string{"/clear", "/clean"} {
+		t.Run(command, func(t *testing.T) {
+			runner := &fakeChatAgentRunner{result: agent.ChatResult{Reply: "agent reply"}}
+			m := &Model{
+				chatAgent:        runner,
+				chatMessages:     []ai.ChatMessage{{Role: "user", Content: "old question"}, {Role: "assistant", Content: "old answer"}},
+				chatWrappedLines: [][]string{{"cached"}},
+				chatWrappedWidth: 72,
+				chatWaiting:      true,
+			}
+			m.chatInput.SetValue(command)
+
+			if cmd := m.submitChat(); cmd != nil {
+				t.Fatalf("%s returned command; reset should not call the agent", command)
+			}
+			if runner.calls != 0 {
+				t.Fatalf("agent calls = %d, want 0", runner.calls)
+			}
+			if got := len(m.chatMessages); got != 0 {
+				t.Fatalf("chatMessages = %d, want cleared", got)
+			}
+			if m.chatWrappedLines != nil {
+				t.Fatal("chatWrappedLines should be invalidated")
+			}
+			if m.chatWrappedWidth != 0 {
+				t.Fatalf("chatWrappedWidth = %d, want reset", m.chatWrappedWidth)
+			}
+			if m.chatWaiting {
+				t.Fatal("chatWaiting should clear after reset command")
+			}
+			if got := m.chatInput.Value(); got != "" {
+				t.Fatalf("chat input = %q, want cleared", got)
+			}
+		})
+	}
+}
+
+func TestChatResetIgnoresStaleInFlightResponse(t *testing.T) {
+	runner := &fakeChatAgentRunner{result: agent.ChatResult{Reply: "late reply"}}
+	m := &Model{chatAgent: runner}
+	m.chatInput.SetValue("slow question")
+
+	cmd := m.submitChat()
+	if cmd == nil {
+		t.Fatal("submitChat returned nil for non-empty question")
+	}
+	raw := cmd()
+	msg, ok := raw.(ChatAgentResponseMsg)
+	if !ok {
+		t.Fatalf("submitChat command returned %T, want ChatAgentResponseMsg", raw)
+	}
+
+	m.chatInput.SetValue("/clear")
+	if resetCmd := m.submitChat(); resetCmd != nil {
+		t.Fatal("/clear should not return an agent command")
+	}
+	updatedModel, _ := m.Update(msg)
+	updated := updatedModel.(*Model)
+	if len(updated.chatMessages) != 0 {
+		t.Fatalf("stale response should not repopulate chatMessages, got %#v", updated.chatMessages)
+	}
+	if updated.chatWaiting {
+		t.Fatal("stale response should leave chatWaiting false after reset")
+	}
+}
+
 func TestRenderChatPanelUsesEffectiveWidthForWrappingAndInput(t *testing.T) {
 	m := makeSizedModel(t, 220, 50)
 	m.showChat = true
@@ -193,6 +261,46 @@ func TestRenderChatPanelShowsAssistantElapsedLabel(t *testing.T) {
 	rendered := stripANSI(updated.renderChatPanel())
 	if !strings.Contains(rendered, "AI (23s): agent reply") {
 		t.Fatalf("assistant label should include elapsed seconds, got:\n%s", rendered)
+	}
+}
+
+func TestRenderChatPanelCanScrollOverflowingHistory(t *testing.T) {
+	m := makeSizedModel(t, 120, 24)
+	m.showChat = true
+	m.focusedPanel = panelChat
+	for i := 1; i <= 24; i++ {
+		m.chatMessages = append(m.chatMessages, ai.ChatMessage{
+			Role:    "assistant",
+			Content: "message " + string(rune('A'+i-1)),
+		})
+	}
+	m.chatInput.SetValue("follow up")
+
+	bottom := stripANSI(m.renderChatPanel())
+	if strings.Contains(bottom, "message A") {
+		t.Fatalf("bottom view should start near newest messages, got:\n%s", bottom)
+	}
+	if !strings.Contains(bottom, "message X") {
+		t.Fatalf("bottom view should include newest message, got:\n%s", bottom)
+	}
+	if !strings.Contains(bottom, "> follow up") {
+		t.Fatalf("chat input should remain visible at bottom, got:\n%s", bottom)
+	}
+
+	model, _, handled := m.handleOverlayKey(tea.KeyPressMsg{Code: tea.KeyHome})
+	if !handled {
+		t.Fatal("expected Home to be handled by focused chat drawer")
+	}
+	m = model.(*Model)
+	top := stripANSI(m.renderChatPanel())
+	if !strings.Contains(top, "message A") {
+		t.Fatalf("scrolled view should include oldest message, got:\n%s", top)
+	}
+	if strings.Contains(top, "message X") {
+		t.Fatalf("scrolled view should hide newest message, got:\n%s", top)
+	}
+	if !strings.Contains(top, "> follow up") {
+		t.Fatalf("chat input should remain visible while scrolled, got:\n%s", top)
 	}
 }
 
