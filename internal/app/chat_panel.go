@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -34,15 +35,19 @@ func (m *Model) submitChat() tea.Cmd {
 	}
 	m.chatInput.SetValue("")
 	m.chatWaiting = true
+	startedAt := time.Now()
+	m.chatStartedAt = startedAt
 
 	currentFolder := m.currentFolder // snapshot before goroutine
 	previousMessages := append([]ai.ChatMessage(nil), m.chatMessages...)
 
 	// Append user message to history
+	m.ensureChatMessageTiming()
 	m.chatMessages = append(m.chatMessages, ai.ChatMessage{
 		Role:    "user",
 		Content: question,
 	})
+	m.chatMessageTimes = append(m.chatMessageTimes, chatMessageTiming{})
 	m.chatWrappedLines = nil // invalidate wrap cache
 
 	if runner := m.chatAgent; runner != nil {
@@ -52,12 +57,12 @@ func (m *Model) submitChat() tea.Cmd {
 			started := time.Now()
 			result, err := runner.Run(context.Background(), input)
 			logger.Debug("Chat response received: duration=%s error=%t reply_chars=%d timeline_intent=%t summary=%t compose_intent=%t", time.Since(started).Round(time.Millisecond), err != nil, len([]rune(result.Reply)), result.Timeline != nil, result.Summary != nil, result.Compose != nil)
-			return ChatAgentResponseMsg{Result: result, Err: err}
+			return ChatAgentResponseMsg{Result: result, Err: err, StartedAt: startedAt, Elapsed: time.Since(startedAt)}
 		}
 	}
 
 	return func() tea.Msg {
-		return ChatAgentResponseMsg{Err: errChatAgentUnavailable}
+		return ChatAgentResponseMsg{Err: errChatAgentUnavailable, StartedAt: startedAt, Elapsed: time.Since(startedAt)}
 	}
 }
 
@@ -169,6 +174,50 @@ func chatAgentBoundedText(value string, limit int) string {
 	return string(runes[:limit]) + "...[truncated]"
 }
 
+func (m *Model) ensureChatMessageTiming() {
+	for len(m.chatMessageTimes) < len(m.chatMessages) {
+		m.chatMessageTimes = append(m.chatMessageTimes, chatMessageTiming{})
+	}
+	if len(m.chatMessageTimes) > len(m.chatMessages) {
+		m.chatMessageTimes = m.chatMessageTimes[:len(m.chatMessages)]
+	}
+}
+
+func chatElapsedTickCmd(startedAt time.Time) tea.Cmd {
+	return tea.Tick(time.Second, func(time.Time) tea.Msg {
+		return ChatElapsedTickMsg{StartedAt: startedAt}
+	})
+}
+
+func chatElapsedLabel(elapsed time.Duration) string {
+	if elapsed < 0 {
+		elapsed = 0
+	}
+	return fmtDurationSeconds(elapsed)
+}
+
+func fmtDurationSeconds(elapsed time.Duration) string {
+	return strconv.FormatInt(int64(elapsed/time.Second), 10) + "s"
+}
+
+func (m *Model) chatMessagePrefix(index int, msg ai.ChatMessage) string {
+	if msg.Role == "user" {
+		return "You: "
+	}
+	if msg.Role == "assistant" && index >= 0 && index < len(m.chatMessageTimes) && m.chatMessageTimes[index].Set {
+		return "AI (" + chatElapsedLabel(m.chatMessageTimes[index].Elapsed) + "): "
+	}
+	return "AI: "
+}
+
+func (m *Model) chatWaitingLabel() string {
+	elapsed := time.Duration(0)
+	if !m.chatStartedAt.IsZero() {
+		elapsed = time.Since(m.chatStartedAt)
+	}
+	return "Thinking... " + chatElapsedLabel(elapsed)
+}
+
 // renderChatPanel renders the chat panel content (without border)
 func (m *Model) renderChatPanel() string {
 	w := m.effectiveChatPanelWidth(m.windowWidth)
@@ -200,12 +249,10 @@ func (m *Model) renderChatPanel() string {
 
 	// Rebuild wrap cache if stale
 	if m.chatWrappedLines == nil || m.chatWrappedWidth != w {
+		m.ensureChatMessageTiming()
 		m.chatWrappedLines = make([][]string, len(m.chatMessages))
 		for i, msg := range m.chatMessages {
-			prefix := "AI: "
-			if msg.Role == "user" {
-				prefix = "You: "
-			}
+			prefix := m.chatMessagePrefix(i, msg)
 			m.chatWrappedLines[i] = wrapText(prefix+msg.Content, w)
 		}
 		m.chatWrappedWidth = w
@@ -240,7 +287,7 @@ func (m *Model) renderChatPanel() string {
 	// Input field
 	if m.chatWaiting {
 		waitStyle := lipgloss.NewStyle().Foreground(m.theme.Text.Dim.ForegroundColor()).Width(w)
-		sb.WriteString(waitStyle.Render("Thinking..."))
+		sb.WriteString(waitStyle.Render(m.chatWaitingLabel()))
 	} else {
 		inputWidth := w - lipgloss.Width(m.chatInput.Prompt)
 		if inputWidth < 1 {

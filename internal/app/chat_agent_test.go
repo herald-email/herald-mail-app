@@ -150,6 +150,52 @@ func TestRenderChatPanelUsesEffectiveWidthForWrappingAndInput(t *testing.T) {
 	}
 }
 
+func TestRenderChatPanelShowsRunningThinkingStopwatch(t *testing.T) {
+	runner := &fakeChatAgentRunner{result: agent.ChatResult{Reply: "agent reply"}}
+	m := makeSizedModel(t, 220, 50)
+	m.showChat = true
+	m.focusedPanel = panelChat
+	m.chatAgent = runner
+	m.chatInput.SetValue("find invoices")
+
+	cmd := m.submitChat()
+	if cmd == nil {
+		t.Fatal("submitChat returned nil command")
+	}
+	m.chatStartedAt = time.Now().Add(-23*time.Second - 100*time.Millisecond)
+
+	rendered := stripANSI(m.renderChatPanel())
+	if !strings.Contains(rendered, "Thinking... 23s") {
+		t.Fatalf("waiting row should show running elapsed seconds, got:\n%s", rendered)
+	}
+}
+
+func TestRenderChatPanelShowsAssistantElapsedLabel(t *testing.T) {
+	runner := &fakeChatAgentRunner{result: agent.ChatResult{Reply: "agent reply"}}
+	m := makeSizedModel(t, 220, 50)
+	m.showChat = true
+	m.focusedPanel = panelChat
+	m.chatAgent = runner
+	m.chatInput.SetValue("find invoices")
+
+	cmd := m.submitChat()
+	if cmd == nil {
+		t.Fatal("submitChat returned nil command")
+	}
+	msg, ok := cmd().(ChatAgentResponseMsg)
+	if !ok {
+		t.Fatalf("submitChat command returned %T, want ChatAgentResponseMsg", msg)
+	}
+	msg.Elapsed = 23 * time.Second
+	updatedModel, _ := m.Update(msg)
+	updated := updatedModel.(*Model)
+
+	rendered := stripANSI(updated.renderChatPanel())
+	if !strings.Contains(rendered, "AI (23s): agent reply") {
+		t.Fatalf("assistant label should include elapsed seconds, got:\n%s", rendered)
+	}
+}
+
 func TestChatAgentResponseErrorAppendsBoundedAssistantMessage(t *testing.T) {
 	m := &Model{}
 	m.chatMessages = append(m.chatMessages, ai.ChatMessage{Role: "user", Content: "hello"})

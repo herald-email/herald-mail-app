@@ -338,8 +338,19 @@ type PreviewCacheReclaimMsg struct {
 
 // ChatAgentResponseMsg carries a typed Gollem chat-agent result.
 type ChatAgentResponseMsg struct {
-	Result agent.ChatResult
-	Err    error
+	Result    agent.ChatResult
+	Err       error
+	StartedAt time.Time
+	Elapsed   time.Duration
+}
+
+type ChatElapsedTickMsg struct {
+	StartedAt time.Time
+}
+
+type chatMessageTiming struct {
+	Elapsed time.Duration
+	Set     bool
 }
 
 // SearchResultMsg carries search results back to the UI
@@ -745,10 +756,12 @@ type Model struct {
 	// Chat panel
 	showChat         bool
 	chatMessages     []ai.ChatMessage // conversation history
-	chatWrappedLines [][]string       // cached wrapText output per message; nil = invalid
-	chatWrappedWidth int              // width at which chatWrappedLines was built
+	chatMessageTimes []chatMessageTiming
+	chatWrappedLines [][]string // cached wrapText output per message; nil = invalid
+	chatWrappedWidth int        // width at which chatWrappedLines was built
 	chatInput        textinput.Model
 	chatWaiting      bool // waiting for chat response
+	chatStartedAt    time.Time
 	chatAgent        agent.Runner
 
 	// AI classification
@@ -3234,12 +3247,23 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case ChatAgentResponseMsg:
 		m.chatWaiting = false
+		m.chatStartedAt = time.Time{}
 		composeWasActive := m.activeTab == tabCompose
 		content := chatAgentAssistantContent(msg.Result, msg.Err)
+		timing := chatMessageTiming{}
+		if !msg.StartedAt.IsZero() || msg.Elapsed > 0 {
+			elapsed := msg.Elapsed
+			if elapsed <= 0 && !msg.StartedAt.IsZero() {
+				elapsed = time.Since(msg.StartedAt)
+			}
+			timing = chatMessageTiming{Elapsed: elapsed, Set: true}
+		}
+		m.ensureChatMessageTiming()
 		m.chatMessages = append(m.chatMessages, ai.ChatMessage{
 			Role:    "assistant",
 			Content: content,
 		})
+		m.chatMessageTimes = append(m.chatMessageTimes, timing)
 		m.chatWrappedLines = nil
 		notifyCmd := m.notifyChatResultCmd(content, msg.Err)
 		if msg.Err != nil {
@@ -3250,6 +3274,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Batch(notifyCmd, timelineCmd)
 		}
 		return m, notifyCmd
+
+	case ChatElapsedTickMsg:
+		if !m.chatWaiting || m.chatStartedAt.IsZero() || !m.chatStartedAt.Equal(msg.StartedAt) {
+			return m, nil
+		}
+		return m, chatElapsedTickCmd(msg.StartedAt)
 
 	case LoadingMsg:
 		m.progressInfo = msg.Info

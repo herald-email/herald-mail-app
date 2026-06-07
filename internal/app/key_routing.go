@@ -170,7 +170,14 @@ func (m *Model) handleOverlayKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool)
 		switch msg.String() {
 		case "enter":
 			if !m.chatWaiting {
-				return m, m.submitChat(), true
+				cmd := m.submitChat()
+				if cmd == nil {
+					return m, nil, true
+				}
+				if !m.chatStartedAt.IsZero() {
+					cmd = tea.Batch(cmd, chatElapsedTickCmd(m.chatStartedAt))
+				}
+				return m, cmd, true
 			}
 			return m, nil, true
 		case "esc":
