@@ -2131,6 +2131,11 @@ func TestSettingsPanelMemoriesSavePersistsMemorySubtree(t *testing.T) {
 	s.memoryEnabled = false
 	s.memoryDirectory = "/tmp/herald-memories"
 	s.memorySourceFolders = "INBOX, Sent, Jobs, Sent"
+	s.memoryTaskChoices = []string{
+		settingsMemoryTaskExtraction,
+		settingsMemoryTaskRadar,
+		settingsMemoryTaskObsidian,
+	}
 	s.memoryObsidianEnabled = true
 	s.memoryVaultPath = "/tmp/Life organizer"
 	s.memoryFrontmatterMode = memory.FrontmatterNone
@@ -2175,6 +2180,14 @@ func TestSettingsPanelMemoriesSavePersistsMemorySubtree(t *testing.T) {
 	}
 	if got := strings.Join(mem.Sources.Folders, ","); got != "INBOX,Sent,Jobs" {
 		t.Fatalf("source folders=%q", got)
+	}
+	if !mem.Tasks.MemoryExtraction ||
+		mem.Tasks.TrackStatusUpdate ||
+		!mem.Tasks.ComposeRadarNudges ||
+		mem.Tasks.Dossiers ||
+		!mem.Tasks.ObsidianSectionFormat ||
+		mem.Tasks.ResearchNoteSummary {
+		t.Fatalf("task settings=%#v", mem.Tasks)
 	}
 	if !mem.Obsidian.Enabled || mem.Obsidian.VaultPath != "/tmp/Life organizer" {
 		t.Fatalf("obsidian settings=%#v", mem.Obsidian)

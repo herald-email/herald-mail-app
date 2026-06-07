@@ -141,6 +141,12 @@ memories:
 | `memories.sources.max_obsidian_notes` | Maximum configured Obsidian Markdown notes to inspect per refresh. Default `100`. |
 | `memories.sources.research_notes` | Opt-in ingestion of saved research Markdown notes with explicit source URLs. Default `false`. |
 | `memories.sources.max_research_notes` | Maximum saved research notes to inspect per refresh. Default `50`. |
+| `memories.tasks.memory_extraction` | Allows extraction from cached mail. Default `true`. |
+| `memories.tasks.track_status_update` | Allows generated track status updates. Default `true`. |
+| `memories.tasks.compose_radar_nudges` | Allows Compose Radar nudges from existing memories. Default `true`. |
+| `memories.tasks.dossiers` | Allows contact, company, and thread dossier assembly. Default `true`. |
+| `memories.tasks.obsidian_section_format` | Allows generated Obsidian section formatting and sync previews. Default `true`. |
+| `memories.tasks.research_note_summary` | Allows saved research-note summarization. Default `true`. |
 | `memories.destinations.people` | Obsidian people note folder. Default `People`. |
 | `memories.destinations.companies` | Obsidian company/job note folder. Default `Job search/active`. |
 | `memories.destinations.daily_briefing` | Daily memory briefing folder. Default `Scheduled Task Artifacts`. |
@@ -148,7 +154,7 @@ memories:
 | `memories.thresholds.dossier` | Minimum confidence for dossier inclusion. Default `0.55`. |
 | `memories.thresholds.obsidian_write` | Minimum confidence for Obsidian sync. Default `0.70`. |
 | `memories.thresholds.compose_radar` | Minimum confidence for Compose Radar nudges. Default `0.75`. |
-| `memories.update_rules.cadence` | Memory update cadence such as manual, compose open, after sync, daily briefing, or idle background. Default `manual`. |
+| `memories.update_rules.cadence` | Automatic extraction trigger such as manual, compose open, after sync, daily briefing, or idle background. This controls record extraction; Compose, chat, and dossiers may still read existing memories. Default `manual`. |
 | `memories.update_rules.retention_days` | Optional retention window for dismissals and controls; `0` means no automatic expiry. |
 | `memories.obsidian.vault_path` | Optional Obsidian vault path for preview/apply sync. |
 | `memories.obsidian.frontmatter_mode` | `full`, `minimal`, `generated_section`, or `none`. Default `minimal`. |

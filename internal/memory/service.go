@@ -104,7 +104,10 @@ func (s *Service) Refresh(ctx context.Context) (RefreshResult, error) {
 			all = append(all, emails...)
 		}
 	}
-	memories := s.extract.Extract(all)
+	var memories []Memory
+	if s.settings.Tasks.MemoryExtraction || s.settings.Tasks.TrackStatusUpdate {
+		memories = s.extract.Extract(all)
+	}
 	if s.settings.Sources.Calendar {
 		calendarMemories, count, err := s.refreshCalendarMemories(ctx)
 		if err != nil {
@@ -123,7 +126,7 @@ func (s *Service) Refresh(ctx context.Context) (RefreshResult, error) {
 			memories = append(memories, s.extract.ExtractObsidianNotes(notes)...)
 		}
 	}
-	if s.settings.Sources.ResearchNotes {
+	if s.settings.Sources.ResearchNotes && s.settings.Tasks.ResearchNoteSummary {
 		notes, err := LoadConfiguredResearchNotes(ctx, s.settings)
 		if err != nil {
 			result.Errors = append(result.Errors, fmt.Sprintf("research notes: %v", err))
@@ -287,6 +290,9 @@ func (s *Service) MarkSourceMissing(ctx context.Context, evidence Evidence, reas
 
 func nudgesFromMemories(memories []Memory, settings Settings) []Nudge {
 	settings.ApplyDefaults()
+	if !settings.Tasks.ComposeRadarNudges {
+		return nil
+	}
 	threshold := settings.Thresholds.ComposeRadar
 	if threshold <= 0 {
 		threshold = 0.75

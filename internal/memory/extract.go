@@ -44,6 +44,10 @@ func (e Extractor) Extract(emails []EmailSnapshot) []Memory {
 }
 
 func (e Extractor) extractEmailMemories(item EmailSnapshot, settings Settings) []Memory {
+	settings.ApplyDefaults()
+	if !settings.Tasks.MemoryExtraction {
+		return nil
+	}
 	email := item.Email
 	body := strings.TrimSpace(item.BodyText)
 	snippet := bounded(firstUsefulSentence(body, email.Subject), 280)
@@ -148,6 +152,10 @@ func (e Extractor) extractEmailMemories(item EmailSnapshot, settings Settings) [
 }
 
 func (e Extractor) extractTrackMemories(emails []EmailSnapshot, settings Settings) []Memory {
+	settings.ApplyDefaults()
+	if !settings.Tasks.TrackStatusUpdate {
+		return nil
+	}
 	byThread := make(map[string][]EmailSnapshot)
 	for _, item := range emails {
 		if item.Email == nil {

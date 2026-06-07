@@ -779,6 +779,14 @@ func TestMemoryDefaultsUseHeraldDirectoryAndObsidianProfile(t *testing.T) {
 	if c.Memories.Destinations.People != "People" || c.Memories.Destinations.DailyBriefing != "Scheduled Task Artifacts" {
 		t.Fatalf("memory destinations = %#v", c.Memories.Destinations)
 	}
+	if !c.Memories.Tasks.MemoryExtraction ||
+		!c.Memories.Tasks.TrackStatusUpdate ||
+		!c.Memories.Tasks.ComposeRadarNudges ||
+		!c.Memories.Tasks.Dossiers ||
+		!c.Memories.Tasks.ObsidianSectionFormat ||
+		!c.Memories.Tasks.ResearchNoteSummary {
+		t.Fatalf("memory tasks should default enabled = %#v", c.Memories.Tasks)
+	}
 }
 
 func TestLoadMemoryConfigPreservesExplicitToggles(t *testing.T) {
@@ -808,6 +816,13 @@ memories:
     max_obsidian_notes: 12
     research_notes: true
     max_research_notes: 7
+  tasks:
+    memory_extraction: true
+    track_status_update: false
+    compose_radar_nudges: true
+    dossiers: false
+    obsidian_section_format: true
+    research_note_summary: false
   obsidian:
     yaml_headers: false
     link_mode: markdown
@@ -836,6 +851,14 @@ memories:
 	}
 	if loaded.Memories.Directory != "/tmp/herald-memory-test" {
 		t.Fatalf("directory = %q", loaded.Memories.Directory)
+	}
+	if !loaded.Memories.Tasks.MemoryExtraction ||
+		loaded.Memories.Tasks.TrackStatusUpdate ||
+		!loaded.Memories.Tasks.ComposeRadarNudges ||
+		loaded.Memories.Tasks.Dossiers ||
+		!loaded.Memories.Tasks.ObsidianSectionFormat ||
+		loaded.Memories.Tasks.ResearchNoteSummary {
+		t.Fatalf("task toggles = %#v", loaded.Memories.Tasks)
 	}
 	if loaded.Memories.Obsidian.FrontmatterMode != memory.FrontmatterNone ||
 		loaded.Memories.Obsidian.YAMLHeaders ||

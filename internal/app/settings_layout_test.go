@@ -341,7 +341,7 @@ func TestSettingsWizardPreferencesStartWithEnterHerald(t *testing.T) {
 	s := NewSettingsWithOptions(SettingsModeWizard, nil, SettingsOptions{FirstRunPreferencesOnly: true})
 
 	rendered := renderSettingsViewForTest(t, s, 100, 32)
-	for _, want := range []string{"Advanced settings", "Theme", "AI", "Keyboard", "Offline Cache", "Signature", "Enter Herald", "Customize setup"} {
+	for _, want := range []string{"Advanced settings", "Memories", "Theme", "AI", "Keyboard", "Offline Cache", "Signature", "Enter Herald", "Customize setup"} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("expected post-validation setup screen to include %q, got:\n%s", want, rendered)
 		}
@@ -473,25 +473,52 @@ func TestSettingsPanelMemoriesCategoryShowsMemoryFieldsOnly(t *testing.T) {
 		memory.DefaultDirectory,
 		"Source folders",
 		"Obsidian-friendly output",
+		"Memory tasks",
 		"6 exposed templates",
 	} {
 		if !strings.Contains(normalized, want) {
 			t.Fatalf("expected Memories settings to include %q, got:\n%s", want, rendered)
 		}
 	}
+	for _, notWant := range []string{
+		"People destination",
+		"Chat retrieval threshold",
+	} {
+		if strings.Contains(normalized, notWant) {
+			t.Fatalf("expected setup page to hide advanced field %q, got:\n%s", notWant, rendered)
+		}
+	}
 	for _, want := range []string{
+		"Extract memories from cached mail",
+		"Show Compose Radar nudges",
+	} {
+		taskView := renderSettingsViewContainingForTest(t, s, 120, 42, want)
+		if !strings.Contains(taskView, want) {
+			t.Fatalf("expected memory task view to include %q, got:\n%s", want, taskView)
+		}
+	}
+	for _, want := range []string{
+		"Automatic extraction trigger",
+		"Manual - only when explicitly refreshed",
+		"Prompt template inventory",
+		"Advanced Rules",
+		"Low-confidence memories",
+		"Chat retrieval threshold",
+		"Retention days",
+	} {
+		_ = renderSettingsViewContainingForTest(t, s, 120, 42, want)
+	}
+	s.memoryObsidianEnabled = true
+	s.buildForm()
+	for _, want := range []string{
+		"Obsidian Output",
 		"Show YAML headers",
 		"Frontmatter mode",
 		"Link mode",
 		"Tag mode",
-		"Update cadence",
-		"Low-confidence memories",
-		"Chat retrieval threshold",
-		"Retention days",
-		"Prompt templates",
 		"People destination",
 	} {
-		s = assertSettingsPanelCanReachText(t, s, want)
+		_ = renderSettingsViewContainingForTest(t, s, 120, 42, want)
 	}
 	for _, notWant := range []string{"Email address", "AI Provider", "Keyboard Profile", "Email Signature"} {
 		if strings.Contains(normalized, notWant) {
@@ -1164,7 +1191,29 @@ func TestSettingsWizardFirstRunCustomizedAIStartsWithCompactSetupPreset(t *testi
 	s.buildForm()
 
 	rendered := renderSettingsViewForTest(t, s, 100, 32)
-
+	for _, want := range []string{
+		"Memory Setup",
+		"Herald Memories",
+		"Memory directory",
+		"Source folders",
+	} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("expected first-run custom setup to start with memory setup field %q, got:\n%s", want, rendered)
+		}
+	}
+	s.form.NextGroup()
+	rendered = renderSettingsViewForTest(t, s, 100, 32)
+	for _, want := range []string{
+		"Memory Tasks",
+		"Extract memories from cached mail",
+		"Show Compose Radar nudges",
+	} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("expected first-run custom memory tasks to include %q, got:\n%s", want, rendered)
+		}
+	}
+	s.form.NextGroup()
+	rendered = renderSettingsViewForTest(t, s, 100, 32)
 	for _, want := range []string{
 		"AI Setup",
 		"Ollama local default",
@@ -1175,7 +1224,7 @@ func TestSettingsWizardFirstRunCustomizedAIStartsWithCompactSetupPreset(t *testi
 		"Advanced manual config",
 	} {
 		if !strings.Contains(rendered, want) {
-			t.Fatalf("expected first-run custom AI presets to include %q, got:\n%s", want, rendered)
+			t.Fatalf("expected first-run custom AI presets to include %q after memory setup, got:\n%s", want, rendered)
 		}
 	}
 	for _, notWant := range []string{"Chat Role", "Embedding Role", "Ollama Host"} {

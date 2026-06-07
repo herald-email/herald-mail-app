@@ -99,7 +99,7 @@ The `Offline Cache` selector controls how much fetched preview data Herald keeps
 
 1. Press `S`.
 2. Choose `Memories`.
-3. Review the default local directory, source folders, Obsidian vault path, destination folders, frontmatter/link/tag modes, prompt templates, update cadence, and thresholds.
+3. Review the default local directory, source folders, allowed memory tasks, optional Obsidian output, automatic extraction trigger, prompt-template inventory, and advanced thresholds.
 4. Save changes or return to the menu with `Esc`.
 
 ### Change Keyboard Profile

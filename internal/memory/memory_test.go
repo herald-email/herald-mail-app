@@ -44,6 +44,14 @@ func TestSettingsDefaultsAreObsidianFriendlyAndImmutable(t *testing.T) {
 	if len(settings.Prompts) == 0 {
 		t.Fatal("expected default prompt templates")
 	}
+	if !settings.Tasks.MemoryExtraction ||
+		!settings.Tasks.TrackStatusUpdate ||
+		!settings.Tasks.ComposeRadarNudges ||
+		!settings.Tasks.Dossiers ||
+		!settings.Tasks.ObsidianSectionFormat ||
+		!settings.Tasks.ResearchNoteSummary {
+		t.Fatalf("tasks should default enabled = %#v", settings.Tasks)
+	}
 }
 
 func TestSettingsCanDisableContactsAndHideYAMLHeaders(t *testing.T) {
@@ -91,6 +99,32 @@ update_rules:
 
 	if settings.UpdateRules.ConflictCreatesState {
 		t.Fatal("explicit update_rules.conflict_creates_state: false should be preserved")
+	}
+}
+
+func TestSettingsCanPreserveExplicitTaskFalse(t *testing.T) {
+	var settings Settings
+	data := []byte(`
+tasks:
+  memory_extraction: false
+  track_status_update: false
+  compose_radar_nudges: false
+  dossiers: false
+  obsidian_section_format: false
+  research_note_summary: false
+`)
+	if err := yaml.Unmarshal(data, &settings); err != nil {
+		t.Fatalf("yaml.Unmarshal: %v", err)
+	}
+	settings.ApplyDefaults()
+
+	if settings.Tasks.MemoryExtraction ||
+		settings.Tasks.TrackStatusUpdate ||
+		settings.Tasks.ComposeRadarNudges ||
+		settings.Tasks.Dossiers ||
+		settings.Tasks.ObsidianSectionFormat ||
+		settings.Tasks.ResearchNoteSummary {
+		t.Fatalf("explicit disabled tasks should be preserved = %#v", settings.Tasks)
 	}
 }
 
@@ -570,6 +604,24 @@ func TestNudgesFromMemoriesUseTypedContractAndDismissalScope(t *testing.T) {
 	}
 }
 
+func TestComposeRadarTaskToggleSuppressesNudges(t *testing.T) {
+	settings := DefaultSettings()
+	settings.Tasks = NewTaskSettings(true, true, false, true, true, true)
+
+	prep := BuildReplyPrepFromMemories(
+		ReplyPrepQuery{Recipient: "sergey@example.com", Subject: "Interview"},
+		[]Memory{testMemoryWithKind("Sergey asked for availability.", KindOpenQuestion, 0.92)},
+		settings,
+	)
+
+	if len(prep.Memories) != 1 {
+		t.Fatalf("reply prep should still include searchable memories, got %#v", prep.Memories)
+	}
+	if len(prep.Nudges) != 0 {
+		t.Fatalf("compose radar disabled should suppress nudges, got %#v", prep.Nudges)
+	}
+}
+
 func TestMemoryControlStateAppliesForgetPinCorrectWithoutMutatingRecords(t *testing.T) {
 	ctx := context.Background()
 	store, err := NewFileStoreWithClock(t.TempDir(), testTime)
@@ -844,6 +896,25 @@ func TestBuildPersonDossierFromSourceBackedMemories(t *testing.T) {
 	}
 	if strings.Contains(dossier.RelationshipSummary, "Maybe") {
 		t.Fatalf("low-confidence memory leaked into dossier: %#v", dossier)
+	}
+}
+
+func TestDossierTaskToggleSuppressesDossierContent(t *testing.T) {
+	settings := DefaultSettings()
+	settings.Tasks = NewTaskSettings(true, true, true, false, true, true)
+
+	dossier := BuildPersonDossier(
+		"Sergey",
+		[]Memory{testMemoryWithKind("Sergey asked whether the take-home follow-up is still on track.", KindOpenQuestion, 0.92)},
+		settings,
+		testTime(),
+	)
+
+	if dossier.Subject != "Sergey" || dossier.Kind != DossierKindPerson {
+		t.Fatalf("dossier identity should remain available, got %#v", dossier)
+	}
+	if dossier.RelationshipSummary != "" || len(dossier.OpenLoops) != 0 || len(dossier.Evidence) != 0 {
+		t.Fatalf("dossier content should be suppressed when task is disabled, got %#v", dossier)
 	}
 }
 

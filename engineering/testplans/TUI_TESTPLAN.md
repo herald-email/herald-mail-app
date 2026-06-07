@@ -1218,19 +1218,22 @@ Check these states during every applicable lane:
 **Steps:**
 1. Launch with a config that omits `memories`.
 2. Open `Settings > Memories` and inspect the effective defaults.
-3. Change the memory directory, included folders, Obsidian vault path, frontmatter mode, YAML header toggle, link mode, tag mode, update cadence, and confidence thresholds, then save.
-4. Reopen `Settings > Memories` and confirm the saved values round-trip without losing unrelated settings.
-5. Inspect the prompt-template summary and confirm exposed prompts are named/versioned while privacy and no-mutation guardrails are not editable in the form.
-6. Configure a temp vault path with existing People and Job search notes that include user-authored text outside Herald markers.
-7. Generate an Obsidian sync preview for memory records.
-8. Toggle frontmatter mode between minimal YAML and no visible YAML, then regenerate the preview.
+3. Confirm the setup group asks only for memory enablement, local storage, source folders, and optional Obsidian output; then confirm the task group uses checkboxes for allowed memory tasks rather than a prompt-template selector.
+4. Change the memory directory, included folders, Obsidian vault path, memory task toggles, frontmatter mode, YAML header toggle, link mode, tag mode, automatic extraction trigger, and confidence thresholds, then save.
+5. Reopen `Settings > Memories` and confirm the saved values round-trip without losing unrelated settings.
+6. Inspect the prompt-template summary in the advanced prompt-template group and confirm exposed prompts are named/versioned while privacy and no-mutation guardrails are not editable in the onboarding-level task group.
+7. Configure a temp vault path with existing People and Job search notes that include user-authored text outside Herald markers.
+8. Generate an Obsidian sync preview for memory records.
+9. Toggle frontmatter mode between minimal YAML and no visible YAML, then regenerate the preview.
 
 **Expect:**
 - The Settings top-level menu includes `Memories`, and that category does not show unrelated account, AI, keyboard, theme, or signature fields.
-- `Settings > Memories` summarizes enabled state, immutable local store, current directory, vault path, source folders, prompt-template count, safe external research state, configured memory thresholds, and read-only total/stale/review-needed memory counts.
+- `Settings > Memories` summarizes enabled state, immutable local store, current directory, vault path, source folders, allowed memory tasks, prompt-template count, safe external research state, and read-only total/stale/review-needed memory counts without dumping threshold numbers into the setup group.
+- Onboarding-level Memories setup stays neutral and sparse: enablement, local storage, source folders, Obsidian output, and allowed memory tasks are shown before advanced destinations, extraction triggers, prompt-template inventory, and numeric thresholds.
 - Empty, missing, or unreadable memory stores do not block Settings; the status line shows zero counts or a bounded unavailable state.
 - Effective memory storage defaults to `~/.herald/memories` and remains append-only.
-- Defaults target `People/`, `Job search/`, `Scheduled Task Artifacts/`, and a configurable memory inbox with minimal Obsidian frontmatter plus conservative links/tags.
+- Defaults target `People/`, `Job search/`, `Scheduled Task Artifacts/`, and a configurable memory inbox with minimal Obsidian frontmatter plus conservative links/tags, but destination fields live in the Obsidian output group instead of the setup group.
+- `Automatic extraction trigger` explains that the single-select mode controls record extraction, while Compose, chat, and dossiers may still read existing memories.
 - The Obsidian-friendly toggle can hide YAML headers while preserving generated-section metadata inside Herald markers.
 - Saving from `Settings > Memories` persists only the `memories` config subtree and returns to the Settings menu.
 - Sync preview shows the destination path, generated section, frontmatter/link/tag mode, and source evidence before any write.

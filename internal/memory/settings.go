@@ -33,6 +33,7 @@ type Settings struct {
 	Immutable    bool                `yaml:"immutable,omitempty" json:"immutable,omitempty"`
 	Profile      string              `yaml:"profile,omitempty" json:"profile,omitempty"`
 	Sources      SourceSettings      `yaml:"sources,omitempty" json:"sources,omitempty"`
+	Tasks        TaskSettings        `yaml:"tasks,omitempty" json:"tasks,omitempty"`
 	Destinations DestinationSettings `yaml:"destinations,omitempty" json:"destinations,omitempty"`
 	Thresholds   ThresholdSettings   `yaml:"thresholds,omitempty" json:"thresholds,omitempty"`
 	UpdateRules  UpdateRuleSettings  `yaml:"update_rules,omitempty" json:"update_rules,omitempty"`
@@ -56,6 +57,22 @@ type SourceSettings struct {
 	MaxResearchNotes      int      `yaml:"max_research_notes,omitempty" json:"max_research_notes,omitempty"`
 
 	contactsSet bool `yaml:"-" json:"-"`
+}
+
+type TaskSettings struct {
+	MemoryExtraction      bool `yaml:"memory_extraction" json:"memory_extraction"`
+	TrackStatusUpdate     bool `yaml:"track_status_update" json:"track_status_update"`
+	ComposeRadarNudges    bool `yaml:"compose_radar_nudges" json:"compose_radar_nudges"`
+	Dossiers              bool `yaml:"dossiers" json:"dossiers"`
+	ObsidianSectionFormat bool `yaml:"obsidian_section_format" json:"obsidian_section_format"`
+	ResearchNoteSummary   bool `yaml:"research_note_summary" json:"research_note_summary"`
+
+	memoryExtractionSet      bool `yaml:"-" json:"-"`
+	trackStatusUpdateSet     bool `yaml:"-" json:"-"`
+	composeRadarNudgesSet    bool `yaml:"-" json:"-"`
+	dossiersSet              bool `yaml:"-" json:"-"`
+	obsidianSectionFormatSet bool `yaml:"-" json:"-"`
+	researchNoteSummarySet   bool `yaml:"-" json:"-"`
 }
 
 type DestinationSettings struct {
@@ -131,6 +148,7 @@ func (s *Settings) UnmarshalYAML(value *yaml.Node) error {
 		Immutable    *bool               `yaml:"immutable"`
 		Profile      string              `yaml:"profile"`
 		Sources      SourceSettings      `yaml:"sources"`
+		Tasks        TaskSettings        `yaml:"tasks"`
 		Destinations DestinationSettings `yaml:"destinations"`
 		Thresholds   ThresholdSettings   `yaml:"thresholds"`
 		UpdateRules  UpdateRuleSettings  `yaml:"update_rules"`
@@ -153,12 +171,53 @@ func (s *Settings) UnmarshalYAML(value *yaml.Node) error {
 	s.Directory = decoded.Directory
 	s.Profile = decoded.Profile
 	s.Sources = decoded.Sources
+	s.Tasks = decoded.Tasks
 	s.Destinations = decoded.Destinations
 	s.Thresholds = decoded.Thresholds
 	s.UpdateRules = decoded.UpdateRules
 	s.Obsidian = decoded.Obsidian
 	s.Prompts = decoded.Prompts
 	s.Research = decoded.Research
+	return nil
+}
+
+func (t *TaskSettings) UnmarshalYAML(value *yaml.Node) error {
+	type rawTasks struct {
+		MemoryExtraction      *bool `yaml:"memory_extraction"`
+		TrackStatusUpdate     *bool `yaml:"track_status_update"`
+		ComposeRadarNudges    *bool `yaml:"compose_radar_nudges"`
+		Dossiers              *bool `yaml:"dossiers"`
+		ObsidianSectionFormat *bool `yaml:"obsidian_section_format"`
+		ResearchNoteSummary   *bool `yaml:"research_note_summary"`
+	}
+	var decoded rawTasks
+	if err := value.Decode(&decoded); err != nil {
+		return err
+	}
+	if decoded.MemoryExtraction != nil {
+		t.MemoryExtraction = *decoded.MemoryExtraction
+		t.memoryExtractionSet = true
+	}
+	if decoded.TrackStatusUpdate != nil {
+		t.TrackStatusUpdate = *decoded.TrackStatusUpdate
+		t.trackStatusUpdateSet = true
+	}
+	if decoded.ComposeRadarNudges != nil {
+		t.ComposeRadarNudges = *decoded.ComposeRadarNudges
+		t.composeRadarNudgesSet = true
+	}
+	if decoded.Dossiers != nil {
+		t.Dossiers = *decoded.Dossiers
+		t.dossiersSet = true
+	}
+	if decoded.ObsidianSectionFormat != nil {
+		t.ObsidianSectionFormat = *decoded.ObsidianSectionFormat
+		t.obsidianSectionFormatSet = true
+	}
+	if decoded.ResearchNoteSummary != nil {
+		t.ResearchNoteSummary = *decoded.ResearchNoteSummary
+		t.researchNoteSummarySet = true
+	}
 	return nil
 }
 
@@ -275,6 +334,23 @@ func DefaultSettings() Settings {
 	return settings
 }
 
+func NewTaskSettings(memoryExtraction, trackStatusUpdate, composeRadarNudges, dossiers, obsidianSectionFormat, researchNoteSummary bool) TaskSettings {
+	return TaskSettings{
+		MemoryExtraction:         memoryExtraction,
+		TrackStatusUpdate:        trackStatusUpdate,
+		ComposeRadarNudges:       composeRadarNudges,
+		Dossiers:                 dossiers,
+		ObsidianSectionFormat:    obsidianSectionFormat,
+		ResearchNoteSummary:      researchNoteSummary,
+		memoryExtractionSet:      true,
+		trackStatusUpdateSet:     true,
+		composeRadarNudgesSet:    true,
+		dossiersSet:              true,
+		obsidianSectionFormatSet: true,
+		researchNoteSummarySet:   true,
+	}
+}
+
 func (s *Settings) ApplyDefaults() {
 	if !s.enabledSet {
 		s.Enabled = true
@@ -308,6 +384,7 @@ func (s *Settings) ApplyDefaults() {
 	if s.Sources.MaxResearchNotes <= 0 {
 		s.Sources.MaxResearchNotes = 50
 	}
+	s.Tasks.ApplyDefaults()
 	if strings.TrimSpace(s.Destinations.People) == "" {
 		s.Destinations.People = "People"
 	}
@@ -371,6 +448,27 @@ func (s *Settings) ApplyDefaults() {
 	}
 	if s.Research.StaleAfterDays == 0 {
 		s.Research.StaleAfterDays = 30
+	}
+}
+
+func (t *TaskSettings) ApplyDefaults() {
+	if !t.memoryExtractionSet {
+		t.MemoryExtraction = true
+	}
+	if !t.trackStatusUpdateSet {
+		t.TrackStatusUpdate = true
+	}
+	if !t.composeRadarNudgesSet {
+		t.ComposeRadarNudges = true
+	}
+	if !t.dossiersSet {
+		t.Dossiers = true
+	}
+	if !t.obsidianSectionFormatSet {
+		t.ObsidianSectionFormat = true
+	}
+	if !t.researchNoteSummarySet {
+		t.ResearchNoteSummary = true
 	}
 }
 

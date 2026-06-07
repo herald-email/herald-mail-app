@@ -107,11 +107,12 @@ The feature should be tweakable without making users design a memory system from
 - [x] Provide a default memory profile that stores people memories under `People/`, job/company memories under `Job search/`, daily diffs under `Scheduled Task Artifacts/`, uncategorized items under a configurable memory inbox, and uses minimal Obsidian frontmatter plus conservative links/tags.
 - [x] Let users choose included sources: Inbox, Sent, selected folders, selected accounts, Contacts, Calendar, Obsidian, and explicit research notes.
 - [x] Let users set per-memory-type destinations for people, companies, threads, job search, projects, research notes, and daily briefing output.
-- [x] Let users set update cadence: manual only, on compose open, after sync, daily briefing, or background when idle.
+- [x] Let users set allowed memory tasks separately from prompt-template editing: extraction, track updates, Compose Radar, dossiers, Obsidian section formatting, and research-note summaries.
+- [x] Let users set automatic extraction trigger: manual only, on compose open, after sync, daily briefing, or background when idle. This controls record extraction; Compose, chat, and dossiers may still read existing memories.
 - [x] Let users set confidence thresholds for chat retrieval, dossier inclusion, Obsidian writes, and Compose Radar nudges separately.
 - [x] Let users choose whether low-confidence memories are hidden, shown only in chat, or saved to a review queue.
 - [x] Surface the shipped safe defaults in Settings: immutable local records, configured cached-mail sources, external research opt-in, and private body text never sent to web research by default.
-- [x] Provide a Settings screen section that summarizes memory status, configured vault path, prompt template count, update rules, and confidence thresholds.
+- [x] Provide a Settings screen section that summarizes memory status, configured vault path, allowed task count, prompt template count, update rules, and confidence thresholds, while grouping onboarding-level setup separately from advanced destinations and numeric rules.
 - [x] Add read-only total, stale, and review-needed memory counts to Settings from the immutable local store without mutating memory records.
 - [x] Extend the Settings screen section with last run, pending writes, failed writes, and approved write-flow state once Obsidian writes exist.
 
@@ -119,7 +120,7 @@ The feature should be tweakable without making users design a memory system from
 
 Some memory behavior should be editable because the quality bar depends on user taste and workflow. Herald should expose prompts carefully as versioned templates with safe variables, not as a raw prompt-editing trap for every internal instruction.
 
-- [x] Expose prompt templates for memory extraction, track status updates, Compose Radar nudge generation, dossier summarization, Obsidian section formatting, and research-note summarization.
+- [x] Expose prompt-template inventory for memory extraction, track status updates, Compose Radar nudge generation, dossier summarization, Obsidian section formatting, and research-note summarization, while using separate task toggles for whether those memory jobs are allowed to run.
 - [x] Keep high-risk guardrail prompts internal, including privacy policy, external research boundaries, evidence requirements, and no-mutation rules.
 - [x] Version every exposed prompt template so existing memories can report which prompt generated or updated them.
 - [x] Let users reset any exposed prompt to the shipped default.

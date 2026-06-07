@@ -93,6 +93,13 @@ const (
 	settingsCleanupToolPrompts    = "custom-prompts"
 	settingsCleanupToolRules      = "cleanup-rules"
 
+	settingsMemoryTaskExtraction = "memory_extraction"
+	settingsMemoryTaskTrack      = "track_status_update"
+	settingsMemoryTaskRadar      = "compose_radar_nudges"
+	settingsMemoryTaskDossiers   = "dossiers"
+	settingsMemoryTaskObsidian   = "obsidian_section_format"
+	settingsMemoryTaskResearch   = "research_note_summary"
+
 	settingsAccountEditExisting    = "existing"
 	settingsAccountEditAddMail     = "add-mail"
 	settingsAccountEditAddCalendar = "add-calendar"
@@ -227,6 +234,7 @@ type Settings struct {
 	memoryEnabled                  bool
 	memoryDirectory                string
 	memorySourceFolders            string
+	memoryTaskChoices              []string
 	memoryObsidianEnabled          bool
 	memoryVaultPath                string
 	memoryFrontmatterMode          string
@@ -578,6 +586,7 @@ func (s *Settings) syncMemoryFieldsFromConfig(settings memory.Settings) {
 	s.memoryEnabled = settings.Enabled
 	s.memoryDirectory = strings.TrimSpace(firstNonEmptyString(settings.Directory, memory.DefaultDirectory))
 	s.memorySourceFolders = strings.Join(settings.Sources.Folders, ", ")
+	s.memoryTaskChoices = settingsMemoryTaskChoices(settings.Tasks)
 	s.memoryObsidianEnabled = settings.Obsidian.Enabled
 	s.memoryVaultPath = strings.TrimSpace(settings.Obsidian.VaultPath)
 	s.memoryFrontmatterMode = memory.NormalizeFrontmatterMode(settings.Obsidian.FrontmatterMode)
@@ -756,12 +765,81 @@ func settingsMemoryTagModeOptions() []huh.Option[string] {
 
 func settingsMemoryCadenceOptions() []huh.Option[string] {
 	return []huh.Option[string]{
-		huh.NewOption("Manual", "manual"),
-		huh.NewOption("On compose open", "compose_open"),
-		huh.NewOption("After sync", "after_sync"),
-		huh.NewOption("Daily briefing", "daily_briefing"),
-		huh.NewOption("Background idle", "background_idle"),
+		huh.NewOption("Manual - only when explicitly refreshed", "manual"),
+		huh.NewOption("On compose open - extract before reply context", "compose_open"),
+		huh.NewOption("After sync - extract after mail sync", "after_sync"),
+		huh.NewOption("Daily briefing - extract during briefing generation", "daily_briefing"),
+		huh.NewOption("Background idle - extract when the app is idle", "background_idle"),
 	}
+}
+
+func settingsMemoryTaskOptions() []huh.Option[string] {
+	return []huh.Option[string]{
+		huh.NewOption("Extract memories from cached mail", settingsMemoryTaskExtraction),
+		huh.NewOption("Update track status", settingsMemoryTaskTrack),
+		huh.NewOption("Show Compose Radar nudges", settingsMemoryTaskRadar),
+		huh.NewOption("Build contact and thread dossiers", settingsMemoryTaskDossiers),
+		huh.NewOption("Format Obsidian sections", settingsMemoryTaskObsidian),
+		huh.NewOption("Summarize research notes", settingsMemoryTaskResearch),
+	}
+}
+
+func settingsMemoryTaskChoices(tasks memory.TaskSettings) []string {
+	tasks.ApplyDefaults()
+	var choices []string
+	if tasks.MemoryExtraction {
+		choices = append(choices, settingsMemoryTaskExtraction)
+	}
+	if tasks.TrackStatusUpdate {
+		choices = append(choices, settingsMemoryTaskTrack)
+	}
+	if tasks.ComposeRadarNudges {
+		choices = append(choices, settingsMemoryTaskRadar)
+	}
+	if tasks.Dossiers {
+		choices = append(choices, settingsMemoryTaskDossiers)
+	}
+	if tasks.ObsidianSectionFormat {
+		choices = append(choices, settingsMemoryTaskObsidian)
+	}
+	if tasks.ResearchNoteSummary {
+		choices = append(choices, settingsMemoryTaskResearch)
+	}
+	return choices
+}
+
+func settingsMemoryTasksFromChoices(choices []string) memory.TaskSettings {
+	enabled := make(map[string]bool, len(choices))
+	for _, choice := range choices {
+		enabled[strings.TrimSpace(choice)] = true
+	}
+	return memory.NewTaskSettings(
+		enabled[settingsMemoryTaskExtraction],
+		enabled[settingsMemoryTaskTrack],
+		enabled[settingsMemoryTaskRadar],
+		enabled[settingsMemoryTaskDossiers],
+		enabled[settingsMemoryTaskObsidian],
+		enabled[settingsMemoryTaskResearch],
+	)
+}
+
+func settingsMemoryTaskSummary(choices []string) string {
+	options := settingsMemoryTaskOptions()
+	enabled := make(map[string]bool, len(choices))
+	for _, choice := range choices {
+		enabled[strings.TrimSpace(choice)] = true
+	}
+	on := 0
+	var lines []string
+	for _, option := range options {
+		state := "off"
+		if enabled[option.Value] {
+			state = "on"
+			on++
+		}
+		lines = append(lines, fmt.Sprintf("- %s: %s", option.Key, state))
+	}
+	return fmt.Sprintf("%d of %d memory tasks enabled\n%s", on, len(options), strings.Join(lines, "\n"))
 }
 
 func settingsMemoryLowConfidenceOptions() []huh.Option[string] {
@@ -900,31 +978,22 @@ func (s *Settings) memoryStatusDescription() string {
 	if folders == "" {
 		folders = "INBOX, Sent"
 	}
+	taskCount := len(s.memoryTaskChoices)
+	taskTotal := len(settingsMemoryTaskOptions())
 	lines := []string{
 		fmt.Sprintf("Enabled: %s", settingsBoolWord(s.memoryEnabled)),
 		"Store: " + settingsMaybeUnset(firstNonEmptyString(s.memoryDirectory, memory.DefaultDirectory)),
 		"Immutable records: on",
 		"Sources: " + folders,
 		"Vault: " + settingsMaybeUnset(s.memoryVaultPath),
+		fmt.Sprintf("Memory tasks: %d of %d enabled", taskCount, taskTotal),
 		fmt.Sprintf("Obsidian: %s / YAML %s / %s links / %s tags",
 			settingsBoolWord(s.memoryObsidianEnabled),
 			settingsBoolWord(s.memoryYAMLHeaders),
 			memory.NormalizeLinkMode(s.memoryLinkMode),
 			memory.NormalizeTagMode(s.memoryTagMode),
 		),
-		fmt.Sprintf("Update rules: %s / low confidence %s / stale after %s days / retention %s",
-			settingsMemoryUpdateCadence(s.memoryUpdateCadence),
-			settingsMemoryLowConfidenceDisposition(s.memoryLowConfidenceDisposition),
-			strings.TrimSpace(firstNonEmptyString(s.memoryStaleAfterDaysStr, "45")),
-			settingsMemoryRetentionLabel(s.memoryRetentionDaysStr),
-		),
-		fmt.Sprintf("Thresholds: chat %s / dossier %s / write %s / compose %s / match %s",
-			firstNonEmptyString(s.memoryChatThresholdStr, "0.35"),
-			firstNonEmptyString(s.memoryDossierThresholdStr, "0.55"),
-			firstNonEmptyString(s.memoryObsidianThresholdStr, "0.70"),
-			firstNonEmptyString(s.memoryComposeThresholdStr, "0.75"),
-			firstNonEmptyString(s.memoryMatchThresholdStr, "0.80"),
-		),
+		fmt.Sprintf("Extraction trigger: %s", settingsMemoryUpdateCadence(s.memoryUpdateCadence)),
 		fmt.Sprintf("Prompts: %d exposed templates", len(s.memoryPromptTemplatesForSettings())),
 		s.memoryStoreStatsLine(),
 		s.memoryResearchStatusLine(),
@@ -1535,30 +1604,39 @@ func (s *Settings) buildForm() {
 	if s.mode == SettingsModePanel && s.panelSection == settingsPanelSectionMemories {
 		s.refreshMemoryStoreStats()
 	}
-	memoryGroup := huh.NewGroup(
+	memorySetupGroup := huh.NewGroup(
+		huh.NewNote().
+			Title("Herald Memories").
+			Description("Store local, source-backed relationship context for replies, contacts, chat, and optional Obsidian output."),
+		hideSettingsFieldWhen(
+			huh.NewNote().
+				Title("Current status").
+				DescriptionFunc(func() string {
+					return s.memoryStatusDescription()
+				}, []any{
+					&s.memoryEnabled,
+					&s.memoryDirectory,
+					&s.memorySourceFolders,
+					&s.memoryTaskChoices,
+					&s.memoryVaultPath,
+					&s.memoryObsidianEnabled,
+					&s.memoryYAMLHeaders,
+					&s.memoryLinkMode,
+					&s.memoryTagMode,
+					&s.memoryUpdateCadence,
+					&s.memoryLowConfidenceDisposition,
+					&s.memoryChatThresholdStr,
+					&s.memoryDossierThresholdStr,
+					&s.memoryObsidianThresholdStr,
+					&s.memoryComposeThresholdStr,
+					&s.memoryMatchThresholdStr,
+					&s.memoryStaleAfterDaysStr,
+					&s.memoryRetentionDaysStr,
+				}),
+			func() bool { return s.mode != SettingsModePanel },
+		),
 		huh.NewConfirm().
-			Title("Enable Herald Memories").
-			DescriptionFunc(func() string {
-				return s.memoryStatusDescription()
-			}, []any{
-				&s.memoryEnabled,
-				&s.memoryDirectory,
-				&s.memorySourceFolders,
-				&s.memoryVaultPath,
-				&s.memoryObsidianEnabled,
-				&s.memoryYAMLHeaders,
-				&s.memoryLinkMode,
-				&s.memoryTagMode,
-				&s.memoryUpdateCadence,
-				&s.memoryLowConfidenceDisposition,
-				&s.memoryChatThresholdStr,
-				&s.memoryDossierThresholdStr,
-				&s.memoryObsidianThresholdStr,
-				&s.memoryComposeThresholdStr,
-				&s.memoryMatchThresholdStr,
-				&s.memoryStaleAfterDaysStr,
-				&s.memoryRetentionDaysStr,
-			}).
+			Title("Herald Memories").
 			Affirmative("On").
 			Negative("Off").
 			Value(&s.memoryEnabled),
@@ -1579,6 +1657,27 @@ func (s *Settings) buildForm() {
 			Affirmative("On").
 			Negative("Off").
 			Value(&s.memoryObsidianEnabled),
+		hideSettingsFieldWhen(
+			huh.NewInput().
+				Title("Obsidian vault path").
+				Inline(true).
+				Placeholder("~/Documents/Obsidian").
+				Value(&s.memoryVaultPath),
+			func() bool { return !s.memoryObsidianEnabled },
+		),
+	).Title("Memory Setup")
+
+	memoryTasksGroup := huh.NewGroup(
+		huh.NewMultiSelect[string]().
+			Title("Memory tasks").
+			DescriptionFunc(func() string {
+				return settingsMemoryTaskSummary(s.memoryTaskChoices)
+			}, []any{&s.memoryTaskChoices}).
+			Options(settingsMemoryTaskOptions()...).
+			Value(&s.memoryTaskChoices),
+	).Title("Memory Tasks")
+
+	memoryObsidianGroup := huh.NewGroup(
 		huh.NewInput().
 			Title("Obsidian vault path").
 			Inline(true).
@@ -1601,10 +1700,69 @@ func (s *Settings) buildForm() {
 			Title("Tag mode").
 			Options(settingsMemoryTagModeOptions()...).
 			Value(&s.memoryTagMode),
+		huh.NewInput().
+			Title("People destination").
+			Inline(true).
+			Placeholder("People").
+			Value(&s.memoryPeopleDestination),
+		huh.NewInput().
+			Title("Companies destination").
+			Inline(true).
+			Placeholder("Job search/active").
+			Value(&s.memoryCompaniesDestination),
+		huh.NewInput().
+			Title("Job search destination").
+			Inline(true).
+			Placeholder("Job search").
+			Value(&s.memoryJobSearchDestination),
+		huh.NewInput().
+			Title("Projects destination").
+			Inline(true).
+			Placeholder("Projects").
+			Value(&s.memoryProjectsDestination),
+		huh.NewInput().
+			Title("Threads destination").
+			Inline(true).
+			Placeholder("Threads").
+			Value(&s.memoryThreadsDestination),
+		huh.NewInput().
+			Title("Research destination").
+			Inline(true).
+			Placeholder("Research").
+			Value(&s.memoryResearchDestination),
+		huh.NewInput().
+			Title("Daily briefing destination").
+			Inline(true).
+			Placeholder("Scheduled Task Artifacts").
+			Value(&s.memoryDailyDestination),
+		huh.NewInput().
+			Title("Inbox destination").
+			Inline(true).
+			Placeholder("Memory Inbox").
+			Value(&s.memoryInboxDestination),
+	).Title("Obsidian Output").WithHideFunc(func() bool {
+		return !s.memoryObsidianEnabled
+	})
+
+	memoryExtractionGroup := huh.NewGroup(
+		huh.NewNote().
+			Title("Automatic extraction trigger").
+			Description("Controls when Herald creates or updates memory records. Compose, chat, and dossiers may still read existing memories."),
 		huh.NewSelect[string]().
-			Title("Update cadence").
+			Title("Automatic extraction trigger").
 			Options(settingsMemoryCadenceOptions()...).
 			Value(&s.memoryUpdateCadence),
+	).Title("Extraction Trigger")
+
+	memoryPromptGroup := huh.NewGroup(
+		huh.NewNote().
+			Title("Prompt template inventory").
+			DescriptionFunc(func() string {
+				return s.memoryPromptTemplateSummary()
+			}, []any{&s.memoryPromptTemplateChoice}),
+	).Title("Prompt Templates")
+
+	memoryAdvancedGroup := huh.NewGroup(
 		huh.NewSelect[string]().
 			Title("Low-confidence memories").
 			Options(settingsMemoryLowConfidenceOptions()...).
@@ -1651,54 +1809,7 @@ func (s *Settings) buildForm() {
 			Placeholder("0").
 			Value(&s.memoryRetentionDaysStr).
 			Validate(settingsNonNegativeIntValidator("Retention days")),
-		huh.NewSelect[string]().
-			Title("Prompt templates").
-			DescriptionFunc(func() string {
-				return s.memoryPromptTemplateSummary()
-			}, []any{&s.memoryPromptTemplateChoice}).
-			Options(s.memoryPromptTemplateOptions()...).
-			Value(&s.memoryPromptTemplateChoice),
-		huh.NewInput().
-			Title("People destination").
-			Inline(true).
-			Placeholder("People").
-			Value(&s.memoryPeopleDestination),
-		huh.NewInput().
-			Title("Companies destination").
-			Inline(true).
-			Placeholder("Job search/active").
-			Value(&s.memoryCompaniesDestination),
-		huh.NewInput().
-			Title("Job search destination").
-			Inline(true).
-			Placeholder("Job search").
-			Value(&s.memoryJobSearchDestination),
-		huh.NewInput().
-			Title("Projects destination").
-			Inline(true).
-			Placeholder("Projects").
-			Value(&s.memoryProjectsDestination),
-		huh.NewInput().
-			Title("Threads destination").
-			Inline(true).
-			Placeholder("Threads").
-			Value(&s.memoryThreadsDestination),
-		huh.NewInput().
-			Title("Research destination").
-			Inline(true).
-			Placeholder("Research").
-			Value(&s.memoryResearchDestination),
-		huh.NewInput().
-			Title("Daily briefing destination").
-			Inline(true).
-			Placeholder("Scheduled Task Artifacts").
-			Value(&s.memoryDailyDestination),
-		huh.NewInput().
-			Title("Inbox destination").
-			Inline(true).
-			Placeholder("Memory Inbox").
-			Value(&s.memoryInboxDestination),
-	).Title("Memories")
+	).Title("Advanced Rules")
 
 	calendarGroup := huh.NewGroup(
 		huh.NewSelect[string]().
@@ -2177,7 +2288,12 @@ func (s *Settings) buildForm() {
 			}
 		case settingsPanelSectionMemories:
 			groups = []*huh.Group{
-				memoryGroup,
+				memorySetupGroup,
+				memoryTasksGroup,
+				memoryObsidianGroup,
+				memoryExtractionGroup,
+				memoryPromptGroup,
+				memoryAdvancedGroup,
 				saveGroup.Title("Memories"),
 			}
 		case settingsPanelSectionCalendar:
@@ -2218,7 +2334,7 @@ func (s *Settings) buildForm() {
 		enterGroup := huh.NewGroup(
 			huh.NewNote().
 				Title("Advanced settings").
-				Description("Theme: Inherited\nAI: Disabled\nKeyboard: Default\nOffline Cache: Message bodies without attachments\nSignature: None"),
+				Description("Memories: On with local defaults\nTheme: Inherited\nAI: Disabled\nKeyboard: Default\nOffline Cache: Message bodies without attachments\nSignature: None"),
 			huh.NewSelect[string]().
 				Title("Next").
 				Options(
@@ -2231,6 +2347,8 @@ func (s *Settings) buildForm() {
 			groups = []*huh.Group{enterGroup}
 		} else {
 			groups = []*huh.Group{
+				memorySetupGroup,
+				memoryTasksGroup,
 				aiProviderGroup,
 				advancedAIGroup,
 				ollamaDefaultGroup,
@@ -3943,7 +4061,8 @@ func (s *Settings) buildConfig() *config.Config {
 	} else if strings.TrimSpace(s.themeFG) != "" || strings.TrimSpace(s.themeBG) != "" {
 		storeThemeFieldsInMap(cfg.Theme.Overrides, s.themeRole, s.themeFG, s.themeBG)
 	}
-	if s.mode == SettingsModePanel && s.panelSection == settingsPanelSectionMemories {
+	if (s.mode == SettingsModePanel && s.panelSection == settingsPanelSectionMemories) ||
+		(s.mode == SettingsModeWizard && s.firstRunPreferencesOnly) {
 		cfg.Memories = s.buildMemorySettingsConfig(cfg.Memories)
 	}
 
@@ -3959,6 +4078,7 @@ func (s *Settings) buildMemorySettingsConfig(existing memory.Settings) memory.Se
 	settings.Directory = strings.TrimSpace(firstNonEmptyString(s.memoryDirectory, memory.DefaultDirectory))
 	settings.Profile = "obsidian-friendly"
 	settings.Sources.Folders = settingsParseCSV(s.memorySourceFolders, []string{"INBOX", "Sent"})
+	settings.Tasks = settingsMemoryTasksFromChoices(s.memoryTaskChoices)
 	settings.Destinations.People = strings.TrimSpace(firstNonEmptyString(s.memoryPeopleDestination, settings.Destinations.People, "People"))
 	settings.Destinations.Companies = strings.TrimSpace(firstNonEmptyString(s.memoryCompaniesDestination, settings.Destinations.Companies, "Job search/active"))
 	settings.Destinations.JobSearch = strings.TrimSpace(firstNonEmptyString(s.memoryJobSearchDestination, settings.Destinations.JobSearch, "Job search"))

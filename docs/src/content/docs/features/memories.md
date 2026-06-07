@@ -19,7 +19,7 @@ Demo mode includes synthetic memory examples for Sergey, Mina, and Cobalt Works,
 | Contact dossier | Relationship summary, recent interactions, active tracks, open loops, vault links, and compact evidence labels. |
 | Company dossier | Company or domain-backed tracks, job-search vault path, open loop, and evidence. |
 | Thread dossier | Email-preview context for the selected subject, including active track, open loop, canonical note link, and source evidence. |
-| Settings > Memories | Local directory, vault path, included sources, prompt template count, confidence thresholds, update rules, Obsidian profile, and store counts. |
+| Settings > Memories | Setup fields, allowed memory tasks, vault path, included sources, prompt template inventory, confidence thresholds, update rules, Obsidian profile, and store counts. |
 | Obsidian preview | Generated-section Markdown changes shown before first write or section rewrite. |
 | Daily briefing diff | Changed tracks, newly resolved loops, stale loops, failed syncs, review-needed memories, and vault hygiene items. |
 
@@ -31,7 +31,7 @@ Demo mode includes synthetic memory examples for Sergey, Mina, and Cobalt Works,
 
 | Control | Context | Result |
 | --- | --- | --- |
-| `Settings > Memories` | Main settings overlay | Configure local directory, vault targets, sources, prompts, confidence thresholds, update cadence, and Obsidian output profile. |
+| `Settings > Memories` | Main settings overlay | Configure enablement, local directory, sources, allowed memory tasks, extraction trigger, vault targets, confidence thresholds, prompt-template inventory, and Obsidian output profile. |
 | Compose Radar actions | Reply Compose when nudges exist | Open source, insert a bounded phrase, dismiss, mark resolved, save for review, or record research intent. |
 | Contact detail | Contacts tab | Shows person and company dossiers when matching memories exist. |
 | Email preview | Timeline preview | Shows a thread dossier when the selected subject has matching memories. |
@@ -59,7 +59,7 @@ Compose Radar does not silently mutate drafts. It stays hidden or quiet when the
 ### Sync To Obsidian-Friendly Markdown
 
 1. Open `Settings > Memories`.
-2. Configure the vault path and destinations such as `People/`, `Job search/`, `Scheduled Task Artifacts/`, and `Memory Inbox/`.
+2. Configure the vault path and, in advanced Obsidian output settings, destinations such as `People/`, `Job search/`, `Scheduled Task Artifacts/`, and `Memory Inbox/`.
 3. Choose frontmatter, YAML header, link, and tag modes.
 4. Generate a preview.
 5. Apply only after reviewing the generated sections.

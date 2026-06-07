@@ -109,6 +109,9 @@ func PlanObsidianSync(ctx context.Context, memories []Memory, settings Settings,
 		return ObsidianSyncPlan{}, err
 	}
 	settings.ApplyDefaults()
+	if !settings.Tasks.ObsidianSectionFormat {
+		return ObsidianSyncPlan{}, ErrObsidianSyncDisabled
+	}
 	vaultRoot, err := obsidianVaultRoot(settings)
 	if err != nil {
 		return ObsidianSyncPlan{}, err
@@ -216,6 +219,9 @@ func (s *FileStore) ApplyObsidianSync(ctx context.Context, plan ObsidianSyncPlan
 
 func ObsidianSyncEligibleMemories(memories []Memory, settings Settings) []Memory {
 	settings.ApplyDefaults()
+	if !settings.Tasks.ObsidianSectionFormat {
+		return nil
+	}
 	threshold := settings.Thresholds.ObsidianWrite
 	if threshold <= 0 {
 		threshold = 0.70

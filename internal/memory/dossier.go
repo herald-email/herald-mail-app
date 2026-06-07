@@ -59,6 +59,15 @@ func BuildDossierFromMemories(opts DossierBuildOptions, memories []Memory, setti
 	if opts.Now.IsZero() {
 		opts.Now = time.Now()
 	}
+	if !settings.Tasks.Dossiers {
+		return Dossier{
+			ID:          firstNonEmpty(opts.ID, deterministicDossierID(opts.Kind, opts.Subject)),
+			Subject:     strings.TrimSpace(opts.Subject),
+			Kind:        opts.Kind,
+			Freshness:   FreshnessFresh,
+			GeneratedAt: opts.Now,
+		}
+	}
 	memories = filterDossierMemories(memories, settings, opts.Limit)
 	dossier := Dossier{
 		ID:          firstNonEmpty(opts.ID, deterministicDossierID(opts.Kind, opts.Subject)),
