@@ -509,10 +509,6 @@ func (m *Model) handleEscKey() (tea.Model, tea.Cmd) {
 		m.clearTimelineFullScreen()
 		return m, cmd
 	}
-	if m.activeTab == tabTimeline && m.timeline.rangeMode {
-		m.finishTimelineRangeSelection()
-		return m, nil
-	}
 	if m.activeTab == tabTimeline && m.timeline.chatFilterMode {
 		m.clearTimelineChatFilter()
 		return m, nil
@@ -536,6 +532,14 @@ func (m *Model) handleEscKey() (tea.Model, tea.Cmd) {
 		cmd := m.timelineNativeImageClearCmd()
 		m.clearTimelineSearch()
 		return m, cmd
+	}
+	if m.activeTab == tabTimeline && m.timelineSelectedCount() > 0 {
+		m.clearTimelineSelection()
+		return m, nil
+	}
+	if m.activeTab == tabTimeline && m.timeline.rangeMode {
+		m.finishTimelineRangeSelection()
+		return m, nil
 	}
 	if m.activeTab == tabCompose {
 		if m.composeAISubjectHint != "" {

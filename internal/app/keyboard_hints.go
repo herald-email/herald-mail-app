@@ -59,7 +59,7 @@ func (m *Model) verticalPairHint(scope, upDesc, downDesc string) string {
 
 func (m *Model) rangeExtendHint(scope string) string {
 	down, up := m.verticalKeys(scope)
-	return fmt.Sprintf("%s/%s: extend range", down, up)
+	return fmt.Sprintf("%s/%s: toggle range", down, up)
 }
 
 func (m *Model) verticalKeys(scope string) (down, up string) {

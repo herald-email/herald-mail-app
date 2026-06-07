@@ -723,7 +723,11 @@ func (m *Model) applyTimelineRangeSelection() {
 	for row := lo; row <= hi; row++ {
 		for _, email := range m.timelineRowEmails(m.timeline.threadRowMap[row]) {
 			if key := timelineSelectionKey(email); key != "" {
-				selected[key] = true
+				if selected[key] {
+					delete(selected, key)
+				} else {
+					selected[key] = true
+				}
 			}
 		}
 	}
@@ -2613,9 +2617,9 @@ func (m *Model) timelineKeyHints(chrome ChromeState) (string, bool) {
 		return joinHintSegments(m.primaryTabShortcutHint(), m.commandHint("timeline", CommandTimelineGroupCycle, "group"), m.commandHint("timeline", CommandTimelineSortCycle, "sort"), m.movementHint("timeline", "navigate"), "enter: open", m.commandHint("timeline", CommandHelpSearch, "local search"), m.commandHint(keyboardScopeGlobal, CommandSidebarToggle, "sidebar"), m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"), "read-only"), true
 	}
 	if m.timeline.rangeMode && chrome.FocusedPanel == panelTimeline {
-		segments := []string{m.rangeExtendHint("timeline"), "V/Esc: done"}
+		segments := []string{m.rangeExtendHint("timeline"), "V: done", "Esc: clear"}
 		if m.timeline.rangeShiftMode {
-			segments = []string{"shift+↑/↓: extend range", "plain ↑/↓: done"}
+			segments = []string{"shift+↑/↓: toggle range", "plain ↑/↓: done", "Esc: clear"}
 		}
 		segments = append(segments, m.timelinePrimaryMessageActionHintSegments()...)
 		return joinHintSegments(segments...), true
@@ -2665,13 +2669,13 @@ func (m *Model) timelineKeyHints(chrome ChromeState) (string, bool) {
 				segments = append(segments, printHint)
 			}
 		}
-		segments = append(segments, m.previewFocusHint("timeline"), "h/left/[: fold/folders", m.movementHint("timeline", "navigate"), "space: select", "shift+↑/↓: range", "enter: open", "esc: close", m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"))
+		segments = append(segments, m.previewFocusHint("timeline"), "h/left/[: fold/folders", m.movementHint("timeline", "navigate"), "space: select", "shift+↑/↓: toggle", "enter: open", "esc: close", m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"))
 		return joinHintSegments(segments...), true
 	}
 	if m.timelineSelectedCount() > 0 {
 		segments := []string{m.primaryTabShortcutHint(), m.commandHint("timeline", CommandComposeNew, "compose")}
 		segments = append(segments, m.timelinePrimaryMessageActionHintSegments()...)
-		segments = append(segments, m.commandHint("timeline", CommandTimelineGroupCycle, "group"), m.commandHint("timeline", CommandTimelineSortCycle, "sort"), "V: range", "space: select", m.commandHint(keyboardScopeGlobal, CommandAppSettings, "settings"), m.movementHint("timeline", "navigate"), "shift+↑/↓: range", m.timelineOpenPreviewHint(), m.foldersFocusHint("timeline"), "enter: open", m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"))
+		segments = append(segments, m.commandHint("timeline", CommandTimelineGroupCycle, "group"), m.commandHint("timeline", CommandTimelineSortCycle, "sort"), "V: toggle", "space: select", "Esc: clear", m.commandHint(keyboardScopeGlobal, CommandAppSettings, "settings"), m.movementHint("timeline", "navigate"), "shift+↑/↓: toggle", m.timelineOpenPreviewHint(), m.foldersFocusHint("timeline"), "enter: open", m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"))
 		return joinHintSegments(segments...), true
 	}
 	if m.usesDefaultKeyboardProfile() && m.currentTimelineRowEmail() != nil {
@@ -2712,7 +2716,7 @@ func (m *Model) timelineKeyHints(chrome ChromeState) (string, bool) {
 	} else {
 		segments = append(segments, m.commandHint(keyboardScopeGlobal, CommandAppSettings, "settings"))
 	}
-	segments = append(segments, m.foldersFocusHint("timeline"), m.timelineOpenPreviewHint(), m.commandHint("timeline", CommandTimelineGroupCycle, "group"), m.commandHint("timeline", CommandTimelineSortCycle, "sort"), m.movementHint("timeline", "navigate"), "ctrl+d/u: half-page", "space: select", "shift+↑/↓: range", "enter: open")
+	segments = append(segments, m.foldersFocusHint("timeline"), m.timelineOpenPreviewHint(), m.commandHint("timeline", CommandTimelineGroupCycle, "group"), m.commandHint("timeline", CommandTimelineSortCycle, "sort"), m.movementHint("timeline", "navigate"), "ctrl+d/u: half-page", "space: select", "shift+↑/↓: toggle", "enter: open")
 	if m.timelineSelectedCount() == 0 {
 		segments = append(segments, m.commandHint("timeline", CommandHelpSearch, "hybrid search"))
 	}
@@ -3349,10 +3353,8 @@ func (m *Model) handleTimelineKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool
 		}
 		return m, nil, true
 	case "esc":
-		if m.timeline.rangeMode {
-			m.finishTimelineRangeSelection()
-			return m, nil, true
-		}
+		model, cmd := m.handleEscKey()
+		return model, cmd, true
 	case "*":
 		if m.timelineIsReadOnlyDiagnostic() {
 			return m, nil, true

@@ -125,10 +125,11 @@ func TestToggleTimelineSelection_ExpandedRowSelectsOnlyCurrentEmail(t *testing.T
 	}
 }
 
-func TestTimelineShiftDownRangeSelectsAnchorAndNextVisibleRow(t *testing.T) {
+func TestTimelineShiftDownRangeTogglesAnchorAndNextVisibleRow(t *testing.T) {
 	m := makeSizedModel(t, 120, 40)
 	m.activeTab = tabTimeline
 	m.timeline.emails = timelineBulkEmails()
+	m.timeline.selectedMessageIDs = map[string]bool{"thread-new": true, "thread-old": true}
 	m.updateTimelineTable()
 	m.timelineTable.SetCursor(0)
 	m.setFocusedPanel(panelTimeline)
@@ -138,28 +139,31 @@ func TestTimelineShiftDownRangeSelectsAnchorAndNextVisibleRow(t *testing.T) {
 	if got := updated.timelineTable.Cursor(); got != 1 {
 		t.Fatalf("cursor=%d, want 1", got)
 	}
-	requireTimelineSelectedIDs(t, updated, "thread-new", "thread-old", "solo")
+	requireTimelineSelectedIDs(t, updated, "solo")
 }
 
-func TestTimelineShiftRangeShrinksAndPreservesExistingSelection(t *testing.T) {
+func TestTimelineShiftRangeTogglesFromBaseSelectionWhenShrinking(t *testing.T) {
 	m := makeSizedModel(t, 120, 40)
 	m.activeTab = tabTimeline
 	m.timeline.emails = timelineRangeEmails()
-	m.timeline.selectedMessageIDs = map[string]bool{"msg-3": true}
+	m.timeline.selectedMessageIDs = map[string]bool{"msg-1": true, "msg-3": true}
 	m.updateTimelineTable()
 	m.timelineTable.SetCursor(0)
 	m.setFocusedPanel(panelTimeline)
 
 	updated := timelineKeyPress(t, m, tea.KeyPressMsg{Code: tea.KeyDown, Mod: tea.ModShift})
 	updated = timelineKeyPress(t, updated, tea.KeyPressMsg{Code: tea.KeyDown, Mod: tea.ModShift})
-	requireTimelineSelectedIDs(t, updated, "msg-0", "msg-1", "msg-2", "msg-3")
+	requireTimelineSelectedIDs(t, updated, "msg-0", "msg-2", "msg-3")
 
 	updated = timelineKeyPress(t, updated, tea.KeyPressMsg{Code: tea.KeyUp, Mod: tea.ModShift})
 
 	if got := updated.timelineTable.Cursor(); got != 1 {
 		t.Fatalf("cursor=%d, want 1", got)
 	}
-	requireTimelineSelectedIDs(t, updated, "msg-0", "msg-1", "msg-3")
+	requireTimelineSelectedIDs(t, updated, "msg-0", "msg-3")
+	if updated.timeline.selectedMessageIDs["msg-2"] {
+		t.Fatalf("expected msg-2 to restore to its unselected base state; selected=%#v", updated.timeline.selectedMessageIDs)
+	}
 }
 
 func TestTimelineShiftRangeStopsWhenPlainNavigationFollows(t *testing.T) {
@@ -215,10 +219,11 @@ func TestTimelineShiftRangesCanBeDiscontiguousAfterPlainNavigation(t *testing.T)
 	}
 }
 
-func TestTimelineFallbackRangeModeExtendsAndEscKeepsSelection(t *testing.T) {
+func TestTimelineFallbackRangeModeTogglesAndEscClearsSelection(t *testing.T) {
 	m := makeSizedModel(t, 120, 40)
 	m.activeTab = tabTimeline
 	m.timeline.emails = timelineRangeEmails()
+	m.timeline.selectedMessageIDs = map[string]bool{"msg-2": true}
 	m.updateTimelineTable()
 	m.timelineTable.SetCursor(1)
 	m.setFocusedPanel(panelTimeline)
@@ -231,14 +236,74 @@ func TestTimelineFallbackRangeModeExtendsAndEscKeepsSelection(t *testing.T) {
 
 	updated = timelineKeyPress(t, updated, keyRunes("j"))
 	updated = timelineKeyPress(t, updated, keyRunes("j"))
-	requireTimelineSelectedIDs(t, updated, "msg-1", "msg-2", "msg-3")
+	requireTimelineSelectedIDs(t, updated, "msg-1", "msg-3")
 
-	updated = timelineKeyPress(t, updated, tea.KeyPressMsg{Code: tea.KeyEsc})
+	model, _ := updated.handleKeyMsg(tea.KeyPressMsg{Code: tea.KeyEsc})
+	updated = model.(*Model)
 	status = stripANSI(updated.renderStatusBar())
 	if strings.Contains(status, "range select") {
 		t.Fatalf("expected range-select status to clear after Esc, got %q", status)
 	}
-	requireTimelineSelectedIDs(t, updated, "msg-1", "msg-2", "msg-3")
+	requireTimelineSelectedIDs(t, updated)
+}
+
+func TestTimelineEscClearsSelectionInBrowseContext(t *testing.T) {
+	m := makeSizedModel(t, 120, 40)
+	m.activeTab = tabTimeline
+	m.timeline.emails = timelineRangeEmails()
+	m.timeline.selectedMessageIDs = map[string]bool{"msg-0": true, "msg-2": true}
+	m.updateTimelineTable()
+	m.timelineTable.SetCursor(1)
+	m.setFocusedPanel(panelTimeline)
+
+	model, cmd := m.handleKeyMsg(tea.KeyPressMsg{Code: tea.KeyEsc})
+	updated := model.(*Model)
+
+	if cmd != nil {
+		t.Fatal("expected Esc bulk-unselect to stay synchronous")
+	}
+	requireTimelineSelectedIDs(t, updated)
+	if updated.timeline.rangeMode {
+		t.Fatal("expected Esc bulk-unselect to finish range mode")
+	}
+}
+
+func TestTimelineEscClosesPreviewBeforeClearingSelection(t *testing.T) {
+	m := makeSizedModel(t, 120, 40)
+	m.activeTab = tabTimeline
+	m.timeline.emails = timelineRangeEmails()
+	m.timeline.selectedMessageIDs = map[string]bool{"msg-0": true, "msg-2": true}
+	m.timeline.selectedEmail = m.timeline.emails[1]
+	m.updateTimelineTable()
+	m.timelineTable.SetCursor(1)
+	m.setFocusedPanel(panelPreview)
+
+	model, _ := m.handleKeyMsg(tea.KeyPressMsg{Code: tea.KeyEsc})
+	updated := model.(*Model)
+
+	if updated.timeline.selectedEmail != nil {
+		t.Fatalf("expected Esc to close preview first, got %#v", updated.timeline.selectedEmail)
+	}
+	requireTimelineSelectedIDs(t, updated, "msg-0", "msg-2")
+}
+
+func TestTimelineEscClearsSearchBeforeSelection(t *testing.T) {
+	m := makeSizedModel(t, 120, 40)
+	m.activeTab = tabTimeline
+	m.timeline.emails = timelineRangeEmails()
+	m.timeline.selectedMessageIDs = map[string]bool{"msg-0": true, "msg-2": true}
+	m.updateTimelineTable()
+	m.openTimelineSearch()
+	m.timeline.searchInput.SetValue("alpha")
+	m.setFocusedPanel(panelTimeline)
+
+	model, _ := m.handleKeyMsg(tea.KeyPressMsg{Code: tea.KeyEsc})
+	updated := model.(*Model)
+
+	if updated.timeline.searchMode {
+		t.Fatal("expected Esc to clear Timeline search before bulk unselect")
+	}
+	requireTimelineSelectedIDs(t, updated, "msg-0", "msg-2")
 }
 
 func TestQueueRequests_TimelineSelectionTakesPriorityOverCursor(t *testing.T) {
@@ -564,7 +629,7 @@ func TestRenderKeyHints_TimelineRangeModeShowsRangeActions(t *testing.T) {
 	m = timelineKeyPress(t, m, keyRunes("V"))
 
 	hints := stripANSI(m.renderKeyHints())
-	requireHintSegments(t, hints, "down/up: extend range", "V/Esc: done", "Del: delete selected", "Shift+Del: delete now")
+	requireHintSegments(t, hints, "down/up: toggle range", "V: done", "Esc: clear", "Del: delete selected", "Shift+Del: delete now")
 	status := stripANSI(m.renderStatusBar())
 	if !strings.Contains(status, "range select") || !strings.Contains(status, "1 message selected") {
 		t.Fatalf("expected range status and selected count, got %q", status)
@@ -588,8 +653,8 @@ func TestRenderKeyHints_TimelineShiftRangeModeShowsMomentaryActions(t *testing.T
 	m = timelineKeyPress(t, m, tea.KeyPressMsg{Code: tea.KeyDown, Mod: tea.ModShift})
 
 	hints := stripANSI(m.renderKeyHints())
-	requireHintSegments(t, hints, "shift+↑/↓: extend range", "plain ↑/↓: done", "Del: delete selected", "Shift+Del: delete now")
-	if strings.Contains(hints, "j/k: extend range") {
+	requireHintSegments(t, hints, "shift+↑/↓: toggle range", "plain ↑/↓: done", "Esc: clear", "Del: delete selected", "Shift+Del: delete now")
+	if strings.Contains(hints, "j/k: toggle range") {
 		t.Fatalf("shift range should not advertise plain j/k extension, got %q", hints)
 	}
 }

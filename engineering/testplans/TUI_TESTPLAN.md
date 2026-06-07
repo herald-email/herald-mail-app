@@ -469,20 +469,22 @@ Check these states during every applicable lane:
 1. Open Timeline.
 2. Press `space` on a single-message row.
 3. Move to a collapsed thread row and press `space`.
-4. Where the terminal reports shifted arrows, press `Shift+Down` and `Shift+Up` from the Timeline list to extend and shrink a selected range.
-5. Press `V`, then `j` / `k`, then `Esc` to verify fallback range selection keeps the selected messages.
+4. Where the terminal reports shifted arrows, press `Shift+Down` and `Shift+Up` from the Timeline list to toggle rows into and out of the selected range.
+5. Press `V`, then `j` / `k`, then `V` to verify fallback range selection toggles rows without shifted arrows.
 6. Press `D`, confirm the prompt copy references selected messages, then cancel with `Esc`.
 7. Press `e`, confirm archive prompt copy references selected non-draft messages, then cancel with `Esc`.
 8. Expand a thread with `Enter`, select one child row with `space`, resize through the required sizes, and capture.
-9. Select a virtual read-only Timeline view such as `All Mail only` and try `space`, `Shift+Down`, `V`, `D`, and `e`.
+9. With no preview, search, or confirmation open, press `Esc` after selecting messages and confirm the full Timeline selection clears.
+10. Select a virtual read-only Timeline view such as `All Mail only` and try `space`, `Shift+Down`, `V`, `D`, and `e`.
 
 **Expect:**
 - Timeline rows include a leading `✓` selection column.
 - Selected individual rows show `✓`; collapsed thread rows show checked or partial state based on represented messages.
 - Status text shows `N messages selected` only on Timeline and does not leak into Cleanup or Contacts.
-- Hints advertise `space: select`, `V: range`, and shifted-arrow range selection where space allows.
+- Hints advertise `space: select`, `V: toggle`, `Esc: clear`, and shifted-arrow toggle selection where space allows.
 - Shifted-arrow range selection stops when plain `j/k` or arrows are used; the selected set remains selected and normal navigation resumes.
-- Fallback `V` range mode stays active until `V` or `Esc`; its hints show `j/k: extend range`, `V/Esc: done`, `d: delete selected`, `D: delete now`, and `a: archive selected`.
+- Fallback `V` range mode stays active until `V` finishes it or `Esc` clears the selection; its hints show `j/k: toggle range`, `V: done`, `Esc: clear`, `d: delete selected`, `D: delete now`, and `a: archive selected`.
+- `Esc` first unwinds local Timeline preview, search, confirmation, and text-entry state; when none of those are open and messages are selected, it clears the full Timeline selection.
 - `d`, `D`, `Backspace`, `Shift+Backspace`, and `e` use the selected message set instead of the current cursor row while any Timeline messages are selected; lowercase/delete-Backspace paths prompt, uppercase/Shift+Backspace paths delete immediately.
 - Read-only diagnostic views do not allow selection or destructive actions.
 - At `50x15`, the minimum-size guard appears instead of clipped selection UI.
