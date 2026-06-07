@@ -219,6 +219,31 @@ func TestMouseClickTimelineRowOpensPreview(t *testing.T) {
 	}
 }
 
+func TestMouseClickChatDrawerFocusesInput(t *testing.T) {
+	m := makeMouseTimelineModel(t)
+	m.windowWidth = 220
+	m.windowHeight = 50
+	m.showChat = true
+	m.setFocusedPanel(panelTimeline)
+	m.chatInput.Blur()
+	m.updateTableDimensions(m.windowWidth, m.windowHeight)
+
+	chatX := m.windowWidth - m.effectiveChatOuterWidth(m.windowWidth) + 1
+	chatY := m.mouseContentTop() + 1
+	model, _ := m.Update(mousePress(chatX, chatY))
+
+	updated := model.(*Model)
+	if !updated.showChat {
+		t.Fatal("clicking inside the chat drawer should not close it")
+	}
+	if updated.focusedPanel != panelChat {
+		t.Fatalf("focusedPanel = %d, want chat panel", updated.focusedPanel)
+	}
+	if !updated.chatInput.Focused() {
+		t.Fatal("chat input should focus after clicking inside the chat drawer")
+	}
+}
+
 func TestMouseClickCollapsedThreadRootFirstSelectsPreviewWithoutExpanding(t *testing.T) {
 	m, root, _ := makeMouseThreadTimelineModel(t)
 

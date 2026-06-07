@@ -94,6 +94,10 @@ func (m *Model) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 	plan := m.buildLayoutPlan(m.windowWidth, m.windowHeight)
 	top := m.mouseContentTop()
 
+	if chatRect, ok := m.chatMouseRect(plan, top); ok && chatRect.contains(mouse.X, mouse.Y) {
+		return m.handleChatMouse(mouse, chatRect)
+	}
+
 	if plan.SidebarVisible {
 		sidebar := mouseRect{x: 0, y: top, w: sidebarContentWidth + 2, h: m.mousePanelHeight()}
 		if sidebar.contains(mouse.X, mouse.Y) {
@@ -110,6 +114,22 @@ func (m *Model) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 		return m.handleCalendarMouse(mouse, plan, top)
 	}
 	return m, nil, false
+}
+
+func (m *Model) chatMouseRect(plan LayoutPlan, top int) (mouseRect, bool) {
+	if !plan.ChatVisible {
+		return mouseRect{}, false
+	}
+	w := m.effectiveChatOuterWidth(m.windowWidth)
+	return mouseRect{x: m.windowWidth - w, y: top, w: w, h: m.mousePanelHeight()}, true
+}
+
+func (m *Model) handleChatMouse(msg tea.Mouse, _ mouseRect) (tea.Model, tea.Cmd, bool) {
+	if msg.Button == tea.MouseLeft || mouseIsWheel(msg) {
+		m.setFocusedPanel(panelChat)
+		return m, nil, true
+	}
+	return m, nil, true
 }
 
 func (m *Model) handleMouseTabClick(msg tea.Mouse) (tea.Cmd, bool) {
