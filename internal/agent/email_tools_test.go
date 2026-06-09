@@ -31,6 +31,13 @@ func (f *fakeEmailToolSource) SearchEmails(folder, query string, _ bool) ([]*mod
 	return f.keywordResults, nil
 }
 
+func (f *fakeEmailToolSource) SearchEmailsCrossFolder(query string) ([]*models.EmailData, error) {
+	f.searchCalls++
+	f.lastFolder = ""
+	f.lastQuery = query
+	return f.keywordResults, nil
+}
+
 func (f *fakeEmailToolSource) SearchEmailsSemantic(folder, query string, _ int, _ float64) ([]*models.EmailData, error) {
 	f.semanticCalls++
 	f.lastFolder = folder

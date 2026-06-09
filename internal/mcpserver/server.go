@@ -25,6 +25,7 @@ import (
 	"github.com/herald-email/herald-mail-app/internal/cleanup"
 	"github.com/herald-email/herald-mail-app/internal/config"
 	"github.com/herald-email/herald-mail-app/internal/models"
+	"github.com/herald-email/herald-mail-app/internal/retrieval"
 	rulesengine "github.com/herald-email/herald-mail-app/internal/rules"
 	buildversion "github.com/herald-email/herald-mail-app/internal/version"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -321,6 +322,21 @@ func Run(commandName string, args []string) error {
 	return nil
 }
 
+type cacheRetrievalSource struct {
+	cache *cache.Cache
+}
+
+func (s cacheRetrievalSource) SearchEmails(folder, query string, bodySearch bool) ([]*models.EmailData, error) {
+	if bodySearch {
+		return s.cache.SearchEmailsFTS(folder, query)
+	}
+	return s.cache.SearchEmails(folder, query)
+}
+
+func (s cacheRetrievalSource) SearchEmailsCrossFolder(query string) ([]*models.EmailData, error) {
+	return s.cache.SearchEmailsCrossFolder(query)
+}
+
 func newMCPServer(c *cache.Cache, classifier ai.AIClient) *server.MCPServer {
 	return newMCPServerWithConfig(c, classifier, nil)
 }
@@ -392,7 +408,7 @@ func newMCPServerWithConfig(c *cache.Cache, classifier ai.AIClient, cfg *config.
 	// Tool: search_emails
 	s.AddTool(
 		mcp.NewTool("search_emails",
-			mcp.WithDescription("Search emails by sender or subject keyword (case-insensitive, up to 100 results)"),
+			mcp.WithDescription("Search emails by sender or subject keyword using shared Herald retrieval semantics (case-insensitive, up to 100 results)"),
 			mcp.WithReadOnlyHintAnnotation(true),
 			mcp.WithDestructiveHintAnnotation(false),
 			mcp.WithString("folder",
@@ -401,7 +417,7 @@ func newMCPServerWithConfig(c *cache.Cache, classifier ai.AIClient, cfg *config.
 			),
 			mcp.WithString("query",
 				mcp.Required(),
-				mcp.Description("Search term matched against sender address and subject"),
+				mcp.Description("Search query matched against sender address and subject"),
 			),
 		),
 		func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -414,10 +430,16 @@ func newMCPServerWithConfig(c *cache.Cache, classifier ai.AIClient, cfg *config.
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
-			emails, err := c.SearchEmails(folder, query)
+			result, err := retrieval.Search(ctx, cacheRetrievalSource{cache: c}, nil, retrieval.Request{
+				Folder: folder,
+				Query:  query,
+				Mode:   retrieval.ModeKeyword,
+				Limit:  100,
+			})
 			if err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("search error: %v", err)), nil
 			}
+			emails := result.Emails
 			if len(emails) == 0 {
 				return mcp.NewToolResultText(fmt.Sprintf("No emails found matching %q in %s", query, folder)), nil
 			}

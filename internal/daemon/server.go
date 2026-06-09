@@ -22,6 +22,7 @@ import (
 	"github.com/herald-email/herald-mail-app/internal/filesafe"
 	"github.com/herald-email/herald-mail-app/internal/logger"
 	"github.com/herald-email/herald-mail-app/internal/models"
+	"github.com/herald-email/herald-mail-app/internal/retrieval"
 	rulesengine "github.com/herald-email/herald-mail-app/internal/rules"
 )
 
@@ -846,23 +847,36 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 		folder = "INBOX"
 	}
 	bodySearch := r.URL.Query().Get("body") == "true"
-	emails, err := s.backend.SearchEmails(folder, q, bodySearch)
+	mode := retrieval.ModeKeyword
+	if bodySearch {
+		mode = retrieval.ModeBody
+	}
+	result, err := retrieval.Search(r.Context(), s.backend, nil, retrieval.Request{
+		Folder: folder,
+		Query:  q,
+		Mode:   mode,
+		Limit:  100,
+	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, emails)
+	writeJSON(w, http.StatusOK, result.Emails)
 }
 
 // handleSearchAll searches emails across all folders.
 func (s *Server) handleSearchAll(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query().Get("q")
-	emails, err := s.backend.SearchEmailsCrossFolder(q)
+	result, err := retrieval.Search(r.Context(), s.backend, nil, retrieval.Request{
+		Query: q,
+		Mode:  retrieval.ModeCross,
+		Limit: 100,
+	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, emails)
+	writeJSON(w, http.StatusOK, result.Emails)
 }
 
 // handleSearchSemantic searches emails using semantic similarity.
@@ -884,12 +898,18 @@ func (s *Server) handleSearchSemantic(w http.ResponseWriter, r *http.Request) {
 			minScore = f
 		}
 	}
-	emails, err := s.backend.SearchEmailsSemantic(folder, q, limit, minScore)
+	result, err := retrieval.Search(r.Context(), s.backend, nil, retrieval.Request{
+		Folder:   folder,
+		Query:    q,
+		Mode:     retrieval.ModeSemantic,
+		Limit:    limit,
+		MinScore: minScore,
+	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, emails)
+	writeJSON(w, http.StatusOK, result.Emails)
 }
 
 // handleGetClassifications returns AI classifications for a folder.

@@ -215,6 +215,7 @@ The next chat architecture uses Gollem agents and typed tools. The model can sea
 
 - [x] Add a Gollem provider factory for `ollama`, `anthropic`, `kimi`, and `fireworks`
 - [x] Add `find_emails` with keyword, semantic, hybrid, current-folder, unread, sender, date-hint, and result-limit parameters
+- [x] Route `find_emails` through the shared mailbox retrieval core so chat, Timeline, MCP, daemon, and future tools use the same tokenized keyword, FTS/body, semantic, recency, scope, capping, and score-carrying result semantics where available
 - [ ] Extend `find_emails` with cross-folder search and semantic score disclosure in tool rows
 - [x] Add `get_email_context` for bounded subject/sender/date/body-snippet context by message ID
 - [x] Add `summarize_email_set` for search-result summaries with cited message IDs, involved people, dates, open questions, and action items
@@ -223,6 +224,7 @@ The next chat architecture uses Gollem agents and typed tools. The model can sea
 - [x] Add `TimelineIntent` so chat can show explicit selections, keyword results, semantic results, or hybrid results in Timeline
 - [x] Add `ComposeIntent` so chat can propose subject/body edits when Compose is active, routed through the existing review/accept flow
 - [ ] Add progress states for `searching`, `reading`, `summarizing`, and `draft edit ready` so long-running chat requests do not look frozen
+- [x] Add per-turn Gollem tool policy so simple replies can run with no tools, retrieval requests can force the mailbox search tool once, and future tools are exposed only when the active tab/request can use them
 - [x] Add deterministic provider-contract tests for plain reply, one tool call, two-step search-plus-summary, typed Timeline intent, typed Compose intent, malformed args, and provider failure
 - [ ] Add live provider smoke results for Ollama/local, Anthropic, OpenAI, Kimi, and Fireworks before publishing provider recommendations
 

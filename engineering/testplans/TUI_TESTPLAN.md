@@ -1175,7 +1175,9 @@ Check these states during every applicable lane:
 7. In Compose, return a `ComposeIntent` and confirm the existing AI review/accept panel opens without mutating subject or body; repeat outside Compose and confirm a visible `Open Compose` notice.
 8. In agent tests, run provider-contract fake-mail cases for provider factory construction, tool calls, search-plus-summary, typed Timeline intent, typed Compose intent, malformed tool args, and provider failure.
 9. Submit an assistant reply that contains literal `<filter>...</filter>` text and confirm it renders as ordinary assistant text instead of mutating Timeline.
-10. Resize through `220x50`, `80x24`, and `50x15` with chat open.
+10. In deterministic mail fixtures, search through chat for a multi-word mailbox phrase whose words are separated in the actual subject, such as `Herald newsletter` matching `Herald Mail App Newsletter`, and confirm the result comes from shared retrieval rather than a chat-only shortcut.
+11. In agent/tool-policy tests, submit a plain greeting and confirm no mailbox tools are exposed or called; submit an explicit retrieval request and confirm `find_emails` is the only forced first tool before returning to normal tool choice.
+12. Resize through `220x50`, `80x24`, and `50x15` with chat open.
 
 **Expect:**
 - Gollem is the only chat runtime; default configured AI routes chat through Gollem, while explicit `ai.provider: disabled` disables chat.
@@ -1184,6 +1186,8 @@ Check these states during every applicable lane:
 - Typed Timeline intents are locally validated before mutation; keyword, semantic, and hybrid modes reuse the existing search pipeline.
 - Typed Compose intents route through the existing Compose AI review state and never silently change a draft.
 - The legacy direct Ollama chat loop, chat tool registry, and `<filter>` parser are absent from the chat panel path.
+- Chat, Timeline, MCP, daemon, and SSH search consumers share deterministic retrieval semantics for tokenized keyword matching, result capping, scope, and match metadata.
+- Gollem tool policy keeps unrelated tools out of simple turns and exposes only request-relevant tools when future capabilities are added.
 - At `50x15`, the minimum-size guard appears instead of clipped chat chrome, and resizing larger restores the chat layout.
 
 ### TC-18E — Herald Memories chat and Compose Radar

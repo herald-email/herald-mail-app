@@ -12,6 +12,7 @@ import (
 	"github.com/fugue-labs/gollem/provider/anthropic"
 	"github.com/fugue-labs/gollem/provider/openai"
 	"github.com/herald-email/herald-mail-app/internal/logger"
+	"github.com/herald-email/herald-mail-app/internal/searchquery"
 )
 
 const (
@@ -60,6 +61,9 @@ func newGollemRunner(model core.Model, tools []core.Tool, opts ...core.AgentOpti
 		core.WithSystemPrompt[ChatResult](systemPrompt()),
 		core.WithMaxRetries[ChatResult](0),
 		core.WithHooks[ChatResult](telemetry.hook()),
+		core.WithToolsPrepare[ChatResult](prepareChatToolsForRun),
+		core.WithAgentMiddleware[ChatResult](chatToolPolicyMiddleware()),
+		core.WithToolChoiceAutoReset[ChatResult](),
 	}, opts...)
 	if len(tools) > 0 {
 		options = append(options, core.WithTools[ChatResult](tools...))
@@ -136,6 +140,411 @@ func (r *GollemRunner) Run(ctx context.Context, input ChatInput) (ChatResult, er
 	return result.Output, nil
 }
 
+type chatToolPolicy struct {
+	filter      bool
+	allowed     map[string]bool
+	requireTool bool
+}
+
+type chatCapability string
+
+const (
+	chatCapabilityMailboxSearch  chatCapability = "mailbox_search"
+	chatCapabilityMailboxContext chatCapability = "mailbox_context"
+	chatCapabilityMailboxSummary chatCapability = "mailbox_summary"
+	chatCapabilityPeople         chatCapability = "people"
+)
+
+type chatToolSpec struct {
+	capabilities       map[chatCapability]bool
+	requiresMessageIDs bool
+	providesMessageIDs bool
+}
+
+var chatToolSpecs = map[string]chatToolSpec{
+	"find_emails": {
+		capabilities:       chatCapabilitySet(chatCapabilityMailboxSearch),
+		providesMessageIDs: true,
+	},
+	"get_email_context": {
+		capabilities:       chatCapabilitySet(chatCapabilityMailboxContext),
+		requiresMessageIDs: true,
+	},
+	"summarize_email_set": {
+		capabilities:       chatCapabilitySet(chatCapabilityMailboxSummary),
+		requiresMessageIDs: true,
+	},
+	"explain_people": {
+		capabilities:       chatCapabilitySet(chatCapabilityPeople),
+		requiresMessageIDs: true,
+	},
+}
+
+func chatCapabilitySet(capabilities ...chatCapability) map[chatCapability]bool {
+	out := make(map[chatCapability]bool, len(capabilities))
+	for _, capability := range capabilities {
+		out[capability] = true
+	}
+	return out
+}
+
+type chatToolFacts struct {
+	messageIDs            bool
+	queryScopedMessageIDs bool
+	completed             map[chatCapability]bool
+}
+
+func prepareChatToolsForRun(_ context.Context, rc *core.RunContext, defs []core.ToolDefinition) []core.ToolDefinition {
+	input, ok := core.TryGetDeps[ChatInput](rc)
+	if !ok {
+		return defs
+	}
+	policy := chatToolPolicyForRun(input, rc.Messages)
+	if !policy.filter {
+		return defs
+	}
+	filtered := make([]core.ToolDefinition, 0, len(defs))
+	for _, def := range defs {
+		if policy.allowed[def.Name] {
+			filtered = append(filtered, def)
+		}
+	}
+	return filtered
+}
+
+func chatToolPolicyMiddleware() core.AgentMiddleware {
+	return core.RequestOnlyMiddleware(func(ctx context.Context, messages []core.ModelMessage, settings *core.ModelSettings, params *core.ModelRequestParameters, next func(context.Context, []core.ModelMessage, *core.ModelSettings, *core.ModelRequestParameters) (*core.ModelResponse, error)) (*core.ModelResponse, error) {
+		input := ChatInput{UserMessage: latestUserMessageFromModelMessages(messages)}
+		if modelMessagesContainMessageIDContext(messages) {
+			input.VisibleIDs = []string{"context"}
+		}
+		policy := chatToolPolicyForRun(input, messages)
+		if policy.requireTool {
+			if settings == nil {
+				settings = &core.ModelSettings{}
+			}
+			if shouldSetRequiredToolChoice(settings.ToolChoice) {
+				settings.ToolChoice = core.ToolChoiceRequired()
+			}
+		}
+		return next(ctx, messages, settings, params)
+	})
+}
+
+func chatToolPolicyForInput(input ChatInput) chatToolPolicy {
+	return chatToolPolicyForRun(input, nil)
+}
+
+func chatToolPolicyForRun(input ChatInput, messages []core.ModelMessage) chatToolPolicy {
+	terms := searchquery.Terms(input.UserMessage)
+	if len(terms) == 0 {
+		return chatToolPolicy{filter: true, allowed: map[string]bool{}}
+	}
+	if isPlainChatTurn(terms) {
+		return chatToolPolicy{filter: true, allowed: map[string]bool{}}
+	}
+	facts := chatToolFactsForRun(input, messages)
+	requested := requestedChatCapabilities(terms, facts)
+	if len(requested) == 0 {
+		return chatToolPolicy{}
+	}
+	allowed := make(map[string]bool)
+	for name, spec := range chatToolSpecs {
+		if !chatToolCanAdvanceRequestedCapabilities(spec, requested, facts) {
+			continue
+		}
+		if spec.requiresMessageIDs && !chatToolHasRequiredMessageIDs(requested, facts) {
+			continue
+		}
+		allowed[name] = true
+	}
+	return chatToolPolicy{
+		filter:      true,
+		allowed:     allowed,
+		requireTool: len(allowed) > 0,
+	}
+}
+
+func shouldSetRequiredToolChoice(choice *core.ToolChoice) bool {
+	if choice == nil {
+		return true
+	}
+	return choice.ToolName == "" && (choice.Mode == "" || choice.Mode == "auto")
+}
+
+func requestedChatCapabilities(terms []string, facts chatToolFacts) map[chatCapability]bool {
+	requested := map[chatCapability]bool{}
+	if hasMailboxSearchIntent(terms) {
+		requested[chatCapabilityMailboxSearch] = true
+	}
+	if hasAnyTerm(terms, "summarize", "summary", "digest", "recap") {
+		requested[chatCapabilityMailboxSummary] = true
+	}
+	if hasAnyTerm(terms, "context", "inspect", "details", "detail") {
+		requested[chatCapabilityMailboxContext] = true
+	}
+	if hasAnyTerm(terms, "people", "person", "who") {
+		requested[chatCapabilityPeople] = true
+	}
+	if chatRequiresMessageSet(requested) && !facts.queryScopedMessageIDs && hasSearchTopicTerm(terms) {
+		requested[chatCapabilityMailboxSearch] = true
+	}
+	if chatRequiresMessageSet(requested) && !facts.messageIDs && hasSearchScopeOrTopic(terms) {
+		requested[chatCapabilityMailboxSearch] = true
+	}
+	return requested
+}
+
+func chatRequiresMessageSet(requested map[chatCapability]bool) bool {
+	return requested[chatCapabilityMailboxContext] ||
+		requested[chatCapabilityMailboxSummary] ||
+		requested[chatCapabilityPeople]
+}
+
+func chatToolCanAdvanceRequestedCapabilities(spec chatToolSpec, requested map[chatCapability]bool, facts chatToolFacts) bool {
+	for capability := range spec.capabilities {
+		if requested[capability] && !facts.completed[capability] {
+			return true
+		}
+	}
+	return false
+}
+
+func chatToolHasRequiredMessageIDs(requested map[chatCapability]bool, facts chatToolFacts) bool {
+	if !facts.messageIDs {
+		return false
+	}
+	if requested[chatCapabilityMailboxSearch] {
+		return facts.queryScopedMessageIDs
+	}
+	return true
+}
+
+func chatToolFactsForRun(input ChatInput, messages []core.ModelMessage) chatToolFacts {
+	facts := chatToolFacts{
+		messageIDs: hasSummaryContext(input) || modelMessagesContainMessageIDContext(messages),
+		completed:  map[chatCapability]bool{},
+	}
+	for _, msg := range messages {
+		req, ok := msg.(core.ModelRequest)
+		if !ok {
+			continue
+		}
+		for _, part := range req.Parts {
+			toolReturn, ok := part.(core.ToolReturnPart)
+			if !ok {
+				continue
+			}
+			spec, ok := chatToolSpecs[toolReturn.ToolName]
+			if !ok {
+				continue
+			}
+			for capability := range spec.capabilities {
+				facts.completed[capability] = true
+			}
+			if spec.providesMessageIDs && toolReturnContainsMessageIDs(toolReturn.Content) {
+				facts.messageIDs = true
+				facts.queryScopedMessageIDs = true
+			}
+		}
+	}
+	return facts
+}
+
+func isPlainChatTurn(terms []string) bool {
+	if len(terms) > 3 {
+		return false
+	}
+	for _, term := range terms {
+		switch term {
+		case "hey", "hi", "hello", "yo", "thanks", "thank", "you", "ok", "okay":
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+func hasSummaryContext(input ChatInput) bool {
+	if len(input.SelectedIDs) > 0 || len(input.VisibleIDs) > 0 {
+		return true
+	}
+	for _, turn := range input.History {
+		content := strings.ToLower(turn.Content)
+		if strings.Contains(content, "message_id=") ||
+			strings.Contains(content, `"message_id"`) ||
+			strings.Contains(content, "sources:") {
+			return true
+		}
+	}
+	return false
+}
+
+func hasMailboxSearchIntent(terms []string) bool {
+	hasRetrievalVerb := hasAnyTerm(terms, "find", "search", "pull", "show", "list", "get", "open", "locate", "look", "latest", "recent")
+	return hasRetrievalVerb && hasSearchScopeOrTopic(terms)
+}
+
+func hasSearchScopeOrTopic(terms []string) bool {
+	return hasMailboxHint(terms) || hasSearchTopicTerm(terms)
+}
+
+func hasMailboxHint(terms []string) bool {
+	return hasAnyTerm(terms, "email", "emails", "mail", "mails", "message", "messages", "newsletter", "newsletters", "inbox", "sender", "senders", "subject", "unread", "invoice", "invoices", "receipt", "receipts", "alert", "alerts")
+}
+
+func hasSearchTopicTerm(terms []string) bool {
+	for _, term := range terms {
+		if !isChatIntentStopTerm(term) {
+			return true
+		}
+	}
+	return false
+}
+
+func isChatIntentStopTerm(term string) bool {
+	switch term {
+	case "a", "an", "and", "about", "for", "from", "in", "my", "of", "or", "the", "to", "with", "your":
+		return true
+	case "email", "emails", "mail", "mails", "message", "messages", "inbox", "sender", "senders", "subject", "unread":
+		return true
+	case "find", "search", "pull", "show", "list", "get", "open", "locate", "look", "latest", "recent":
+		return true
+	case "summarize", "summary", "digest", "recap", "context", "inspect", "details", "detail", "people", "person", "who":
+		return true
+	default:
+		return false
+	}
+}
+
+func hasAnyTerm(terms []string, candidates ...string) bool {
+	for _, term := range terms {
+		for _, candidate := range candidates {
+			if term == candidate {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func toolReturnContainsMessageIDs(content any) bool {
+	if content == nil {
+		return false
+	}
+	switch value := content.(type) {
+	case string:
+		if !strings.Contains(value, "message_id") && !strings.Contains(value, "message_ids") {
+			return false
+		}
+		var decoded any
+		if err := json.Unmarshal([]byte(value), &decoded); err != nil {
+			return strings.Contains(value, "message_id") || strings.Contains(value, "message_ids")
+		}
+		return valueContainsMessageIDs(decoded)
+	default:
+		return valueContainsMessageIDs(value)
+	}
+}
+
+func valueContainsMessageIDs(value any) bool {
+	switch typed := value.(type) {
+	case map[string]any:
+		for key, nested := range typed {
+			switch strings.ToLower(key) {
+			case "message_id", "messageid":
+				if strings.TrimSpace(fmt.Sprint(nested)) != "" {
+					return true
+				}
+			case "message_ids", "messageids":
+				if valueContainsNonEmptyItem(nested) {
+					return true
+				}
+			default:
+				if valueContainsMessageIDs(nested) {
+					return true
+				}
+			}
+		}
+	case []any:
+		for _, nested := range typed {
+			if valueContainsMessageIDs(nested) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func valueContainsNonEmptyItem(value any) bool {
+	switch typed := value.(type) {
+	case []any:
+		for _, item := range typed {
+			if strings.TrimSpace(fmt.Sprint(item)) != "" {
+				return true
+			}
+		}
+		return false
+	case []string:
+		for _, item := range typed {
+			if strings.TrimSpace(item) != "" {
+				return true
+			}
+		}
+		return false
+	default:
+		return strings.TrimSpace(fmt.Sprint(typed)) != ""
+	}
+}
+
+func modelMessagesContainMessageIDContext(messages []core.ModelMessage) bool {
+	for _, msg := range messages {
+		req, ok := msg.(core.ModelRequest)
+		if !ok {
+			continue
+		}
+		for _, part := range req.Parts {
+			user, ok := part.(core.UserPromptPart)
+			if !ok {
+				continue
+			}
+			content := strings.ToLower(user.Content)
+			if strings.Contains(content, "visible message ids:") ||
+				strings.Contains(content, "selected message ids:") ||
+				strings.Contains(content, "message_id=") ||
+				strings.Contains(content, `"message_id"`) ||
+				strings.Contains(content, "sources:") {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func latestUserMessageFromModelMessages(messages []core.ModelMessage) string {
+	for i := len(messages) - 1; i >= 0; i-- {
+		req, ok := messages[i].(core.ModelRequest)
+		if !ok {
+			continue
+		}
+		for j := len(req.Parts) - 1; j >= 0; j-- {
+			part, ok := req.Parts[j].(core.UserPromptPart)
+			if !ok {
+				continue
+			}
+			content := strings.TrimSpace(part.Content)
+			if idx := strings.LastIndex(content, "\nUser: "); idx >= 0 {
+				return strings.TrimSpace(content[idx+len("\nUser: "):])
+			}
+			if strings.HasPrefix(content, "User: ") {
+				return strings.TrimSpace(strings.TrimPrefix(content, "User: "))
+			}
+			return content
+		}
+	}
+	return ""
+}
+
 func (r *GollemRunner) runTextFallback(ctx context.Context, input ChatInput, originalErr error) (string, error) {
 	if !isStructuredOutputError(originalErr) || r.model == nil {
 		return "", originalErr
@@ -144,6 +553,9 @@ func (r *GollemRunner) runTextFallback(ctx context.Context, input ChatInput, ori
 	options := []core.AgentOption[string]{
 		core.WithSystemPrompt[string](systemPrompt()),
 		core.WithHooks[string](newChatAgentTelemetry(modelName, len(r.tools)).hook()),
+		core.WithToolsPrepare[string](prepareChatToolsForRun),
+		core.WithAgentMiddleware[string](chatToolPolicyMiddleware()),
+		core.WithToolChoiceAutoReset[string](),
 	}
 	if len(r.tools) > 0 {
 		options = append(options, core.WithTools[string](r.tools...))
@@ -391,6 +803,7 @@ func systemPrompt() string {
 		"Do not send email, delete email, archive email, or mutate calendar events.",
 		"When answering from Herald Memories, cite source evidence and distinguish email, Obsidian, public research, and inference.",
 		"No evidence means no factual memory answer.",
+		"Use tool outputs as grounding, not as the final answer format: synthesize summaries and avoid raw message IDs, email addresses, and body snippets unless the user asks for rows or evidence.",
 		"Return a JSON object matching the ChatResult schema.",
 		"When no UI action is needed, set reply to the helpful answer and omit timeline, summary, and compose.",
 	}, "\n")

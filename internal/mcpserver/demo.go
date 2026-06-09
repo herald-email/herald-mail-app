@@ -10,6 +10,7 @@ import (
 
 	"github.com/herald-email/herald-mail-app/internal/demo"
 	"github.com/herald-email/herald-mail-app/internal/models"
+	"github.com/herald-email/herald-mail-app/internal/searchquery"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -76,16 +77,13 @@ func newDemoMCPServer() *server.MCPServer {
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
-			q := strings.ToLower(query)
 			var matches []*models.EmailData
 			for _, email := range demoMCPEmails(folder) {
 				bodyText := ""
 				if body, ok := demo.BodyByMessageID(email.MessageID); ok {
 					bodyText = body.TextPlain
 				}
-				if strings.Contains(strings.ToLower(email.Sender), q) ||
-					strings.Contains(strings.ToLower(email.Subject), q) ||
-					strings.Contains(strings.ToLower(bodyText), q) {
+				if searchquery.MatchTerms(query, email.Sender, email.Subject, bodyText) {
 					matches = append(matches, email)
 				}
 			}

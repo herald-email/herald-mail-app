@@ -8,6 +8,7 @@ import (
 
 	"github.com/fugue-labs/gollem/core"
 	"github.com/herald-email/herald-mail-app/internal/models"
+	"github.com/herald-email/herald-mail-app/internal/retrieval"
 )
 
 const (
@@ -19,6 +20,7 @@ const (
 
 type EmailToolSource interface {
 	SearchEmails(folder, query string, bodySearch bool) ([]*models.EmailData, error)
+	SearchEmailsCrossFolder(query string) ([]*models.EmailData, error)
 	SearchEmailsSemantic(folder, query string, limit int, minScore float64) ([]*models.EmailData, error)
 	GetEmailByID(messageID string) (*models.EmailData, error)
 	GetBodyText(messageID string) (string, error)
@@ -172,38 +174,22 @@ func (s *EmailToolService) FindEmails(ctx context.Context, params FindEmailsPara
 	}
 	folder := s.folder(params.Folder)
 	limit := s.limit(params.Limit)
-
-	var emails []*models.EmailData
-	var err error
-	source := mode
-	switch mode {
-	case TimelineModeKeyword:
-		source = "keyword"
-		emails, err = s.source.SearchEmails(folder, query, false)
-	case TimelineModeSemantic:
-		source = "semantic"
-		emails, err = s.source.SearchEmailsSemantic(folder, query, limit, s.opts.MinScore)
-	case TimelineModeHybrid:
-		source = "hybrid"
-		var keywordEmails, semanticEmails []*models.EmailData
-		keywordEmails, err = s.source.SearchEmails(folder, query, false)
-		if err != nil {
-			break
-		}
-		semanticEmails, err = s.source.SearchEmailsSemantic(folder, query, limit, s.opts.MinScore)
-		if err != nil {
-			emails = keywordEmails
-			err = nil
-			break
-		}
-		emails = mergeEmailRows(keywordEmails, semanticEmails)
-	default:
-		return FindEmailsResult{}, fmt.Errorf("unsupported find_emails mode: %s", params.Mode)
+	retrievalLimit := limit
+	if retrievalLimit < defaultEmailToolMaxResults {
+		retrievalLimit = defaultEmailToolMaxResults
 	}
+
+	result, err := retrieval.Search(ctx, s.source, nil, retrieval.Request{
+		Folder:   folder,
+		Query:    query,
+		Mode:     mode,
+		Limit:    retrievalLimit,
+		MinScore: s.opts.MinScore,
+	})
 	if err != nil {
 		return FindEmailsResult{}, err
 	}
-	emails = filterEmailRows(emails, params)
+	emails := filterEmailRows(result.Emails, params)
 	total := len(emails)
 	if len(emails) > limit {
 		emails = emails[:limit]
@@ -212,7 +198,7 @@ func (s *EmailToolService) FindEmails(ctx context.Context, params FindEmailsPara
 		Tool:   "find_emails",
 		Query:  query,
 		Mode:   mode,
-		Source: source,
+		Source: result.Source,
 		Total:  total,
 		Capped: total > len(emails),
 		Emails: emailMetadataRows(emails),
@@ -348,25 +334,6 @@ func normalizeTimelineMode(mode string) string {
 	default:
 		return ""
 	}
-}
-
-func mergeEmailRows(primary, secondary []*models.EmailData) []*models.EmailData {
-	merged := make([]*models.EmailData, 0, len(primary)+len(secondary))
-	seen := make(map[string]bool, len(primary)+len(secondary))
-	add := func(email *models.EmailData) {
-		if email == nil || strings.TrimSpace(email.MessageID) == "" || seen[email.MessageID] {
-			return
-		}
-		seen[email.MessageID] = true
-		merged = append(merged, email)
-	}
-	for _, email := range primary {
-		add(email)
-	}
-	for _, email := range secondary {
-		add(email)
-	}
-	return merged
 }
 
 func filterEmailRows(emails []*models.EmailData, params FindEmailsParams) []*models.EmailData {

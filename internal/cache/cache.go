@@ -12,6 +12,7 @@ import (
 
 	"github.com/herald-email/herald-mail-app/internal/logger"
 	"github.com/herald-email/herald-mail-app/internal/models"
+	"github.com/herald-email/herald-mail-app/internal/searchquery"
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -1998,13 +1999,28 @@ func escapeLike(s string) string {
 
 // SearchEmails returns emails in a folder where sender or subject contains the query (case-insensitive)
 func (c *Cache) SearchEmails(folder, query string) ([]*models.EmailData, error) {
-	like := "%" + escapeLike(query) + "%"
-	rows, err := c.db.Query(`
+	termGroups := searchquery.TermVariantGroups(query)
+	if len(termGroups) == 0 {
+		return nil, nil
+	}
+	where := []string{"folder = ?"}
+	args := []any{folder}
+	for _, group := range termGroups {
+		groupWhere := make([]string, 0, len(group))
+		for _, term := range group {
+			like := "%" + escapeLike(term) + "%"
+			groupWhere = append(groupWhere, "(sender LIKE ? ESCAPE '\\' OR subject LIKE ? ESCAPE '\\')")
+			args = append(args, like, like)
+		}
+		where = append(where, "("+strings.Join(groupWhere, " OR ")+")")
+	}
+	sql := `
 		SELECT COALESCE(source_id, 'default-mail'), COALESCE(account_id, 'default'), COALESCE(local_id, ''), COALESCE(uid_validity, 0),
 		       message_id, COALESCE(uid, 0), sender, subject, date, size, has_attachments, COALESCE(is_read, 0), COALESCE(is_starred, 0), COALESCE(is_draft, 0)
 		FROM emails
-		WHERE folder = ? AND (sender LIKE ? ESCAPE '\' OR subject LIKE ? ESCAPE '\')
-		ORDER BY date DESC LIMIT 100`, folder, like, like)
+		WHERE ` + strings.Join(where, " AND ") + `
+		ORDER BY date DESC LIMIT 100`
+	rows, err := c.db.Query(sql, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -2434,14 +2450,29 @@ func (c *Cache) SearchEmailsCrossFolder(query string) ([]*models.EmailData, erro
 		return emails, nil
 	}
 	// Fallback to LIKE across all folders
-	like := "%" + escapeLike(query) + "%"
-	rows, err := c.db.Query(`
+	termGroups := searchquery.TermVariantGroups(query)
+	if len(termGroups) == 0 {
+		return nil, nil
+	}
+	where := make([]string, 0, len(termGroups))
+	args := make([]any, 0, len(termGroups)*2)
+	for _, group := range termGroups {
+		groupWhere := make([]string, 0, len(group))
+		for _, term := range group {
+			like := "%" + escapeLike(term) + "%"
+			groupWhere = append(groupWhere, "(sender LIKE ? ESCAPE '\\' OR subject LIKE ? ESCAPE '\\')")
+			args = append(args, like, like)
+		}
+		where = append(where, "("+strings.Join(groupWhere, " OR ")+")")
+	}
+	sql := `
 		SELECT COALESCE(source_id, 'default-mail'), COALESCE(account_id, 'default'), COALESCE(local_id, ''), COALESCE(uid_validity, 0),
 		       message_id, COALESCE(uid,0), sender, subject, date, size, has_attachments, folder,
 		       COALESCE(is_read,0), COALESCE(is_starred,0), COALESCE(is_draft,0)
 		FROM emails
-		WHERE sender LIKE ? ESCAPE '\' OR subject LIKE ? ESCAPE '\'
-		ORDER BY date DESC LIMIT 100`, like, like)
+		WHERE ` + strings.Join(where, " AND ") + `
+		ORDER BY date DESC LIMIT 100`
+	rows, err := c.db.Query(sql, args...)
 	if err != nil {
 		return nil, err
 	}

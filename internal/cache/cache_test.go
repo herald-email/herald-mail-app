@@ -149,6 +149,76 @@ func TestCacheEmail_StoresAndRetrieves(t *testing.T) {
 	}
 }
 
+func TestSearchEmailsMatchesMultiWordQueryAsTerms(t *testing.T) {
+	c := newTestCache(t)
+	now := time.Now().Truncate(time.Second)
+	for _, email := range []*models.EmailData{
+		{
+			MessageID: "<welcome-herald-newsletter@example.test>",
+			UID:       1,
+			Sender:    "Herald Mail App",
+			Subject:   "You're in! Welcome to Herald Mail App Newsletter",
+			Date:      now,
+			Folder:    "INBOX",
+		},
+		{
+			MessageID: "<confirm-herald-newsletter@example.test>",
+			UID:       2,
+			Sender:    "Herald Mail App",
+			Subject:   "Confirm your subscription to Herald Mail App Newsletter",
+			Date:      now.Add(-time.Minute),
+			Folder:    "INBOX",
+		},
+		{
+			MessageID: "<herald-no-newsletter@example.test>",
+			UID:       3,
+			Sender:    "Herald Mail App",
+			Subject:   "Your setup guide",
+			Date:      now.Add(-2 * time.Minute),
+			Folder:    "INBOX",
+		},
+	} {
+		if err := c.CacheEmail(email); err != nil {
+			t.Fatalf("CacheEmail(%s): %v", email.MessageID, err)
+		}
+	}
+
+	results, err := c.SearchEmails("INBOX", "Herald newsletter")
+	if err != nil {
+		t.Fatalf("SearchEmails: %v", err)
+	}
+	if len(results) != 2 {
+		t.Fatalf("SearchEmails len = %d, want 2: %#v", len(results), results)
+	}
+	for _, got := range []string{results[0].MessageID, results[1].MessageID} {
+		if got == "<herald-no-newsletter@example.test>" {
+			t.Fatalf("query matched row missing newsletter term: %#v", results)
+		}
+	}
+}
+
+func TestSearchEmailsMatchesSimplePluralQueryVariant(t *testing.T) {
+	c := newTestCache(t)
+	if err := c.CacheEmail(&models.EmailData{
+		MessageID: "<welcome-herald-newsletter@example.test>",
+		UID:       1,
+		Sender:    "Herald Mail App",
+		Subject:   "You're in! Welcome to Herald Mail App Newsletter",
+		Date:      time.Now().Truncate(time.Second),
+		Folder:    "INBOX",
+	}); err != nil {
+		t.Fatalf("CacheEmail: %v", err)
+	}
+
+	results, err := c.SearchEmails("INBOX", "Herald newsletters")
+	if err != nil {
+		t.Fatalf("SearchEmails: %v", err)
+	}
+	if len(results) != 1 || results[0].MessageID != "<welcome-herald-newsletter@example.test>" {
+		t.Fatalf("SearchEmails results = %#v, want singular newsletter match", results)
+	}
+}
+
 func TestCacheEmail_UIDisPersisted(t *testing.T) {
 	c := newTestCache(t)
 

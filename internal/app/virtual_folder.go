@@ -6,6 +6,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/herald-email/herald-mail-app/internal/models"
+	"github.com/herald-email/herald-mail-app/internal/searchquery"
 )
 
 const virtualFolderAllMailOnly = "__virtual__/all-mail-only"
@@ -63,7 +64,7 @@ func (m *Model) activateCurrentFolder() tea.Cmd {
 }
 
 func filterVirtualFolderEmails(emails []*models.EmailData, query string) []*models.EmailData {
-	query = strings.ToLower(strings.TrimSpace(query))
+	query = strings.TrimSpace(query)
 	if query == "" {
 		return []*models.EmailData{}
 	}
@@ -72,8 +73,7 @@ func filterVirtualFolderEmails(emails []*models.EmailData, query string) []*mode
 		if email == nil {
 			continue
 		}
-		haystack := strings.ToLower(email.Sender + "\n" + email.Subject)
-		if strings.Contains(haystack, query) {
+		if searchquery.MatchTerms(query, email.Sender, email.Subject) {
 			out = append(out, email)
 		}
 	}

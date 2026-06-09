@@ -74,6 +74,72 @@ func TestSubmitChatUsesInjectedAgentRunner(t *testing.T) {
 	}
 }
 
+func TestSubmitChatMailboxRetrievalUsesAgentWithVisibleContext(t *testing.T) {
+	runner := &fakeChatAgentRunner{result: agent.ChatResult{
+		Reply: "Found the latest Herald newsletter.",
+		Timeline: &agent.TimelineIntent{
+			Mode:       agent.TimelineModeExplicitIDs,
+			MessageIDs: []string{"welcome-newsletter"},
+			Label:      "Herald newsletter",
+		},
+	}}
+	backend := &stubBackend{}
+	m := &Model{
+		backend:       backend,
+		currentFolder: "INBOX",
+		activeTab:     tabTimeline,
+		chatAgent:     runner,
+	}
+	newest := time.Date(2026, 6, 6, 9, 56, 0, 0, time.UTC)
+	m.timeline.emails = []*models.EmailData{
+		{
+			MessageID: "welcome-newsletter",
+			Sender:    "Herald Mail App <herald-mail.app@buttondown.email>",
+			Subject:   "You're in! Welcome to Herald Mail App Newsletter",
+			Date:      newest,
+			Folder:    "INBOX",
+		},
+		{
+			MessageID: "confirm-newsletter",
+			Sender:    "Herald Mail App <herald-mail.app@buttondown.email>",
+			Subject:   "Confirm your subscription to Herald Mail App Newsletter",
+			Date:      newest.Add(-time.Hour),
+			Folder:    "INBOX",
+		},
+	}
+	m.chatInput.SetValue("pull the latest herald newsletter")
+
+	cmd := m.submitChat()
+	if cmd == nil {
+		t.Fatal("submitChat returned nil command")
+	}
+	msg, ok := cmd().(ChatAgentResponseMsg)
+	if !ok {
+		t.Fatalf("submitChat command returned %T, want ChatAgentResponseMsg", msg)
+	}
+	if runner.calls != 1 {
+		t.Fatalf("agent calls = %d, want 1", runner.calls)
+	}
+	if backend.searchCalls != 0 {
+		t.Fatalf("backend search calls = %d, want 0 before agent tool execution", backend.searchCalls)
+	}
+	if msg.Err != nil {
+		t.Fatalf("agent response error = %v", msg.Err)
+	}
+	if runner.input.UserMessage != "pull the latest herald newsletter" {
+		t.Fatalf("agent user message = %q", runner.input.UserMessage)
+	}
+	if len(runner.input.VisibleIDs) != 2 || runner.input.VisibleIDs[0] != "welcome-newsletter" {
+		t.Fatalf("visible IDs = %#v", runner.input.VisibleIDs)
+	}
+	if msg.Result.Timeline == nil || msg.Result.Timeline.Mode != agent.TimelineModeExplicitIDs {
+		t.Fatalf("agent timeline = %#v", msg.Result.Timeline)
+	}
+	if len(msg.Result.Timeline.MessageIDs) != 1 || msg.Result.Timeline.MessageIDs[0] != "welcome-newsletter" {
+		t.Fatalf("agent message IDs = %#v", msg.Result.Timeline.MessageIDs)
+	}
+}
+
 func TestSubmitChatReportsAgentUnavailableWithoutLegacyFallback(t *testing.T) {
 	classifier := &stubClassifier{chatResponse: "legacy reply"}
 	m := &Model{
@@ -301,6 +367,39 @@ func TestRenderChatPanelCanScrollOverflowingHistory(t *testing.T) {
 	}
 	if !strings.Contains(top, "> follow up") {
 		t.Fatalf("chat input should remain visible while scrolled, got:\n%s", top)
+	}
+}
+
+func TestRenderChatPanelKeepsInputVisibleAfterLongToolStyleAnswer(t *testing.T) {
+	m := makeSizedModel(t, 120, 24)
+	m.showChat = true
+	m.focusedPanel = panelChat
+	m.chatMessages = []ai.ChatMessage{
+		{
+			Role:    "user",
+			Content: "find and summarize herald newsletters",
+		},
+		{
+			Role: "assistant",
+			Content: strings.Join([]string{
+				`Found 3 Herald-related messages in INBOX (sources: emails). Summary:`,
+				`<7fa6c0ab-c389-4f42-a19f-2f5a1a13202a@mtasv.net> - "You're in! Welcome to Herald Mail App Newsletter" Body: welcome note you'll start receiving emails here.`,
+				`<93540719-3210-45e2-a94a-e297fbb21069@mtasv.net> - "Confirm your subscription to Herald Mail App Newsletter" Body: confirmation link and description.`,
+				`<CAC1zfDUJP8G2pKEfMZ1-X+ELHpq9y=RehVE7K7wK3B4VKxHVyA@mail.gmail.com> - "[HERALD TEST 17/25] Example: Systems newsletter with unsubscribe" Body: demo newsletter with queue observability and latency budgets.`,
+			}, "\n- "),
+		},
+	}
+
+	rendered := stripANSI(m.renderChatPanel())
+	lines := strings.Split(rendered, "\n")
+	if got, want := len(lines), m.chatPanelContentHeight(); got != want {
+		t.Fatalf("rendered chat panel lines = %d, want %d:\n%s", got, want, rendered)
+	}
+	if !strings.Contains(lines[len(lines)-1], "> Ask about your emails") {
+		t.Fatalf("last line should remain the chat input, got %q in:\n%s", lines[len(lines)-1], rendered)
+	}
+	if !strings.Contains(rendered, "Newsletter") {
+		t.Fatalf("rendered history disappeared entirely:\n%s", rendered)
 	}
 }
 

@@ -164,6 +164,16 @@ The replacement boundary should live in an `internal/agent` package with a small
 - [ ] Agent requests publish concise progress states such as `searching`, `reading`, `summarizing`, and `draft edit ready` so the chat drawer does not appear stuck during slow local or remote provider calls.
 - [x] The first implementation does not add memory, autonomous daily summaries, calendar mutations, delete/archive, send mail, or MCP mirroring.
 
+**Shared mailbox retrieval contract**
+
+Mailbox search is a product capability rather than a chat-specific trick. Timeline search, Gollem `find_emails`, daemon search endpoints, MCP tools, SSH sessions, and future agent tools should call a shared retrieval planner that normalizes the user's query once, runs deterministic keyword/FTS/semantic legs as configured, merges results with stable capping and score metadata, and returns enough match information for each surface to explain why rows appeared.
+
+- [x] Tokenized keyword matching treats multi-word queries as terms that may match across sender and subject, so `Herald newsletter` can find `Herald Mail App Newsletter` without semantic embeddings.
+- [x] Keyword, body/FTS, cross-folder, semantic, and hybrid retrieval share one query-plan/result shape before each surface formats the rows for its UI or protocol.
+- [x] Gollem tools are wrappers around shared retrieval results; they do not maintain independent query parsing, ranking, capping, or empty-state semantics.
+- [x] The chat runner applies per-turn tool policy through Gollem tool choice and tool filtering, so adding new tools does not automatically increase every chat turn's model/tool-selection cost.
+- [x] Direct app shortcuts are reserved for existing command routing and text-entry behavior, not hidden natural-language mailbox retrieval branches.
+
 ### Herald Memories foundation
 
 Herald Memories is a local-first relationship memory layer behind the backend and agent boundaries. Immutable records live in the configured memory directory, while chat and Compose consume read-only retrieval APIs and Obsidian remains an export/preview adapter rather than the only source of truth.

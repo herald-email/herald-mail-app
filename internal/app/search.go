@@ -1,8 +1,8 @@
 package app
 
 import (
+	"context"
 	"fmt"
-	"sort"
 	"strings"
 	"time"
 
@@ -10,6 +10,7 @@ import (
 	"github.com/herald-email/herald-mail-app/internal/ai"
 	"github.com/herald-email/herald-mail-app/internal/logger"
 	"github.com/herald-email/herald-mail-app/internal/models"
+	"github.com/herald-email/herald-mail-app/internal/retrieval"
 )
 
 // --- Search helpers ---
@@ -25,41 +26,6 @@ func (m *Model) semanticSearchConfig() (limit int, minScore float64) {
 		}
 	}
 	return limit, minScore
-}
-
-func mergeHybridSearchResults(keywordEmails []*models.EmailData, semanticResults []*models.SemanticSearchResult) ([]*models.EmailData, map[string]float64) {
-	merged := make([]*models.EmailData, 0, len(keywordEmails)+len(semanticResults))
-	semanticScores := make(map[string]float64)
-	seen := make(map[string]bool)
-
-	for _, email := range keywordEmails {
-		if email == nil || seen[email.MessageID] {
-			continue
-		}
-		seen[email.MessageID] = true
-		merged = append(merged, email)
-	}
-
-	sort.SliceStable(semanticResults, func(i, j int) bool {
-		return semanticResults[i].Score > semanticResults[j].Score
-	})
-	for _, result := range semanticResults {
-		if result == nil || result.Email == nil {
-			continue
-		}
-		if prev, ok := semanticScores[result.Email.MessageID]; !ok || result.Score > prev {
-			semanticScores[result.Email.MessageID] = result.Score
-		}
-		if seen[result.Email.MessageID] {
-			continue
-		}
-		seen[result.Email.MessageID] = true
-		merged = append(merged, result.Email)
-	}
-	if len(semanticScores) == 0 {
-		semanticScores = nil
-	}
-	return merged, semanticScores
 }
 
 // performSearch runs a local or semantic search and returns the result as a tea.Cmd.
@@ -140,81 +106,55 @@ func (m *Model) performSearchWithToken(query string, token int) tea.Cmd {
 	classifier := m.classifier
 	backend := m.backend
 	semanticLimit, semanticMinScore := m.semanticSearchConfig()
+	mode := retrieval.ModeHybrid
+	switch {
+	case keywordMode:
+		mode = retrieval.ModeKeyword
+	case semanticMode:
+		mode = retrieval.ModeSemantic
+	case bodyMode:
+		mode = retrieval.ModeBody
+	case crossFolder:
+		mode = retrieval.ModeCross
+	}
 	return func() tea.Msg {
-		var emails []*models.EmailData
-		var scores map[string]float64
-		var err error
-		source := "local"
-		switch {
-		case keywordMode:
+		source := mode
+		if source == retrieval.ModeKeyword {
 			source = "local"
-			emails, err = backend.SearchEmails(folder, actualQuery, false)
-		case semanticMode:
-			source = "semantic"
-			if classifier == nil {
-				logger.Warn("Semantic search requires Ollama classifier — not configured")
-				return SearchResultMsg{Emails: nil, Query: query, Source: source, Token: token, Err: fmt.Errorf("semantic search unavailable: AI is not configured")}
+		}
+		if semanticMode && classifier == nil {
+			logger.Warn("Semantic search requires AI classifier — not configured")
+			return SearchResultMsg{Emails: nil, Query: query, Source: source, Token: token, Err: fmt.Errorf("semantic search unavailable: AI is not configured")}
+		}
+		var embedder retrieval.Embedder
+		if classifier != nil {
+			embedder = ai.WithTaskKind(classifier, ai.TaskKindSemanticSearch)
+		}
+		result, err := retrieval.Search(context.Background(), backend, embedder, retrieval.Request{
+			Folder:   folder,
+			Query:    actualQuery,
+			Mode:     mode,
+			Limit:    semanticLimit,
+			MinScore: semanticMinScore,
+		})
+		if err != nil {
+			logger.Warn("Search error: %v", err)
+			if semanticMode && strings.Contains(err.Error(), "not supported") {
+				return SearchResultMsg{Emails: nil, Query: query, Source: source, Token: token, Err: fmt.Errorf("semantic search requires local backend")}
 			}
-			queryText := ai.BuildQueryText(actualQuery)
-			vec, embedErr := ai.WithTaskKind(classifier, ai.TaskKindSemanticSearch).Embed(queryText)
-			if embedErr != nil {
-				logger.Warn("Semantic search embed error: %v", embedErr)
-				guidance := aiGuidanceNotice(embedErr)
+			if semanticMode {
+				guidance := aiGuidanceNotice(err)
 				if guidance != "" {
 					return SearchResultMsg{Emails: nil, Query: query, Source: source, Token: token, Err: fmt.Errorf("semantic search unavailable: %s", guidance)}
 				}
-				return SearchResultMsg{Emails: nil, Query: query, Source: source, Token: token, Err: fmt.Errorf("semantic search unavailable: %v", embedErr)}
+				return SearchResultMsg{Emails: nil, Query: query, Source: source, Token: token, Err: err}
 			}
-			results, searchErr := backend.SearchSemanticChunked(folder, vec, semanticLimit, semanticMinScore)
-			if searchErr != nil {
-				logger.Warn("semantic search: %v", searchErr)
-				if strings.Contains(searchErr.Error(), "not supported") {
-					return SearchResultMsg{Emails: nil, Token: token, Err: fmt.Errorf("semantic search requires local backend")}
-				}
-				return SearchResultMsg{Emails: nil, Token: token, Err: searchErr}
-			}
-			scores = make(map[string]float64, len(results))
-			for _, r := range results {
-				emails = append(emails, r.Email)
-				scores[r.Email.MessageID] = r.Score
-			}
-		case bodyMode:
-			emails, err = backend.SearchEmails(folder, actualQuery, true)
-			source = "fts"
-		case crossFolder:
-			emails, err = backend.SearchEmailsCrossFolder(actualQuery)
-			source = "cross"
-		default:
-			source = "hybrid"
-			keywordEmails, keywordErr := backend.SearchEmails(folder, actualQuery, false)
-			if keywordErr != nil {
-				err = keywordErr
-				break
-			}
-			emails = keywordEmails
-			if classifier != nil {
-				queryText := ai.BuildQueryText(actualQuery)
-				vec, embedErr := ai.WithTaskKind(classifier, ai.TaskKindSemanticSearch).Embed(queryText)
-				if embedErr != nil {
-					logger.Warn("Hybrid search semantic embed error: %v", embedErr)
-				} else {
-					results, searchErr := backend.SearchSemanticChunked(folder, vec, semanticLimit, semanticMinScore)
-					if searchErr != nil {
-						logger.Warn("Hybrid search semantic leg failed: %v", searchErr)
-					} else {
-						emails, scores = mergeHybridSearchResults(keywordEmails, results)
-					}
-				}
-			}
-		}
-		if err != nil {
-			logger.Warn("Search error: %v", err)
 			return SearchResultMsg{Emails: []*models.EmailData{}, Query: query, Source: source, Token: token}
 		}
-		if emails == nil {
-			emails = []*models.EmailData{}
+		if result.Emails == nil {
+			result.Emails = []*models.EmailData{}
 		}
-		return SearchResultMsg{Emails: emails, Scores: scores, Query: query, Source: source, Token: token}
+		return SearchResultMsg{Emails: result.Emails, Scores: result.Scores, Query: query, Source: result.Source, Token: token}
 	}
 }
 

@@ -12,6 +12,7 @@ import (
 	"github.com/herald-email/herald-mail-app/internal/memory"
 	"github.com/herald-email/herald-mail-app/internal/models"
 	rulesengine "github.com/herald-email/herald-mail-app/internal/rules"
+	"github.com/herald-email/herald-mail-app/internal/searchquery"
 )
 
 // DemoBackendMarker is detected by the app to show [DEMO] in the status bar.
@@ -602,7 +603,6 @@ func (d *DemoBackend) SearchEmails(folder, query string, bodySearch bool) ([]*mo
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	q := strings.ToLower(query)
 	var out []*models.EmailData
 	for _, e := range d.emails {
 		if d.deletedIDs[e.MessageID] {
@@ -617,9 +617,7 @@ func (d *DemoBackend) SearchEmails(folder, query string, bodySearch bool) ([]*mo
 				bodyText = body.TextPlain
 			}
 		}
-		if strings.Contains(strings.ToLower(e.Subject), q) ||
-			strings.Contains(strings.ToLower(e.Sender), q) ||
-			(bodySearch && strings.Contains(strings.ToLower(bodyText), q)) {
+		if searchquery.MatchTerms(query, e.Subject, e.Sender, bodyText) {
 			out = append(out, e)
 		}
 	}

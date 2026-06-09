@@ -10,6 +10,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/herald-email/herald-mail-app/internal/agent"
 	"github.com/herald-email/herald-mail-app/internal/ai"
 	"github.com/herald-email/herald-mail-app/internal/logger"
@@ -249,20 +250,18 @@ func (m *Model) chatWaitingLabel() string {
 func (m *Model) renderChatPanel() string {
 	w := m.effectiveChatPanelWidth(m.windowWidth)
 	contentHeight := m.chatPanelContentHeight()
-	var sb strings.Builder
+	rows := make([]string, 0, contentHeight)
 
 	// Title
 	titleStyle := lipgloss.NewStyle().
 		Foreground(m.theme.Severity.Info.ForegroundColor()).
-		Bold(true).
-		Width(w)
-	sb.WriteString(titleStyle.Render("Chat") + "\n")
-	sb.WriteString(strings.Repeat("─", w) + "\n")
+		Bold(true)
+	rows = append(rows, chatPanelFitRow(titleStyle.Render("Chat"), w))
+	rows = append(rows, strings.Repeat("─", w))
 
 	// Message history — show last messages that fit in height
-	msgStyle := lipgloss.NewStyle().Width(w)
-	userStyle := lipgloss.NewStyle().Foreground(m.theme.Text.Primary.ForegroundColor()).Width(w)
-	aiStyle := lipgloss.NewStyle().Foreground(m.theme.Severity.Info.ForegroundColor()).Width(w)
+	userStyle := lipgloss.NewStyle().Foreground(m.theme.Text.Primary.ForegroundColor())
+	aiStyle := lipgloss.NewStyle().Foreground(m.theme.Severity.Info.ForegroundColor())
 
 	historyLines := chatHistoryLineCapacity(contentHeight)
 
@@ -277,7 +276,9 @@ func (m *Model) renderChatPanel() string {
 			style = userStyle
 		}
 		for _, line := range m.chatWrappedLines[i] {
-			msgLines = append(msgLines, style.Render(line))
+			for _, visualLine := range strings.Split(style.Render(line), "\n") {
+				msgLines = append(msgLines, chatPanelFitRow(visualLine, w))
+			}
 		}
 		msgLines = append(msgLines, "")
 	}
@@ -296,28 +297,43 @@ func (m *Model) renderChatPanel() string {
 
 	// Pad to fill space
 	for len(msgLines) < historyLines {
-		msgLines = append([]string{msgStyle.Render("")}, msgLines...)
+		msgLines = append([]string{chatPanelFitRow("", w)}, msgLines...)
 	}
-	for _, line := range msgLines {
-		sb.WriteString(line + "\n")
-	}
-
-	sb.WriteString(strings.Repeat("─", w) + "\n")
+	rows = append(rows, msgLines...)
+	rows = append(rows, strings.Repeat("─", w))
 
 	// Input field
 	if m.chatWaiting {
-		waitStyle := lipgloss.NewStyle().Foreground(m.theme.Text.Dim.ForegroundColor()).Width(w)
-		sb.WriteString(waitStyle.Render(m.chatWaitingLabel()))
+		waitStyle := lipgloss.NewStyle().Foreground(m.theme.Text.Dim.ForegroundColor())
+		rows = append(rows, chatPanelFitRow(waitStyle.Render(m.chatWaitingLabel()), w))
 	} else {
 		inputWidth := w - lipgloss.Width(m.chatInput.Prompt)
 		if inputWidth < 1 {
 			inputWidth = 1
 		}
 		m.chatInput.SetWidth(inputWidth)
-		sb.WriteString(m.chatInput.View())
+		rows = append(rows, chatPanelFitRow(m.chatInput.View(), w))
 	}
 
-	return fitPanelContentHeight(sb.String(), contentHeight)
+	return strings.Join(chatPanelFitRows(rows, contentHeight, w), "\n")
+}
+
+func chatPanelFitRows(rows []string, target, width int) []string {
+	if len(rows) > target {
+		rows = rows[:target]
+	}
+	for len(rows) < target {
+		rows = append(rows, chatPanelFitRow("", width))
+	}
+	return rows
+}
+
+func chatPanelFitRow(row string, width int) string {
+	if width <= 0 {
+		return ""
+	}
+	row = strings.ReplaceAll(row, "\n", " ")
+	return lipgloss.NewStyle().Width(width).Render(ansi.Truncate(row, width, ""))
 }
 
 func (m *Model) chatPanelContentHeight() int {
