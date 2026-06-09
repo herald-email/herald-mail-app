@@ -59,7 +59,7 @@ export default defineConfig({
           label: 'Getting Started',
           items: [
             { label: 'Overview', slug: '' },
-            { label: "What's New", slug: 'whats-new-in-v0-6' },
+            { label: "What's New", slug: 'whats-new-in-v0-7' },
             { label: 'Install and run', slug: 'getting-started' },
             { label: 'First 5 Minutes', slug: 'first-5-minutes' },
             { label: 'Nightly Builds', slug: 'nightly-builds' },
@@ -87,6 +87,7 @@ export default defineConfig({
             { label: 'Search', slug: 'features/search' },
             { label: 'AI Features', slug: 'features/ai' },
             { label: 'Chat Panel', slug: 'features/chat' },
+            { label: 'Herald Memories', slug: 'features/memories' },
             { label: 'Rules and Automation', slug: 'features/rules-automation' },
             { label: 'Attachments', slug: 'features/attachments' },
             { label: 'Text Selection', slug: 'features/text-selection' },
@@ -127,6 +128,7 @@ export default defineConfig({
         {
           label: 'Release Archive',
           items: [
+            { label: "What's New in v0.7", slug: 'whats-new-in-v0-7' },
             { label: "What's New in v0.6", slug: 'whats-new-in-v0-6' },
             { label: "What's New in v0.5", slug: 'whats-new-in-v0-5' },
             { label: "What's New in v0.4", slug: 'whats-new-in-v0-4' },

@@ -24,7 +24,7 @@ Demo tapes live in `demos/*.tape`. Canonical GIFs are written to `assets/demo/*.
 
 ## Current Story Set
 
-The v0.6 media set keeps the README and docs front door focused on the newest user-visible workflows. Each tape should remain short enough to understand without narration.
+The v0.7 docs front door now leads with chat, AI settings, range selection, and Compose screenshots while the existing v0.6 demo GIFs continue to cover Calendar and preview workflows. Each tape should remain short enough to understand without narration.
 
 - [x] `overview.tape` shows Timeline, cleanup grouping, Contacts, and Calendar.
 - [x] `calendar-workspace.tape` shows Week, Day, 3-Day, Agenda, Search, Detail, and Event Edit.

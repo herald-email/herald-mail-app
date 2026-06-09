@@ -1,9 +1,9 @@
 ---
 title: What's New in v0.6
-description: User-facing changes in the v0.6 beta release line through v0.6.2.
+description: User-facing changes in the v0.6 beta release line through v0.6.3.
 ---
 
-The v0.6 beta line turns Herald into a source-aware mail and calendar workspace. `v0.6.2-beta.1` is the current beta, building on the `v0.6.0-beta.1` Gmail OAuth graduation and the `v0.6.1-beta.1` multi-account/calendar hardening patch.
+The v0.6 beta line turned Herald into a source-aware mail and calendar workspace. It is now a historical release line; the current beta line starts at `v0.7.0-beta.1`.
 
 ## Release Delta
 
@@ -28,6 +28,7 @@ Each beta in the v0.6 line tightened a different part of the new source platform
 - [x] `v0.6.0-beta.1` graduates Google OAuth onboarding and the Gmail API mail source.
 - [x] `v0.6.1-beta.1` fixes calendar agenda clock drift, live multi-account folder refresh, and two-account mail operations.
 - [x] `v0.6.2-beta.1` adds the latest calendar create guidance and preview cursor-selection/rich-copy polish.
+- [x] `v0.6.3-beta.1` fixes live signature newline preservation and Timeline-initiated Compose navigation regressions before the v0.7 capability release.
 
 ## Demo Highlights
 
@@ -53,6 +54,10 @@ make build
 ```
 
 Press `3` for Calendar, `Ctrl+N` or `n` to create an event in the default profile, `e` to edit one, `/` to search events, and `i` from an email preview containing an invitation to create or update a calendar event. Emacs-profile users keep `Ctrl+N` for movement and use `n` to create events.
+
+## Next Release
+
+The v0.7 release introduced Herald Memories, Compose Radar, Gollem-backed chat intents, macOS preview printing, and AI role assignment polish. See [What's New in v0.7](/whats-new-in-v0-7/) for the current release checklist.
 
 ## Previous Release
 

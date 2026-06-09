@@ -1,7 +1,7 @@
 # Herald
 
 > [!NOTE]
-> Herald v0.6.2-beta.1 is the current beta: Gmail OAuth now uses Herald's Gmail API mail source, Calendar supports provider-backed create/edit/delete/RSVP and invitation import, previews gained safer images plus richer copy, and demo media covers the new workflows.
+> Herald v0.7.0-beta.1 is the current beta: Herald Memories, Compose Radar, Gollem-backed chat, macOS preview printing, Timeline range selection, and AI role assignment controls build on the Gmail API and Calendar source platform from v0.6.
 
 **Email and calendar in your terminal, without turning setup into a project.** Herald gives you a GUI-like, terminal-native workspace with mouse-friendly controls, full keyboard flow, and context help when you press `?`. Try demo mode before connecting an inbox; keep AI optional and local-first when you want classification, semantic search, quick replies, or chat; and use MCP or SSH when your terminal workflow wants to reach further.
 
@@ -112,6 +112,7 @@ To test terminal image rendering, run demo mode in a Kitty-protocol terminal suc
 | Compact overlays for settings, shortcut help, cleanup rules, prompts, and previews        | ✅     |
 | AI classification via Ollama, Claude, or OpenAI-compatible providers                      | ✅     |
 | Semantic search with local or OpenAI-compatible chunked body embeddings                   | ✅     |
+| Herald Memories with Compose Radar, dossiers, Obsidian-friendly sync, and local context   | ✅     |
 | Quick replies — 5 canned + 3 AI-generated suggestions (Ctrl+Q)                            | ✅     |
 | Contact book with LLM enrichment and native Apple Contacts import                         | ✅     |
 | Compose + reply + forward with Markdown preview, preserved context, and external editor   | ✅     |

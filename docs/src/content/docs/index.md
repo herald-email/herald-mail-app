@@ -57,11 +57,11 @@ configure AI, and save the generated config.
 
 Nightly builds are available as short-lived GitHub Actions artifacts for testers who want the latest successful `main` build before the next beta tag. See [Nightly Builds](/nightly-builds/) for download steps and channel rules.
 
-## New in v0.6
+## New in v0.7
 
-The `v0.6.2-beta.1` release line graduates Gmail OAuth onto the Gmail API mail source, hardens multi-account mail behavior, adds provider-backed Calendar mutations and invitation import, and makes previews safer to inspect and copy. See [What's New in v0.6](/whats-new-in-v0-6/) for the release-delta checklist and updated demo GIFs; older release pages remain available under Release Archive so stable links keep working.
+The `v0.7.0-beta.1` release adds local Herald Memories, Compose Radar, the Gollem-backed chat agent path, macOS preview printing, Timeline range-selection polish, and AI role assignment controls. See [What's New in v0.7](/whats-new-in-v0-7/) for the release-delta checklist and screenshots; older release pages remain available under Release Archive so stable links keep working.
 
-![Calendar workspace demo](/demo/calendar-workspace.gif)
+![Chat panel open beside Timeline](/screenshots/chat-panel-open.png)
 
 <!-- HERALD_SCREENSHOT id="overview-first-launch" page="overview" alt="Herald first-run wizard entry screen" state="fresh config, 120x40" desc="Shows the initial setup path users see before connecting a real mailbox." capture="vhs docs media; rm -f /tmp/herald-docs-wizard.yaml; launch ./bin/herald -config /tmp/herald-docs-wizard.yaml" -->
 
@@ -84,6 +84,7 @@ Top tabs, folder rows, Timeline rows, Calendar mini-month days and events, and c
 - [Calendar](/using-herald/calendar/) shows Week, Day, 3-Day, Agenda, Search, Event Detail, RSVP, and edit surfaces with a colored source rail.
 - [Cleanup](/using-herald/cleanup/) now lives in Timeline grouping and Settings Sync & Cleanup managers for bulk delete, archive, hide-future-mail rules, unsubscribe actions, automation rules, custom prompts, and cleanup schedules.
 - [Contacts](/using-herald/contacts/) lists known senders, opens contact details, shows recent mail, previews messages inline, and supports keyword or semantic contact search.
+- [Herald Memories](/features/memories/) adds local, source-backed context for Compose Radar, contact and company dossiers, thread context, chat retrieval, and Obsidian-friendly Markdown sync.
 - [Global UI](/using-herald/global-ui/) covers the tab bar, folder sidebar, mouse navigation, status bar, `?` shortcut help, key hints, logs overlay, chat panel, focus cycling, and narrow terminal behavior.
 - [Feature guides](/features/search/) cover cross-tab behavior such as search, AI, destructive actions, rules, attachments, text selection, settings, themes, and sync status.
 - [Advanced guides](/advanced/mcp/) cover MCP, SSH mode, daemon commands, demo GIF generation, and privacy/security expectations.
