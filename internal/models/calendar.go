@@ -82,6 +82,7 @@ var (
 	ErrCalendarRecurrenceScopeUnsupported = errors.New("calendar recurrence scope unsupported")
 	ErrCalendarAuthorizationRequired      = errors.New("calendar authorization required")
 	ErrCalendarWritePermission            = errors.New("calendar write permission missing")
+	ErrCalendarProviderUnavailable        = errors.New("calendar provider unavailable")
 )
 
 type CalendarMutationOptions struct {

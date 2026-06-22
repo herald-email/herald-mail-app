@@ -4075,6 +4075,9 @@ func calendarMutationErrorStatus(prefix string, err error) string {
 	if errors.Is(err, models.ErrCalendarWritePermission) {
 		return prefix + ": calendar write permission missing; reconnect Google Calendar in Settings"
 	}
+	if errors.Is(err, models.ErrCalendarProviderUnavailable) {
+		return prefix + ": selected calendar is not connected to a writable provider; refresh calendars or reconnect in Settings"
+	}
 	return prefix + ": " + err.Error()
 }
 

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -62,6 +63,8 @@ type GoogleCalendarSource struct {
 	baseURL       string
 	client        *http.Client
 }
+
+const googleOriginalICalUIDExtendedProperty = "heraldOriginalICalUID"
 
 func NewGoogleCalendarSource(cfg config.SourceConfig) (*GoogleCalendarSource, error) {
 	id := models.NormalizeSourceID(models.SourceID(cfg.ID), models.DefaultCalendarSourceID)
@@ -202,8 +205,9 @@ func (s *GoogleCalendarSource) CreateEvent(ctx context.Context, event models.Cal
 		event.ProviderUID = strings.TrimSpace(event.Ref.EventID)
 	}
 	payload := googleEventFromModel(event)
+	copyInvitation := googleEventShouldCopyInvitation(event, s.attendeeEmail)
 	u := s.baseURL + "/calendars/" + url.PathEscape(event.Ref.CalendarID) + "/events?sendUpdates=none"
-	if googleEventShouldImport(event) {
+	if googleEventShouldImport(event) && !copyInvitation {
 		payload.ID = ""
 		if strings.TrimSpace(payload.ICalUID) == "" {
 			payload.ICalUID = strings.TrimSpace(firstNonEmpty(event.ProviderUID, event.Ref.EventID))
@@ -212,6 +216,10 @@ func (s *GoogleCalendarSource) CreateEvent(ctx context.Context, event models.Cal
 	} else {
 		payload.ID = ""
 		payload.ICalUID = ""
+		if copyInvitation {
+			payload.Organizer = nil
+			payload.Extended = googleExtendedPropertiesWithOriginalICalUID(payload.Extended, firstNonEmpty(event.ProviderUID, event.Ref.EventID))
+		}
 	}
 	data, err := json.Marshal(payload)
 	if err != nil {
@@ -224,17 +232,54 @@ func (s *GoogleCalendarSource) CreateEvent(ctx context.Context, event models.Cal
 	req.Header.Set("Content-Type", "application/json; charset=utf-8")
 	var imported googleEventPayload
 	if err := s.doJSON(req, &imported); err != nil {
+		if googleEventShouldImport(event) && errors.Is(err, models.ErrCalendarMutationConflict) {
+			existing, lookupErr := s.FindEventByUID(ctx, models.CollectionRef{
+				SourceID:     s.id,
+				AccountID:    s.accountID,
+				Kind:         models.SourceKindCalendar,
+				CollectionID: event.Ref.CalendarID,
+			}, firstNonEmpty(event.ProviderUID, event.Ref.EventID))
+			if lookupErr == nil && existing != nil {
+				return existing, nil
+			}
+			if lookupErr != nil {
+				return nil, fmt.Errorf("%w; duplicate lookup failed: %v", err, lookupErr)
+			}
+		}
 		return nil, err
 	}
 	out, err := googleEventToModel(s.id, s.accountID, event.Ref.CalendarID, imported)
 	if err != nil {
 		return nil, err
 	}
+	if copyInvitation {
+		out.ProviderUID = strings.TrimSpace(firstNonEmpty(event.ProviderUID, event.Ref.EventID))
+	}
 	return &out, nil
 }
 
 func googleEventShouldImport(event models.CalendarEvent) bool {
 	return strings.Contains(strings.ToUpper(event.Raw), "BEGIN:VEVENT") && strings.TrimSpace(event.ProviderUID) != ""
+}
+
+func googleEventShouldCopyInvitation(event models.CalendarEvent, calendarOwnerEmail string) bool {
+	return googleEventShouldImport(event) && !googleCalendarOwnerParticipates(event, calendarOwnerEmail)
+}
+
+func googleCalendarOwnerParticipates(event models.CalendarEvent, calendarOwnerEmail string) bool {
+	calendarOwnerEmail = strings.TrimSpace(strings.ToLower(calendarOwnerEmail))
+	if calendarOwnerEmail == "" {
+		return true
+	}
+	if strings.EqualFold(strings.TrimSpace(event.OrganizerEmail), calendarOwnerEmail) {
+		return true
+	}
+	for _, attendee := range event.Attendees {
+		if strings.EqualFold(strings.TrimSpace(attendee.Email), calendarOwnerEmail) {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *GoogleCalendarSource) UpdateEvent(ctx context.Context, event models.CalendarEvent, opts models.CalendarMutationOptions) (*models.CalendarEvent, error) {
@@ -298,6 +343,17 @@ func (s *GoogleCalendarSource) FindEventByUID(ctx context.Context, ref models.Co
 	values.Set("iCalUID", uid)
 	values.Set("singleEvents", "false")
 	values.Set("showDeleted", "false")
+	if found, err := s.findEventByGoogleQuery(ctx, endpoint, values, ref.CollectionID); err != nil || found != nil {
+		return found, err
+	}
+	values = url.Values{}
+	values.Set("privateExtendedProperty", googleOriginalICalUIDExtendedProperty+"="+uid)
+	values.Set("singleEvents", "false")
+	values.Set("showDeleted", "false")
+	return s.findEventByGoogleQuery(ctx, endpoint, values, ref.CollectionID)
+}
+
+func (s *GoogleCalendarSource) findEventByGoogleQuery(ctx context.Context, endpoint string, values url.Values, calendarID string) (*models.CalendarEvent, error) {
 	req, err := s.newRequest(ctx, http.MethodGet, endpoint+"?"+values.Encode(), nil)
 	if err != nil {
 		return nil, err
@@ -307,9 +363,9 @@ func (s *GoogleCalendarSource) FindEventByUID(ctx context.Context, ref models.Co
 		return nil, err
 	}
 	for _, item := range payload.Items {
-		event, err := googleEventToModel(s.id, s.accountID, ref.CollectionID, item)
+		event, err := googleEventToModel(s.id, s.accountID, calendarID, item)
 		if err != nil {
-			logger.Warn("Skipping Google calendar duplicate candidate %q from %s: %v", item.ID, ref.CollectionID, err)
+			logger.Warn("Skipping Google calendar duplicate candidate %q from %s: %v", item.ID, calendarID, err)
 			continue
 		}
 		return &event, nil
@@ -1117,7 +1173,7 @@ type googleEventPayload struct {
 	Recurrence  []string           `json:"recurrence,omitempty"`
 	Attachments []googleAttachment `json:"attachments,omitempty"`
 	Reminders   *googleReminders   `json:"reminders,omitempty"`
-	Extended    map[string]any     `json:"extendedProperties,omitempty"`
+	Extended    *googleExtended    `json:"extendedProperties,omitempty"`
 }
 
 type googleEventTime struct {
@@ -1147,6 +1203,11 @@ type googleAttachment struct {
 type googleReminders struct {
 	UseDefault bool             `json:"useDefault"`
 	Overrides  []googleReminder `json:"overrides"`
+}
+
+type googleExtended struct {
+	Private map[string]string `json:"private,omitempty"`
+	Shared  map[string]string `json:"shared,omitempty"`
 }
 
 type googleReminder struct {
@@ -1179,9 +1240,13 @@ func googleEventToModel(sourceID models.SourceID, accountID models.AccountID, ca
 	if item.Organizer != nil {
 		organizer = *item.Organizer
 	}
+	providerUID := item.ICalUID
+	if originalUID := googleOriginalICalUIDFromExtended(item.Extended); originalUID != "" {
+		providerUID = originalUID
+	}
 	return models.CalendarEvent{
 		Ref:               ref,
-		ProviderUID:       item.ICalUID,
+		ProviderUID:       providerUID,
 		Title:             item.Summary,
 		Description:       item.Description,
 		Location:          item.Location,
@@ -1204,6 +1269,28 @@ func googleEventToModel(sourceID models.SourceID, accountID models.AccountID, ca
 	}, nil
 }
 
+func googleOriginalICalUIDFromExtended(extended *googleExtended) string {
+	if extended == nil {
+		return ""
+	}
+	return strings.TrimSpace(extended.Private[googleOriginalICalUIDExtendedProperty])
+}
+
+func googleExtendedPropertiesWithOriginalICalUID(extended *googleExtended, uid string) *googleExtended {
+	uid = strings.TrimSpace(uid)
+	if uid == "" {
+		return extended
+	}
+	if extended == nil {
+		extended = &googleExtended{}
+	}
+	if extended.Private == nil {
+		extended.Private = make(map[string]string, 1)
+	}
+	extended.Private[googleOriginalICalUIDExtendedProperty] = uid
+	return extended
+}
+
 func googleEventFromModel(event models.CalendarEvent) googleEventPayload {
 	payload := googleEventPayload{
 		ID:          event.Ref.EventID,
@@ -1212,7 +1299,7 @@ func googleEventFromModel(event models.CalendarEvent) googleEventPayload {
 		Summary:     event.Title,
 		Description: event.Description,
 		Location:    event.Location,
-		Status:      event.Status,
+		Status:      normalizeCalendarStatus(event.Status),
 		Sequence:    0,
 		Recurrence:  append([]string(nil), event.Recurrence...),
 		Reminders:   googleRemindersFromModel(event.Reminders),
@@ -2060,6 +2147,9 @@ func calendarProviderHTTPError(provider, method string, status int, body []byte)
 	if status == http.StatusBadRequest && calendarProviderMutationMethod(method) && strings.EqualFold(message, http.StatusText(status)) {
 		message = "provider rejected the event details; check title, start/end time, timezone, attendees, recurrence, and reminders"
 	}
+	if calendarProviderMutationMethod(method) && calendarProviderAlreadyExistsMessage(message, body) {
+		return fmt.Errorf("%w: provider calendar item already exists before %s", models.ErrCalendarMutationConflict, strings.ToLower(method))
+	}
 	if status == http.StatusUnauthorized {
 		return fmt.Errorf("%w: %s authorization expired; reconnect this calendar account", models.ErrCalendarAuthorizationRequired, provider)
 	}
@@ -2071,6 +2161,17 @@ func calendarProviderHTTPError(provider, method string, status int, body []byte)
 		return fmt.Errorf("%w: %s %s denied; reconnect this calendar account to approve Calendar access", models.ErrCalendarWritePermission, provider, action)
 	}
 	return fmt.Errorf("%s %s failed: %s", provider, strings.ToLower(method), message)
+}
+
+func calendarProviderAlreadyExistsMessage(message string, body []byte) bool {
+	haystack := strings.ToLower(strings.TrimSpace(message) + " " + strings.TrimSpace(string(body)))
+	if strings.Contains(haystack, "already_exists") {
+		return true
+	}
+	return strings.Contains(haystack, "already exists") &&
+		(strings.Contains(haystack, "identifier") ||
+			strings.Contains(haystack, "uid") ||
+			strings.Contains(haystack, "event"))
 }
 
 func calendarProviderMutationMethod(method string) bool {

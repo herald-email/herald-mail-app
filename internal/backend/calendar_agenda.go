@@ -336,6 +336,8 @@ func (b *LocalBackend) SaveCalendarEvent(event models.CalendarEvent) (*models.Ca
 			return nil, err
 		}
 		return b.cache.GetCalendarEventByRef(saved.Ref)
+	} else if err := b.requireCalendarProviderForRef(event.Ref, "save"); err != nil {
+		return nil, err
 	}
 	if err := b.cache.PutCalendarEvent(event); err != nil {
 		return nil, err
@@ -373,6 +375,8 @@ func (b *LocalBackend) CreateCalendarEvent(event models.CalendarEvent) (*models.
 			return nil, err
 		}
 		return b.cache.GetCalendarEventByRef(saved.Ref)
+	} else if err := b.requireCalendarProviderForRef(event.Ref, "create"); err != nil {
+		return nil, err
 	}
 	if err := b.cache.PutCalendarEvent(event); err != nil {
 		return nil, err
@@ -397,6 +401,8 @@ func (b *LocalBackend) DeleteCalendarEvent(ref models.EventRef) error {
 		}); err != nil {
 			return calendarProviderMutationError("delete", err)
 		}
+	} else if err := b.requireCalendarProviderForRef(ref, "delete"); err != nil {
+		return err
 	}
 	return b.cache.InvalidateCalendarEvent(ref)
 }
@@ -425,6 +431,9 @@ func (b *LocalBackend) RespondCalendarEvent(ref models.EventRef, status string) 
 			return nil, err
 		}
 		return b.cache.GetCalendarEventByRef(saved.Ref)
+	}
+	if err := b.requireCalendarProviderForRef(ref, "RSVP"); err != nil {
+		return nil, err
 	}
 	event, err := b.cache.GetCalendarEventByRef(ref)
 	if err != nil {
@@ -467,6 +476,9 @@ func (b *LocalBackend) FindCalendarEventByUID(ref models.CollectionRef, uid stri
 			return found, nil
 		}
 		return nil, nil
+	}
+	if err := b.requireCalendarProviderForCollection(ref, "duplicate lookup"); err != nil {
+		return nil, err
 	}
 	found, err := b.cache.FindCalendarEventByProviderUID(ref, uid)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -676,6 +688,20 @@ func (b *LocalBackend) calendarUIDLookupSourceForRef(ref models.CollectionRef) (
 	return nil, false, nil
 }
 
+func (b *LocalBackend) requireCalendarProviderForRef(ref models.EventRef, action string) error {
+	if len(b.configuredCalendarSources()) == 0 {
+		return nil
+	}
+	return calendarProviderMutationError(action, fmt.Errorf("%w: selected calendar is not connected to a writable provider", models.ErrCalendarProviderUnavailable))
+}
+
+func (b *LocalBackend) requireCalendarProviderForCollection(ref models.CollectionRef, action string) error {
+	if len(b.configuredCalendarSources()) == 0 {
+		return nil
+	}
+	return calendarProviderMutationError(action, fmt.Errorf("%w: selected calendar is not connected to a writable provider", models.ErrCalendarProviderUnavailable))
+}
+
 func calendarProviderMutationError(action string, err error) error {
 	if err == nil {
 		return nil
@@ -692,6 +718,9 @@ func calendarProviderMutationError(action string, err error) error {
 	}
 	if errors.Is(err, models.ErrCalendarWritePermission) {
 		return fmt.Errorf("calendar provider %s write permission missing; cache was not updated: %w", action, err)
+	}
+	if errors.Is(err, models.ErrCalendarProviderUnavailable) {
+		return fmt.Errorf("calendar provider %s unavailable; cache was not updated: %w", action, err)
 	}
 	return fmt.Errorf("calendar provider %s failed; cache was not updated: %w", action, err)
 }
@@ -1023,31 +1052,40 @@ func (m *MultiBackend) calendarMutationBackendsForRef(ref models.EventRef) []Cal
 	if m == nil {
 		return nil
 	}
+	ref = ref.WithDefaults()
 	m.mu.RLock()
 	active := m.active
 	slots := make([]*accountSlot, 0, len(m.order))
-	if active == AllAccountsSourceID {
-		for _, id := range m.order {
-			slots = append(slots, m.slots[id])
+	appendSlot := func(slot *accountSlot) {
+		if slot == nil {
+			return
 		}
-	} else if slot := m.slots[active]; slot != nil {
+		for _, existing := range slots {
+			if existing == slot {
+				return
+			}
+		}
 		slots = append(slots, slot)
 	}
-	if active != AllAccountsSourceID {
-		for _, id := range m.order {
-			slot := m.slots[id]
-			if slot != nil && slot.info.SourceID == ref.SourceID {
-				alreadyIncluded := false
-				for _, existing := range slots {
-					if existing == slot {
-						alreadyIncluded = true
-						break
-					}
-				}
-				if !alreadyIncluded {
-					slots = append(slots, slot)
-				}
+	for _, id := range m.order {
+		slot := m.slots[id]
+		if slot != nil && slot.info.AccountID == ref.AccountID {
+			appendSlot(slot)
+		}
+	}
+	for _, id := range m.order {
+		slot := m.slots[id]
+		if slot != nil && slot.info.SourceID == ref.SourceID {
+			appendSlot(slot)
+		}
+	}
+	if len(slots) == 0 {
+		if active == AllAccountsSourceID {
+			for _, id := range m.order {
+				appendSlot(m.slots[id])
 			}
+		} else if slot := m.slots[active]; slot != nil {
+			appendSlot(slot)
 		}
 	}
 	m.mu.RUnlock()

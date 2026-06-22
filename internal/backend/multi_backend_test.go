@@ -14,31 +14,34 @@ import (
 
 type recordingAccountBackend struct {
 	*DemoBackend
-	name                string
-	folders             []string
-	status              map[string]models.FolderStatus
-	timeline            map[string][]*models.EmailData
-	bodies              map[string]*models.EmailBody
-	search              map[string][]*models.EmailData
-	loadCalls           []string
-	deleteCalls         []string
-	archiveCalls        []string
-	moveCalls           []string
-	sendCalls           []string
-	composeSends        []ComposeSendRequest
-	saveDraftCalls      []string
-	rawDraftCalls       []string
-	draftDeletes        []string
-	draftSends          []string
-	getMessageRefs      []models.MessageRef
-	embeddingRefs       []models.MessageRef
-	storedEmbeddingRefs []models.MessageRef
-	calendarEvents      []models.CalendarEvent
-	calendarSearch      []string
-	savedCalendarEvents []models.CalendarEvent
-	rsvpCalendarRefs    []models.EventRef
-	rsvpCalendarStatus  []string
-	closed              bool
+	name                  string
+	folders               []string
+	status                map[string]models.FolderStatus
+	timeline              map[string][]*models.EmailData
+	bodies                map[string]*models.EmailBody
+	search                map[string][]*models.EmailData
+	loadCalls             []string
+	deleteCalls           []string
+	archiveCalls          []string
+	moveCalls             []string
+	sendCalls             []string
+	composeSends          []ComposeSendRequest
+	saveDraftCalls        []string
+	rawDraftCalls         []string
+	draftDeletes          []string
+	draftSends            []string
+	getMessageRefs        []models.MessageRef
+	embeddingRefs         []models.MessageRef
+	storedEmbeddingRefs   []models.MessageRef
+	calendarEvents        []models.CalendarEvent
+	calendarSearch        []string
+	createdCalendarEvents []models.CalendarEvent
+	uidLookupRefs         []models.CollectionRef
+	uidLookupUIDs         []string
+	savedCalendarEvents   []models.CalendarEvent
+	rsvpCalendarRefs      []models.EventRef
+	rsvpCalendarStatus    []string
+	closed                bool
 }
 
 func newRecordingAccountBackend(name string, folders []string, email *models.EmailData, body string) *recordingAccountBackend {
@@ -246,6 +249,31 @@ func (b *recordingAccountBackend) SaveCalendarEvent(event models.CalendarEvent) 
 		}
 	}
 	return nil, fmt.Errorf("missing calendar event %s", event.Ref.LocalID)
+}
+
+func (b *recordingAccountBackend) CreateCalendarEvent(event models.CalendarEvent) (*models.CalendarEvent, error) {
+	event.Ref = event.Ref.WithDefaults()
+	b.createdCalendarEvents = append(b.createdCalendarEvents, event)
+	b.calendarEvents = append(b.calendarEvents, event)
+	saved := event
+	return &saved, nil
+}
+
+func (b *recordingAccountBackend) FindCalendarEventByUID(ref models.CollectionRef, uid string) (*models.CalendarEvent, error) {
+	ref.Kind = models.SourceKindCalendar
+	ref.SourceID = models.NormalizeSourceID(ref.SourceID, models.DefaultCalendarSourceID)
+	ref.AccountID = models.NormalizeAccountID(ref.AccountID)
+	b.uidLookupRefs = append(b.uidLookupRefs, ref)
+	b.uidLookupUIDs = append(b.uidLookupUIDs, uid)
+	for _, event := range b.calendarEvents {
+		event.Ref = event.Ref.WithDefaults()
+		if event.Ref.SourceID == ref.SourceID && event.Ref.AccountID == ref.AccountID &&
+			event.Ref.CalendarID == ref.CollectionID && strings.TrimSpace(event.ProviderUID) == strings.TrimSpace(uid) {
+			found := event
+			return &found, nil
+		}
+	}
+	return nil, nil
 }
 
 func (b *recordingAccountBackend) RespondCalendarEvent(ref models.EventRef, status string) (*models.CalendarEvent, error) {

@@ -583,6 +583,324 @@ func TestGoogleCalendarSourceImportsEventAndFindsDuplicateUID(t *testing.T) {
 	}
 }
 
+func TestGoogleCalendarSourceImportConflictReturnsExistingEventByUID(t *testing.T) {
+	start := time.Date(2026, 6, 23, 20, 0, 0, 0, time.UTC)
+	var importCalls int
+	var lookupUID string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/calendar/v3/calendars/primary/events/import":
+			importCalls++
+			w.WriteHeader(http.StatusConflict)
+			_, _ = w.Write([]byte(`{"error":{"code":409,"message":"The requested identifier already exists.","status":"ALREADY_EXISTS"}}`))
+		case r.Method == http.MethodGet && r.URL.Path == "/calendar/v3/calendars/primary/events":
+			lookupUID = r.URL.Query().Get("iCalUID")
+			_ = json.NewEncoder(w).Encode(map[string]any{"items": []map[string]any{{
+				"id":      "google-existing-event",
+				"iCalUID": "fireworks-interview@google.com",
+				"etag":    `"g-existing"`,
+				"summary": "Interview with Fireworks AI",
+				"status":  "confirmed",
+				"start":   map[string]string{"dateTime": start.Format(time.RFC3339), "timeZone": "America/Los_Angeles"},
+				"end":     map[string]string{"dateTime": start.Add(45 * time.Minute).Format(time.RFC3339), "timeZone": "America/Los_Angeles"},
+			}}})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+	src, err := NewGoogleCalendarSource(config.SourceConfig{
+		ID:        "work-calendar",
+		Kind:      string(models.SourceKindCalendar),
+		Provider:  "google_calendar",
+		AccountID: "work",
+		Google: config.GoogleConfig{
+			AccessToken: "token",
+			APIBaseURL:  server.URL + "/calendar/v3",
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewGoogleCalendarSource: %v", err)
+	}
+
+	saved, err := src.CreateEvent(context.Background(), models.CalendarEvent{
+		Ref:         models.EventRef{SourceID: "work-calendar", AccountID: "work", CalendarID: "primary", EventID: "fireworks-interview@google.com"}.WithDefaults(),
+		ProviderUID: "fireworks-interview@google.com",
+		Title:       "Interview with Fireworks AI",
+		Start:       start,
+		End:         start.Add(45 * time.Minute),
+		TimeZone:    "America/Los_Angeles",
+		Status:      "confirmed",
+		Raw: strings.Join([]string{
+			"BEGIN:VCALENDAR",
+			"VERSION:2.0",
+			"BEGIN:VEVENT",
+			"UID:fireworks-interview@google.com",
+			"SUMMARY:Interview with Fireworks AI",
+			"DTSTART;TZID=America/Los_Angeles:20260623T130000",
+			"DTEND;TZID=America/Los_Angeles:20260623T134500",
+			"END:VEVENT",
+			"END:VCALENDAR",
+		}, "\r\n"),
+	}, models.CalendarMutationOptions{})
+	if err != nil {
+		t.Fatalf("CreateEvent: %v", err)
+	}
+	if importCalls != 1 || lookupUID != "fireworks-interview@google.com" {
+		t.Fatalf("importCalls=%d lookupUID=%q, want conflict recovery lookup by UID", importCalls, lookupUID)
+	}
+	if saved.Ref.EventID != "google-existing-event" || saved.ProviderUID != "fireworks-interview@google.com" || saved.Ref.ETag != `"g-existing"` {
+		t.Fatalf("saved = %#v, want existing provider event", saved)
+	}
+}
+
+func TestGoogleCalendarSourceImportBadRequestAlreadyExistsReturnsExistingEventByUID(t *testing.T) {
+	start := time.Date(2026, 6, 23, 20, 0, 0, 0, time.UTC)
+	var importCalls int
+	var lookupUID string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/calendar/v3/calendars/primary/events/import":
+			importCalls++
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = w.Write([]byte(`{"error":{"code":400,"message":"The requested identifier already exists.","status":"ALREADY_EXISTS"}}`))
+		case r.Method == http.MethodGet && r.URL.Path == "/calendar/v3/calendars/primary/events":
+			lookupUID = r.URL.Query().Get("iCalUID")
+			_ = json.NewEncoder(w).Encode(map[string]any{"items": []map[string]any{{
+				"id":      "google-existing-event",
+				"iCalUID": "fireworks-interview@google.com",
+				"etag":    `"g-existing"`,
+				"summary": "Interview with Fireworks AI",
+				"status":  "confirmed",
+				"start":   map[string]string{"dateTime": start.Format(time.RFC3339), "timeZone": "America/Los_Angeles"},
+				"end":     map[string]string{"dateTime": start.Add(45 * time.Minute).Format(time.RFC3339), "timeZone": "America/Los_Angeles"},
+			}}})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+	src, err := NewGoogleCalendarSource(config.SourceConfig{
+		ID:        "work-calendar",
+		Kind:      string(models.SourceKindCalendar),
+		Provider:  "google_calendar",
+		AccountID: "work",
+		Google: config.GoogleConfig{
+			AccessToken: "token",
+			APIBaseURL:  server.URL + "/calendar/v3",
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewGoogleCalendarSource: %v", err)
+	}
+
+	saved, err := src.CreateEvent(context.Background(), models.CalendarEvent{
+		Ref:         models.EventRef{SourceID: "work-calendar", AccountID: "work", CalendarID: "primary", EventID: "fireworks-interview@google.com"}.WithDefaults(),
+		ProviderUID: "fireworks-interview@google.com",
+		Title:       "Interview with Fireworks AI",
+		Start:       start,
+		End:         start.Add(45 * time.Minute),
+		TimeZone:    "America/Los_Angeles",
+		Status:      "confirmed",
+		Raw: strings.Join([]string{
+			"BEGIN:VCALENDAR",
+			"VERSION:2.0",
+			"BEGIN:VEVENT",
+			"UID:fireworks-interview@google.com",
+			"SUMMARY:Interview with Fireworks AI",
+			"DTSTART;TZID=America/Los_Angeles:20260623T130000",
+			"DTEND;TZID=America/Los_Angeles:20260623T134500",
+			"END:VEVENT",
+			"END:VCALENDAR",
+		}, "\r\n"),
+	}, models.CalendarMutationOptions{})
+	if err != nil {
+		t.Fatalf("CreateEvent: %v", err)
+	}
+	if importCalls != 1 || lookupUID != "fireworks-interview@google.com" {
+		t.Fatalf("importCalls=%d lookupUID=%q, want duplicate recovery lookup by UID", importCalls, lookupUID)
+	}
+	if saved.Ref.EventID != "google-existing-event" || saved.ProviderUID != "fireworks-interview@google.com" || saved.Ref.ETag != `"g-existing"` {
+		t.Fatalf("saved = %#v, want existing provider event", saved)
+	}
+}
+
+func TestGoogleCalendarSourceCopiesInvitationWhenCalendarOwnerIsNotParticipant(t *testing.T) {
+	const originalUIDKey = "heraldOriginalICalUID"
+	start := time.Date(2026, 6, 23, 20, 0, 0, 0, time.UTC)
+	var gotPath string
+	var gotPayload map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		gotPath = r.URL.Path
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/calendar/v3/calendars/primary/events/import":
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = w.Write([]byte(`{"error":{"code":400,"message":"The owner of the calendar must either be the organizer or an attendee of an event that is imported."}}`))
+		case r.Method == http.MethodPost && r.URL.Path == "/calendar/v3/calendars/primary/events":
+			if err := json.NewDecoder(r.Body).Decode(&gotPayload); err != nil {
+				t.Fatalf("decode request body: %v", err)
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"id":      "copied-fireworks",
+				"iCalUID": "google-generated-copy@google.com",
+				"etag":    `"g-copy"`,
+				"summary": "Interview with Fireworks AI",
+				"status":  "confirmed",
+				"start":   map[string]string{"dateTime": start.Format(time.RFC3339), "timeZone": "America/Los_Angeles"},
+				"end":     map[string]string{"dateTime": start.Add(45 * time.Minute).Format(time.RFC3339), "timeZone": "America/Los_Angeles"},
+				"extendedProperties": map[string]any{"private": map[string]string{
+					originalUIDKey: "fireworks-interview@google.com",
+				}},
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+	src, err := NewGoogleCalendarSource(config.SourceConfig{
+		ID:        "work-calendar",
+		Kind:      string(models.SourceKindCalendar),
+		Provider:  "google_calendar",
+		AccountID: "work",
+		Google: config.GoogleConfig{
+			Email:       "owner@example.com",
+			AccessToken: "token",
+			APIBaseURL:  server.URL + "/calendar/v3",
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewGoogleCalendarSource: %v", err)
+	}
+
+	saved, err := src.CreateEvent(context.Background(), models.CalendarEvent{
+		Ref:            models.EventRef{SourceID: "work-calendar", AccountID: "work", CalendarID: "primary", EventID: "fireworks-interview@google.com"}.WithDefaults(),
+		ProviderUID:    "fireworks-interview@google.com",
+		Title:          "Interview with Fireworks AI",
+		Description:    "Join the Google Meet meeting",
+		Location:       "https://meet.google.com/sse-mkij-qoc",
+		Start:          start,
+		End:            start.Add(45 * time.Minute),
+		TimeZone:       "America/Los_Angeles",
+		StartTimeZone:  "America/Los_Angeles",
+		EndTimeZone:    "America/Los_Angeles",
+		Status:         "CONFIRMED",
+		Organizer:      "Fireworks Interview Calendar",
+		OrganizerEmail: "fireworks-calendar@group.calendar.google.com",
+		Attendees: []models.CalendarAttendee{
+			{Name: "Candidate", Email: "candidate@example.com", RSVP: "needs-action"},
+			{Name: "Scheduler", Email: "schedule@example.com", RSVP: "needs-action"},
+		},
+		Raw: strings.Join([]string{
+			"BEGIN:VCALENDAR",
+			"VERSION:2.0",
+			"BEGIN:VEVENT",
+			"UID:fireworks-interview@google.com",
+			"SUMMARY:Interview with Fireworks AI",
+			"DTSTART;TZID=America/Los_Angeles:20260623T130000",
+			"DTEND;TZID=America/Los_Angeles:20260623T134500",
+			"END:VEVENT",
+			"END:VCALENDAR",
+		}, "\r\n"),
+	}, models.CalendarMutationOptions{})
+	if err != nil {
+		t.Fatalf("CreateEvent: %v", err)
+	}
+	if gotPath != "/calendar/v3/calendars/primary/events" {
+		t.Fatalf("request path = %q, want copied event insert path", gotPath)
+	}
+	if _, ok := gotPayload["iCalUID"]; ok {
+		t.Fatalf("copied insert payload included iCalUID: %#v", gotPayload["iCalUID"])
+	}
+	if _, ok := gotPayload["organizer"]; ok {
+		t.Fatalf("copied insert payload included organizer: %#v", gotPayload["organizer"])
+	}
+	if gotPayload["status"] != "confirmed" {
+		t.Fatalf("copied insert status = %#v, want provider-normalized confirmed", gotPayload["status"])
+	}
+	extended, ok := gotPayload["extendedProperties"].(map[string]any)
+	if !ok {
+		t.Fatalf("extendedProperties = %#v, want object", gotPayload["extendedProperties"])
+	}
+	private, ok := extended["private"].(map[string]any)
+	if !ok || private[originalUIDKey] != "fireworks-interview@google.com" {
+		t.Fatalf("private extended properties = %#v, want original iCalUID", extended["private"])
+	}
+	if saved.Ref.EventID != "copied-fireworks" || saved.ProviderUID != "fireworks-interview@google.com" {
+		t.Fatalf("saved = %#v, want copied event preserving original provider UID", saved)
+	}
+}
+
+func TestGoogleCalendarSourceFindEventByUIDFindsCopiedInvitationExtendedProperty(t *testing.T) {
+	const originalUIDKey = "heraldOriginalICalUID"
+	start := time.Date(2026, 6, 23, 20, 0, 0, 0, time.UTC)
+	var queries []url.Values
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodGet || r.URL.Path != "/calendar/v3/calendars/primary/events" {
+			http.NotFound(w, r)
+			return
+		}
+		query := r.URL.Query()
+		queries = append(queries, query)
+		if query.Get("privateExtendedProperty") != originalUIDKey+"=fireworks-interview@google.com" {
+			_ = json.NewEncoder(w).Encode(map[string]any{"items": []map[string]any{}})
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"items": []map[string]any{{
+			"id":      "copied-fireworks",
+			"iCalUID": "google-generated-copy@google.com",
+			"etag":    `"g-copy"`,
+			"summary": "Interview with Fireworks AI",
+			"status":  "confirmed",
+			"start":   map[string]string{"dateTime": start.Format(time.RFC3339), "timeZone": "America/Los_Angeles"},
+			"end":     map[string]string{"dateTime": start.Add(45 * time.Minute).Format(time.RFC3339), "timeZone": "America/Los_Angeles"},
+			"extendedProperties": map[string]any{"private": map[string]string{
+				originalUIDKey: "fireworks-interview@google.com",
+			}},
+		}}})
+	}))
+	defer server.Close()
+	src, err := NewGoogleCalendarSource(config.SourceConfig{
+		ID:        "work-calendar",
+		Kind:      string(models.SourceKindCalendar),
+		Provider:  "google_calendar",
+		AccountID: "work",
+		Google: config.GoogleConfig{
+			Email:       "owner@example.com",
+			AccessToken: "token",
+			APIBaseURL:  server.URL + "/calendar/v3",
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewGoogleCalendarSource: %v", err)
+	}
+
+	found, err := src.FindEventByUID(context.Background(), models.CollectionRef{
+		SourceID:     "work-calendar",
+		AccountID:    "work",
+		Kind:         models.SourceKindCalendar,
+		CollectionID: "primary",
+	}, "fireworks-interview@google.com")
+	if err != nil {
+		t.Fatalf("FindEventByUID: %v", err)
+	}
+	if len(queries) != 2 {
+		t.Fatalf("queries = %#v, want iCalUID lookup then extended property lookup", queries)
+	}
+	if queries[0].Get("iCalUID") != "fireworks-interview@google.com" {
+		t.Fatalf("first query = %v, want iCalUID lookup", queries[0])
+	}
+	if queries[1].Get("privateExtendedProperty") != originalUIDKey+"=fireworks-interview@google.com" {
+		t.Fatalf("second query = %v, want original iCalUID extended property lookup", queries[1])
+	}
+	if found == nil || found.Ref.EventID != "copied-fireworks" || found.ProviderUID != "fireworks-interview@google.com" {
+		t.Fatalf("found = %#v, want copied event preserving original provider UID", found)
+	}
+}
+
 func TestGoogleCalendarSourceCreateEventUsesInsertAndOmitsDraftIDs(t *testing.T) {
 	start := time.Date(2026, 6, 2, 16, 0, 0, 0, time.UTC)
 	var gotPath string

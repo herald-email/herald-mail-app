@@ -629,6 +629,45 @@ func TestLocalBackendCalendarCreateEventWritesProviderBeforeCache(t *testing.T) 
 	}
 }
 
+func TestLocalBackendCalendarCreateEventRejectsConfiguredProviderSourceMismatch(t *testing.T) {
+	store, err := cache.New(":memory:")
+	if err != nil {
+		t.Fatalf("cache.New: %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+
+	cfg := &config.Config{Sources: []config.SourceConfig{{
+		ID:        "work-calendar",
+		Kind:      string(models.SourceKindCalendar),
+		Provider:  "google_calendar",
+		AccountID: "work",
+		Google:    config.GoogleConfig{APIBaseURL: "http://127.0.0.1/calendar/v3"},
+	}}}
+	b := &LocalBackend{cache: store, cfg: cfg}
+	event := models.CalendarEvent{
+		Ref:         models.EventRef{SourceID: "orphan-calendar", AccountID: "work", CalendarID: "primary", EventID: "invite-mismatch"}.WithDefaults(),
+		ProviderUID: "invite-mismatch",
+		Title:       "Should not be cache-only",
+		Start:       time.Date(2026, 6, 2, 16, 0, 0, 0, time.UTC),
+		End:         time.Date(2026, 6, 2, 16, 30, 0, 0, time.UTC),
+		Status:      "confirmed",
+	}
+
+	saved, err := b.CreateCalendarEvent(event)
+	if err == nil {
+		t.Fatalf("CreateCalendarEvent saved %#v, want provider source mismatch failure", saved)
+	}
+	if !errors.Is(err, models.ErrCalendarProviderUnavailable) {
+		t.Fatalf("error = %v, want ErrCalendarProviderUnavailable", err)
+	}
+	if strings.Contains(err.Error(), event.Ref.EventID) {
+		t.Fatalf("error leaked provider event id: %v", err)
+	}
+	if _, err := store.GetCalendarEventByRef(event.Ref); err == nil {
+		t.Fatal("CreateCalendarEvent wrote a cache-only event for an unmatched provider source")
+	}
+}
+
 func TestLocalBackendCalendarMutationsRejectCachedReadOnlyCollection(t *testing.T) {
 	start := time.Date(2026, 6, 2, 16, 0, 0, 0, time.UTC)
 	lab := testcalendar.Start(t,
@@ -1101,6 +1140,141 @@ func TestMultiBackendSaveCalendarEventRoutesByScopedRef(t *testing.T) {
 	}
 	if len(personal.savedCalendarEvents) != 1 || personal.savedCalendarEvents[0].Ref.SourceID != "personal-calendar" {
 		t.Fatalf("personal saved events = %#v, want one scoped save", personal.savedCalendarEvents)
+	}
+}
+
+func TestMultiBackendCreateCalendarEventRoutesByCalendarAccountWhenActiveMailDiffers(t *testing.T) {
+	proton := newRecordingAccountBackend("proton", []string{"INBOX"}, nil, "")
+	logrus := newRecordingAccountBackend("logrus", []string{"INBOX"}, nil, "")
+	mb, err := NewMultiBackend([]AccountBackend{
+		{Info: AccountInfo{SourceID: "zoomacode-protonmail-com-mail", AccountID: "zoomacode-protonmail-com", DisplayName: "Zoomacode ProtonMail", Provider: "imap"}, Backend: proton},
+		{Info: AccountInfo{SourceID: "logrusadm-gmail-com-mail", AccountID: "logrusadm-gmail-com", DisplayName: "Logrus Gmail", Provider: "imap"}, Backend: logrus},
+	})
+	if err != nil {
+		t.Fatalf("NewMultiBackend: %v", err)
+	}
+	if err := mb.SwitchAccount("zoomacode-protonmail-com-mail"); err != nil {
+		t.Fatalf("SwitchAccount(proton): %v", err)
+	}
+
+	event := models.CalendarEvent{
+		Ref: models.EventRef{
+			SourceID:   "calendar-calendar",
+			AccountID:  "logrusadm-gmail-com",
+			CalendarID: "logrusadm@gmail.com",
+			EventID:    "fireworks-interview",
+		}.WithDefaults(),
+		ProviderUID: "fireworks-interview",
+		Title:       "Interview with Fireworks AI",
+		Start:       time.Date(2026, 6, 23, 20, 0, 0, 0, time.UTC),
+		End:         time.Date(2026, 6, 23, 20, 45, 0, 0, time.UTC),
+	}
+	saved, err := mb.CreateCalendarEvent(event)
+	if err != nil {
+		t.Fatalf("CreateCalendarEvent: %v", err)
+	}
+	if saved.Ref.AccountID != "logrusadm-gmail-com" {
+		t.Fatalf("saved ref = %#v, want logrus account", saved.Ref)
+	}
+	if len(proton.createdCalendarEvents) != 0 {
+		t.Fatalf("proton created events = %#v, want no cross-account create", proton.createdCalendarEvents)
+	}
+	if len(logrus.createdCalendarEvents) != 1 || logrus.createdCalendarEvents[0].Ref.EventID != "fireworks-interview" {
+		t.Fatalf("logrus created events = %#v, want one Fireworks create", logrus.createdCalendarEvents)
+	}
+}
+
+func TestMultiBackendFindCalendarEventByUIDRoutesByCalendarAccountWhenActiveMailDiffers(t *testing.T) {
+	proton := newRecordingAccountBackend("proton", []string{"INBOX"}, nil, "")
+	logrus := newRecordingAccountBackend("logrus", []string{"INBOX"}, nil, "")
+	logrus.calendarEvents = []models.CalendarEvent{{
+		Ref: models.EventRef{
+			SourceID:   "calendar-calendar",
+			AccountID:  "logrusadm-gmail-com",
+			CalendarID: "logrusadm@gmail.com",
+			EventID:    "fireworks-interview",
+		}.WithDefaults(),
+		ProviderUID: "fireworks-interview",
+		Title:       "Interview with Fireworks AI",
+		Start:       time.Date(2026, 6, 23, 20, 0, 0, 0, time.UTC),
+		End:         time.Date(2026, 6, 23, 20, 45, 0, 0, time.UTC),
+	}}
+	mb, err := NewMultiBackend([]AccountBackend{
+		{Info: AccountInfo{SourceID: "zoomacode-protonmail-com-mail", AccountID: "zoomacode-protonmail-com", DisplayName: "Zoomacode ProtonMail", Provider: "imap"}, Backend: proton},
+		{Info: AccountInfo{SourceID: "logrusadm-gmail-com-mail", AccountID: "logrusadm-gmail-com", DisplayName: "Logrus Gmail", Provider: "imap"}, Backend: logrus},
+	})
+	if err != nil {
+		t.Fatalf("NewMultiBackend: %v", err)
+	}
+	if err := mb.SwitchAccount("zoomacode-protonmail-com-mail"); err != nil {
+		t.Fatalf("SwitchAccount(proton): %v", err)
+	}
+
+	ref := models.CollectionRef{
+		SourceID:     "calendar-calendar",
+		AccountID:    "logrusadm-gmail-com",
+		Kind:         models.SourceKindCalendar,
+		CollectionID: "logrusadm@gmail.com",
+	}
+	found, err := mb.FindCalendarEventByUID(ref, "fireworks-interview")
+	if err != nil {
+		t.Fatalf("FindCalendarEventByUID: %v", err)
+	}
+	if found == nil || found.Ref.AccountID != "logrusadm-gmail-com" {
+		t.Fatalf("found = %#v, want logrus duplicate", found)
+	}
+	if len(proton.uidLookupRefs) != 0 {
+		t.Fatalf("proton UID lookups = %#v, want no cross-account duplicate lookup", proton.uidLookupRefs)
+	}
+	if len(logrus.uidLookupRefs) != 1 || logrus.uidLookupRefs[0].AccountID != "logrusadm-gmail-com" {
+		t.Fatalf("logrus UID lookups = %#v, want one scoped lookup", logrus.uidLookupRefs)
+	}
+}
+
+func TestMultiBackendFindCalendarEventByUIDDoesNotFallbackToActiveAfterCalendarAccountMiss(t *testing.T) {
+	proton := newRecordingAccountBackend("proton", []string{"INBOX"}, nil, "")
+	proton.calendarEvents = []models.CalendarEvent{{
+		Ref: models.EventRef{
+			SourceID:   "calendar-calendar",
+			AccountID:  "logrusadm-gmail-com",
+			CalendarID: "logrusadm@gmail.com",
+			EventID:    "orphan-fireworks-interview",
+		}.WithDefaults(),
+		ProviderUID: "fireworks-interview",
+		Title:       "Interview with Fireworks AI",
+		Start:       time.Date(2026, 6, 23, 20, 0, 0, 0, time.UTC),
+		End:         time.Date(2026, 6, 23, 20, 45, 0, 0, time.UTC),
+	}}
+	logrus := newRecordingAccountBackend("logrus", []string{"INBOX"}, nil, "")
+	mb, err := NewMultiBackend([]AccountBackend{
+		{Info: AccountInfo{SourceID: "zoomacode-protonmail-com-mail", AccountID: "zoomacode-protonmail-com", DisplayName: "Zoomacode ProtonMail", Provider: "imap"}, Backend: proton},
+		{Info: AccountInfo{SourceID: "logrusadm-gmail-com-mail", AccountID: "logrusadm-gmail-com", DisplayName: "Logrus Gmail", Provider: "imap"}, Backend: logrus},
+	})
+	if err != nil {
+		t.Fatalf("NewMultiBackend: %v", err)
+	}
+	if err := mb.SwitchAccount("zoomacode-protonmail-com-mail"); err != nil {
+		t.Fatalf("SwitchAccount(proton): %v", err)
+	}
+
+	ref := models.CollectionRef{
+		SourceID:     "calendar-calendar",
+		AccountID:    "logrusadm-gmail-com",
+		Kind:         models.SourceKindCalendar,
+		CollectionID: "logrusadm@gmail.com",
+	}
+	found, err := mb.FindCalendarEventByUID(ref, "fireworks-interview")
+	if err != nil {
+		t.Fatalf("FindCalendarEventByUID: %v", err)
+	}
+	if found != nil {
+		t.Fatalf("found = %#v, want no duplicate from active account orphan cache", found)
+	}
+	if len(logrus.uidLookupRefs) != 1 || logrus.uidLookupRefs[0].AccountID != "logrusadm-gmail-com" {
+		t.Fatalf("logrus UID lookups = %#v, want one scoped lookup", logrus.uidLookupRefs)
+	}
+	if len(proton.uidLookupRefs) != 0 {
+		t.Fatalf("proton UID lookups = %#v, want no active-account fallback", proton.uidLookupRefs)
 	}
 }
 
