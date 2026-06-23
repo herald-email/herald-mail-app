@@ -15,7 +15,7 @@ Timeline users need to select multiple visible messages without switching to Cle
 
 ## Bulk Actions
 
-Bulk actions reuse the existing destructive-action confirmation flow and deletion worker. This avoids introducing a second IMAP write path for Timeline actions.
+Bulk actions reuse the existing destructive-action confirmation flow and deletion worker. The worker stays serial per mail source for provider safety, but selected delete targets in the same source and folder are sent as one batch request so IMAP can move/delete them with one UID set instead of one message at a time.
 
 - [x] `D` deletes selected Timeline messages when at least one selectable Timeline message is selected.
 - [x] `e` archives selected Timeline messages when at least one non-draft Timeline message is selected.
@@ -23,6 +23,7 @@ Bulk actions reuse the existing destructive-action confirmation flow and deletio
 - [x] A collapsed thread row with no selection targets the full represented thread for delete and archive confirmation.
 - [x] Deleting selected drafts is allowed and confirmation copy says drafts will be discarded when any selected target is a draft.
 - [x] Archiving skips selected drafts; if all selected Timeline targets are drafts, no archive confirmation opens and the status explains that drafts cannot be archived.
+- [x] Delete progress remains message-count based even when the provider operation is executed as a source/folder batch.
 
 ## Selection State And Copy
 
@@ -38,6 +39,6 @@ Selection state is keyed by message ID, not row position. This lets row checks s
 
 The feature must be covered by focused Go tests and tmux captures because it changes table layout, key routing, and destructive-action prompts. Demo mode is sufficient for visual acceptance because it exercises the Timeline UI without live IMAP risk.
 
-- [x] Go tests cover collapsed-thread selection, expanded-row selection, selected-target priority over current row, confirmation text, draft archive skipping, selection pruning, status scoping, and 80-column hint/table fit.
+- [x] Go tests cover collapsed-thread selection, expanded-row selection, selected-target priority over current row, batched delete queueing by source/folder, confirmation text, draft archive skipping, selection pruning, status scoping, and 80-column hint/table fit.
 - [x] Demo tmux captures cover Timeline selection at `220x50`, `80x24`, and the `50x15` minimum-size guard.
 - [x] SSH and MCP smoke checks are run as post-completion surfaces per repo policy.

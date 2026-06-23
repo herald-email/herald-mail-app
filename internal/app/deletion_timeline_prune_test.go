@@ -127,3 +127,40 @@ func TestDeletionResultPrunesTimelineBatchAffectedIDsForArchive(t *testing.T) {
 		t.Fatalf("expected archived preview state to clear")
 	}
 }
+
+func TestDeletionResultBatchAdvancesMessageCountProgress(t *testing.T) {
+	first := makeDeletionPruneEmail("batch-progress-1", "news@example.com", "Newsletter one", 2)
+	second := makeDeletionPruneEmail("batch-progress-2", "news@example.com", "Newsletter two", 1)
+
+	m := makeSizedModel(t, 120, 40)
+	m.activeTab = tabTimeline
+	m.deleting = true
+	m.deletionsPending = 2
+	m.deletionsTotal = 2
+	m.timeline.emails = []*models.EmailData{first, second}
+	m.timeline.selectedMessageIDs = map[string]bool{
+		first.MessageID:  true,
+		second.MessageID: true,
+	}
+	m.updateTimelineTable()
+
+	updatedModel, _ := m.Update(models.DeletionResult{
+		Folder:             "INBOX",
+		DeletedCount:       2,
+		AffectedMessageIDs: []string{first.MessageID, second.MessageID},
+	})
+	updated := updatedModel.(*Model)
+
+	if updated.deleting {
+		t.Fatal("expected batch result to finish deletion")
+	}
+	if updated.deletionsPending != 0 || updated.deletionsTotal != 0 {
+		t.Fatalf("expected completed batch progress to reset, got pending=%d total=%d", updated.deletionsPending, updated.deletionsTotal)
+	}
+	for _, id := range []string{first.MessageID, second.MessageID} {
+		requireMessageAbsent(t, updated.timeline.emails, id)
+		if updated.timeline.selectedMessageIDs[id] {
+			t.Fatalf("expected %s selection to be cleared", id)
+		}
+	}
+}

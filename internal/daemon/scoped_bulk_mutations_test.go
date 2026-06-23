@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/herald-email/herald-mail-app/internal/backend"
+	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
 func newScopedBulkMutationServer(t *testing.T) (*Server, *backend.MultiBackend) {
@@ -49,6 +50,53 @@ func TestDaemonBulkDeleteRoutesByLocalIDs(t *testing.T) {
 	}
 	if email, _ := mb.GetEmailByRef(personalRef); email != nil {
 		t.Fatalf("personal scoped message still visible after bulk delete: %#v", email.MessageRef())
+	}
+}
+
+type batchRecordingMutationBackend struct {
+	*backend.MultiBackend
+	batchRefs  [][]models.MessageRef
+	singleRefs []models.MessageRef
+}
+
+func (b *batchRecordingMutationBackend) DeleteEmailsByRef(refs []models.MessageRef) error {
+	b.batchRefs = append(b.batchRefs, append([]models.MessageRef(nil), refs...))
+	return nil
+}
+
+func (b *batchRecordingMutationBackend) DeleteEmailByRef(ref models.MessageRef) error {
+	b.singleRefs = append(b.singleRefs, ref)
+	return b.MultiBackend.DeleteEmailByRef(ref)
+}
+
+func TestDaemonBulkDeleteUsesScopedBatchMutation(t *testing.T) {
+	mb := backend.NewMultiDemoBackend()
+	if err := mb.SwitchAccount(backend.AllAccountsSourceID); err != nil {
+		t.Fatalf("SwitchAccount(all): %v", err)
+	}
+	_, personalRef := duplicateMessageRefs(t, mb)
+	recorder := &batchRecordingMutationBackend{MultiBackend: mb}
+	s := &Server{backend: recorder}
+	body, _ := json.Marshal(map[string]any{
+		"message_ids": []string{personalRef.MessageID, personalRef.MessageID},
+		"local_ids":   []string{personalRef.LocalID, personalRef.LocalID},
+	})
+	req := httptest.NewRequest(http.MethodPost, "/v1/emails/bulk-delete", bytes.NewReader(body))
+	rr := httptest.NewRecorder()
+
+	s.handleBulkDelete(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected scoped bulk delete to succeed, got %d: %s", rr.Code, rr.Body.String())
+	}
+	if got := len(recorder.batchRefs); got != 1 {
+		t.Fatalf("batch calls = %d, want 1", got)
+	}
+	if got := len(recorder.batchRefs[0]); got != 2 {
+		t.Fatalf("batch size = %d, want 2", got)
+	}
+	if len(recorder.singleRefs) != 0 {
+		t.Fatalf("expected no single DeleteEmailByRef calls, got %#v", recorder.singleRefs)
 	}
 }
 

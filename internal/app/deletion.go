@@ -35,6 +35,19 @@ func countLabel(count int, singular, plural string) string {
 	return fmt.Sprintf("%d %s", count, plural)
 }
 
+type deleteEmailsByRefBackend interface {
+	DeleteEmailsByRef([]models.MessageRef) error
+}
+
+type deleteTarget struct {
+	ref                models.MessageRef
+	messageID          string
+	sender             string
+	isDomain           bool
+	folder             string
+	affectedMessageIDs []string
+}
+
 func (m *Model) toggleTimelineSelection() {
 	if m.activeTab != tabTimeline || m.timelineIsReadOnlyDiagnostic() {
 		return
@@ -160,15 +173,6 @@ func (m *Model) archiveSelectedImmediately() tea.Cmd {
 
 // queueRequests builds deletion/archive requests and sends them to the worker.
 func (m *Model) queueRequests(isArchive bool) tea.Cmd {
-	type deleteTarget struct {
-		ref                models.MessageRef
-		messageID          string
-		sender             string
-		isDomain           bool
-		folder             string
-		affectedMessageIDs []string
-	}
-
 	folder := m.currentFolder
 	var targets []deleteTarget
 	seenMessageIDs := make(map[string]bool)
@@ -222,18 +226,10 @@ func (m *Model) queueRequests(isArchive bool) tea.Cmd {
 			return nil
 		}
 		ch := m.deletionRequestCh
+		requests := deletionRequestsFromTargets(targets, isArchive)
 		go func() {
-			for _, t := range targets {
-				ch <- models.DeletionRequest{
-					MessageRef:         t.ref,
-					SourceID:           t.ref.SourceID,
-					AccountID:          t.ref.AccountID,
-					LocalID:            t.ref.LocalID,
-					MessageID:          t.messageID,
-					Folder:             t.folder,
-					IsArchive:          isArchive,
-					AffectedMessageIDs: t.affectedMessageIDs,
-				}
+			for _, req := range requests {
+				ch <- req
 			}
 		}()
 		m.deletionsPending = len(targets)
@@ -245,8 +241,116 @@ func (m *Model) queueRequests(isArchive bool) tea.Cmd {
 	return nil
 }
 
+func deletionRequestsFromTargets(targets []deleteTarget, isArchive bool) []models.DeletionRequest {
+	if len(targets) == 0 {
+		return nil
+	}
+	if isArchive || len(targets) == 1 {
+		requests := make([]models.DeletionRequest, 0, len(targets))
+		for _, t := range targets {
+			requests = append(requests, singleDeletionRequestFromTarget(t, isArchive))
+		}
+		return requests
+	}
+
+	type batchKey struct {
+		sourceID  models.SourceID
+		accountID models.AccountID
+		folder    string
+	}
+	type batch struct {
+		key      batchKey
+		refs     []models.MessageRef
+		affected []string
+	}
+	batches := make(map[batchKey]*batch)
+	var order []batchKey
+	for _, t := range targets {
+		ref := t.ref.WithDefaults()
+		folder := strings.TrimSpace(t.folder)
+		if folder == "" {
+			folder = ref.Folder
+		}
+		key := batchKey{sourceID: ref.SourceID, accountID: ref.AccountID, folder: folder}
+		group := batches[key]
+		if group == nil {
+			group = &batch{key: key}
+			batches[key] = group
+			order = append(order, key)
+		}
+		group.refs = append(group.refs, ref)
+		group.affected = appendAffectedMessageIDs(group.affected, t.affectedMessageIDs...)
+	}
+
+	requests := make([]models.DeletionRequest, 0, len(order))
+	for _, key := range order {
+		group := batches[key]
+		if len(group.refs) == 1 {
+			t := deleteTarget{
+				ref:                group.refs[0],
+				messageID:          group.refs[0].MessageID,
+				folder:             group.key.folder,
+				affectedMessageIDs: group.affected,
+			}
+			requests = append(requests, singleDeletionRequestFromTarget(t, false))
+			continue
+		}
+		requests = append(requests, models.DeletionRequest{
+			SourceID:           group.key.sourceID,
+			AccountID:          group.key.accountID,
+			Folder:             group.key.folder,
+			MessageRefs:        append([]models.MessageRef(nil), group.refs...),
+			AffectedMessageIDs: append([]string(nil), group.affected...),
+		})
+	}
+	return requests
+}
+
+func singleDeletionRequestFromTarget(t deleteTarget, isArchive bool) models.DeletionRequest {
+	ref := t.ref.WithDefaults()
+	return models.DeletionRequest{
+		MessageRef:         ref,
+		SourceID:           ref.SourceID,
+		AccountID:          ref.AccountID,
+		LocalID:            ref.LocalID,
+		MessageID:          t.messageID,
+		Folder:             t.folder,
+		IsArchive:          isArchive,
+		AffectedMessageIDs: append([]string(nil), t.affectedMessageIDs...),
+	}
+}
+
+func appendAffectedMessageIDs(ids []string, candidates ...string) []string {
+	seen := make(map[string]bool, len(ids)+len(candidates))
+	for _, id := range ids {
+		id = strings.TrimSpace(id)
+		if id == "" || seen[id] {
+			continue
+		}
+		seen[id] = true
+	}
+	for _, id := range candidates {
+		id = strings.TrimSpace(id)
+		if id == "" || seen[id] {
+			continue
+		}
+		seen[id] = true
+		ids = append(ids, id)
+	}
+	return ids
+}
+
 // executeDeletion runs a single deletion/archive request and returns the error.
 func (m *Model) executeDeletion(req models.DeletionRequest) (int, error) {
+	if len(req.MessageRefs) > 0 {
+		if req.IsArchive {
+			return m.executeArchiveBatch(req.MessageRefs)
+		}
+		if bulk, ok := m.backend.(deleteEmailsByRefBackend); ok {
+			return len(req.MessageRefs), bulk.DeleteEmailsByRef(req.MessageRefs)
+		}
+		return m.executeDeleteRefsIndividually(req.MessageRefs)
+	}
 	if req.MessageID != "" {
 		ref := deletionRequestMessageRef(req)
 		if req.IsArchive {
@@ -275,6 +379,40 @@ func (m *Model) executeDeletion(req models.DeletionRequest) (int, error) {
 		return 0, m.backend.DeleteSenderEmails(req.Sender, req.Folder)
 	}
 	return 0, nil
+}
+
+func (m *Model) executeDeleteRefsIndividually(refs []models.MessageRef) (int, error) {
+	var firstErr error
+	for _, ref := range refs {
+		ref = ref.WithDefaults()
+		if scoped, ok := m.backend.(interface{ DeleteEmailByRef(models.MessageRef) error }); ok && ref.SourceID != "" {
+			if err := scoped.DeleteEmailByRef(ref); err != nil && firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
+		if err := m.backend.DeleteEmail(ref.MessageID, ref.Folder); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	return len(refs), firstErr
+}
+
+func (m *Model) executeArchiveBatch(refs []models.MessageRef) (int, error) {
+	var firstErr error
+	for _, ref := range refs {
+		ref = ref.WithDefaults()
+		if scoped, ok := m.backend.(interface{ ArchiveEmailByRef(models.MessageRef) error }); ok && ref.SourceID != "" {
+			if err := scoped.ArchiveEmailByRef(ref); err != nil && firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
+		if err := m.backend.ArchiveEmail(ref.MessageID, ref.Folder); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	return len(refs), firstErr
 }
 
 // deletionWorker processes deletion requests from the queue.
@@ -357,6 +495,7 @@ func deletionResultFromRequest(req models.DeletionRequest) models.DeletionResult
 	ref := deletionRequestMessageRef(req)
 	result := models.DeletionResult{
 		MessageRef:         ref,
+		MessageRefs:        append([]models.MessageRef(nil), req.MessageRefs...),
 		SourceID:           ref.SourceID,
 		AccountID:          ref.AccountID,
 		LocalID:            ref.LocalID,
@@ -375,6 +514,19 @@ func deletionResultFromRequest(req models.DeletionRequest) models.DeletionResult
 	}
 	if result.MessageID != "" && len(result.AffectedMessageIDs) == 0 {
 		result.AffectedMessageIDs = []string{result.MessageID}
+	}
+	if len(result.MessageRefs) > 0 && result.MessageID == "" {
+		first := result.MessageRefs[0].WithDefaults()
+		result.MessageRef = first
+		result.SourceID = first.SourceID
+		result.AccountID = first.AccountID
+		result.LocalID = first.LocalID
+		result.MessageID = first.MessageID
+		result.Folder = first.Folder
+	}
+	for _, ref := range result.MessageRefs {
+		ref = ref.WithDefaults()
+		result.AffectedMessageIDs = appendAffectedMessageIDs(result.AffectedMessageIDs, ref.MessageID, ref.LocalID)
 	}
 	return result
 }
@@ -426,6 +578,16 @@ func deletionWorkResourceKey(req models.DeletionRequest) work.ResourceKey {
 	if itemID == "" {
 		itemID = req.Sender
 	}
+	if itemID == "" && len(req.MessageRefs) > 0 {
+		first := req.MessageRefs[0].WithDefaults()
+		itemID = first.LocalID
+		if itemID == "" {
+			itemID = first.MessageID
+		}
+		if len(req.MessageRefs) > 1 {
+			itemID = fmt.Sprintf("batch:%s:%d", itemID, len(req.MessageRefs))
+		}
+	}
 	return work.ResourceKey{
 		SourceID:     string(deletionWorkSourceID(req)),
 		AccountID:    string(ref.AccountID),
@@ -443,6 +605,15 @@ func affectedDeletionMessageIDSet(result models.DeletionResult) map[string]bool 
 	if id := strings.TrimSpace(result.LocalID); id != "" {
 		ids[id] = true
 	}
+	for _, ref := range result.MessageRefs {
+		ref = ref.WithDefaults()
+		if id := strings.TrimSpace(ref.MessageID); id != "" {
+			ids[id] = true
+		}
+		if id := strings.TrimSpace(ref.LocalID); id != "" {
+			ids[id] = true
+		}
+	}
 	for _, id := range result.AffectedMessageIDs {
 		id = strings.TrimSpace(id)
 		if id != "" {
@@ -450,6 +621,17 @@ func affectedDeletionMessageIDSet(result models.DeletionResult) map[string]bool 
 		}
 	}
 	return ids
+}
+
+func deletionResultProgressCount(result models.DeletionResult) int {
+	switch {
+	case len(result.MessageRefs) > 0:
+		return len(result.MessageRefs)
+	case result.DeletedCount > 1:
+		return result.DeletedCount
+	default:
+		return 1
+	}
 }
 
 func pruneEmailSliceByMessageID(emails []*models.EmailData, ids map[string]bool) ([]*models.EmailData, bool) {

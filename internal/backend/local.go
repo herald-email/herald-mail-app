@@ -662,6 +662,58 @@ func (b *LocalBackend) DeleteEmail(messageID, folder string) error {
 	return err
 }
 
+func (b *LocalBackend) DeleteEmailsByRef(refs []models.MessageRef) error {
+	normalized := normalizeMessageRefsForDelete(refs)
+	if len(normalized) == 0 {
+		return nil
+	}
+	if deleter, ok := b.mailSource.(interface {
+		DeleteEmailsByRef(context.Context, []models.MessageRef) error
+	}); ok {
+		if err := deleter.DeleteEmailsByRef(context.Background(), normalized); err != nil {
+			return err
+		}
+		for _, ref := range normalized {
+			b.markMemoryMessageSourceMissing(ref, "bulk delete removed source email")
+		}
+		return nil
+	}
+
+	var firstErr error
+	for _, ref := range normalized {
+		if err := b.DeleteEmail(ref.MessageID, ref.Folder); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	return firstErr
+}
+
+func normalizeMessageRefsForDelete(refs []models.MessageRef) []models.MessageRef {
+	normalized := make([]models.MessageRef, 0, len(refs))
+	for _, ref := range refs {
+		if parsed, ok := models.MessageRefFromLocalID(ref.LocalID); ok {
+			if ref.SourceID == "" {
+				ref.SourceID = parsed.SourceID
+			}
+			if ref.AccountID == "" {
+				ref.AccountID = parsed.AccountID
+			}
+			if ref.Folder == "" {
+				ref.Folder = parsed.Folder
+			}
+			if ref.MessageID == "" {
+				ref.MessageID = parsed.MessageID
+			}
+		}
+		ref = ref.WithDefaults()
+		if strings.TrimSpace(ref.MessageID) == "" {
+			continue
+		}
+		normalized = append(normalized, ref)
+	}
+	return normalized
+}
+
 func (b *LocalBackend) ListFolders() ([]string, error) {
 	b.foldersMu.RLock()
 	if len(b.cachedFolders) > 0 {
@@ -2208,6 +2260,7 @@ func (b *LocalBackend) DeleteThread(folder, subject string) error {
 
 func (b *LocalBackend) BulkDelete(messageIDs []string) error {
 	var firstErr error
+	refs := make([]models.MessageRef, 0, len(messageIDs))
 	for _, id := range messageIDs {
 		email, err := b.cache.GetEmailByID(id)
 		if err != nil {
@@ -2220,8 +2273,11 @@ func (b *LocalBackend) BulkDelete(messageIDs []string) error {
 		if email == nil {
 			continue
 		}
-		if err := b.DeleteEmail(id, email.Folder); err != nil {
-			logger.Warn("BulkDelete: delete %s: %v", id, err)
+		refs = append(refs, email.MessageRef())
+	}
+	if len(refs) > 0 {
+		if err := b.DeleteEmailsByRef(refs); err != nil {
+			logger.Warn("BulkDelete: batch delete: %v", err)
 			if firstErr == nil {
 				firstErr = err
 			}

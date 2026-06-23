@@ -92,10 +92,11 @@ type FolderSyncEvent struct {
 }
 
 type DeletionResult struct {
-	SourceID   SourceID   `json:"source_id,omitempty"`
-	AccountID  AccountID  `json:"account_id,omitempty"`
-	LocalID    string     `json:"local_id,omitempty"`
-	MessageRef MessageRef `json:"message_ref,omitempty"`
+	SourceID    SourceID     `json:"source_id,omitempty"`
+	AccountID   AccountID    `json:"account_id,omitempty"`
+	LocalID     string       `json:"local_id,omitempty"`
+	MessageRef  MessageRef   `json:"message_ref,omitempty"`
+	MessageRefs []MessageRef `json:"message_refs,omitempty"`
 
 	MessageID          string   `json:"message_id"`
 	Sender             string   `json:"sender"`
@@ -270,10 +271,11 @@ type ComposeAttachment struct {
 
 // Deletion Request
 type DeletionRequest struct {
-	SourceID   SourceID   `json:"source_id,omitempty"`
-	AccountID  AccountID  `json:"account_id,omitempty"`
-	LocalID    string     `json:"local_id,omitempty"`
-	MessageRef MessageRef `json:"message_ref,omitempty"`
+	SourceID    SourceID     `json:"source_id,omitempty"`
+	AccountID   AccountID    `json:"account_id,omitempty"`
+	LocalID     string       `json:"local_id,omitempty"`
+	MessageRef  MessageRef   `json:"message_ref,omitempty"`
+	MessageRefs []MessageRef `json:"message_refs,omitempty"`
 
 	MessageID          string   `json:"message_id"`
 	Sender             string   `json:"sender"`

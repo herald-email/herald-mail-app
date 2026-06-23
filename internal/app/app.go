@@ -3296,7 +3296,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case models.DeletionResult:
 		// Update deletion progress
 		m.deletionProgress = msg
-		m.deletionsPending--
+		m.deletionsPending -= deletionResultProgressCount(msg)
 
 		// Track connection state for the status bar indicator
 		if msg.ConnectionLost {

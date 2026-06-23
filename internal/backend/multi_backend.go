@@ -918,6 +918,47 @@ func (m *MultiBackend) DeleteEmailByRef(ref models.MessageRef) error {
 	return slot.backend.DeleteEmail(ref.MessageID, ref.Folder)
 }
 
+func (m *MultiBackend) DeleteEmailsByRef(refs []models.MessageRef) error {
+	type batch struct {
+		slot *accountSlot
+		refs []models.MessageRef
+	}
+	batches := make(map[models.SourceID]*batch)
+	var order []models.SourceID
+	for _, ref := range refs {
+		slot, ref, err := m.slotForRef(ref)
+		if err != nil {
+			return err
+		}
+		ref = resolveMessageRefForSlot(slot, ref)
+		sourceID := slot.info.SourceID
+		group := batches[sourceID]
+		if group == nil {
+			group = &batch{slot: slot}
+			batches[sourceID] = group
+			order = append(order, sourceID)
+		}
+		group.refs = append(group.refs, ref)
+	}
+
+	var firstErr error
+	for _, sourceID := range order {
+		group := batches[sourceID]
+		if deleter, ok := group.slot.backend.(BulkMutationBackend); ok {
+			if err := deleter.DeleteEmailsByRef(group.refs); err != nil && firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
+		for _, ref := range group.refs {
+			if err := group.slot.backend.DeleteEmail(ref.MessageID, ref.Folder); err != nil && firstErr == nil {
+				firstErr = err
+			}
+		}
+	}
+	return firstErr
+}
+
 func (m *MultiBackend) DeleteCachedEmail(ref models.MessageRef) error {
 	slot, ref, err := m.slotForRef(ref)
 	if err != nil {

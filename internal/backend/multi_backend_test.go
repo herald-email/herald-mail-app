@@ -22,6 +22,7 @@ type recordingAccountBackend struct {
 	search                map[string][]*models.EmailData
 	loadCalls             []string
 	deleteCalls           []string
+	deleteBatchRefs       [][]models.MessageRef
 	archiveCalls          []string
 	moveCalls             []string
 	sendCalls             []string
@@ -138,6 +139,11 @@ func (b *recordingAccountBackend) StoreEmbeddingChunksByRef(ref models.MessageRe
 
 func (b *recordingAccountBackend) DeleteEmail(messageID, folder string) error {
 	b.deleteCalls = append(b.deleteCalls, folder+":"+messageID)
+	return nil
+}
+
+func (b *recordingAccountBackend) DeleteEmailsByRef(refs []models.MessageRef) error {
+	b.deleteBatchRefs = append(b.deleteBatchRefs, append([]models.MessageRef(nil), refs...))
 	return nil
 }
 
@@ -780,6 +786,46 @@ func TestMultiBackendScopedMessageReadAndMutationRouteToSource(t *testing.T) {
 	}
 	if len(personal.deleteCalls) != 0 {
 		t.Fatalf("personal delete calls=%#v, want none", personal.deleteCalls)
+	}
+}
+
+func TestMultiBackendDeleteEmailsByRefBatchesByScopedAccount(t *testing.T) {
+	workFirst := scopedTestEmail(&models.EmailData{SourceID: "work-mail", AccountID: "work", MessageID: "work-1", UID: 11, Folder: "INBOX", Subject: "Work 1"})
+	workSecond := scopedTestEmail(&models.EmailData{SourceID: "work-mail", AccountID: "work", MessageID: "work-2", UID: 12, Folder: "INBOX", Subject: "Work 2"})
+	personalEmail := scopedTestEmail(&models.EmailData{SourceID: "personal-mail", AccountID: "personal", MessageID: "personal-1", UID: 21, Folder: "INBOX", Subject: "Personal"})
+	work := newRecordingAccountBackend("work", []string{"INBOX"}, workFirst, "")
+	personal := newRecordingAccountBackend("personal", []string{"INBOX"}, personalEmail, "")
+	mb, err := NewMultiBackend([]AccountBackend{
+		{Info: AccountInfo{SourceID: "work-mail", AccountID: "work", DisplayName: "Work"}, Backend: work},
+		{Info: AccountInfo{SourceID: "personal-mail", AccountID: "personal", DisplayName: "Personal"}, Backend: personal},
+	})
+	if err != nil {
+		t.Fatalf("NewMultiBackend: %v", err)
+	}
+
+	err = mb.DeleteEmailsByRef([]models.MessageRef{
+		workFirst.MessageRef(),
+		personalEmail.MessageRef(),
+		workSecond.MessageRef(),
+	})
+	if err != nil {
+		t.Fatalf("DeleteEmailsByRef: %v", err)
+	}
+
+	if got := len(work.deleteBatchRefs); got != 1 {
+		t.Fatalf("work batch calls = %d, want 1", got)
+	}
+	if got := len(personal.deleteBatchRefs); got != 1 {
+		t.Fatalf("personal batch calls = %d, want 1", got)
+	}
+	if got := work.deleteBatchRefs[0]; !reflect.DeepEqual(got, []models.MessageRef{workFirst.MessageRef(), workSecond.MessageRef()}) {
+		t.Fatalf("work batch refs = %#v", got)
+	}
+	if got := personal.deleteBatchRefs[0]; !reflect.DeepEqual(got, []models.MessageRef{personalEmail.MessageRef()}) {
+		t.Fatalf("personal batch refs = %#v", got)
+	}
+	if len(work.deleteCalls) != 0 || len(personal.deleteCalls) != 0 {
+		t.Fatalf("expected no single-delete fallback, got work=%#v personal=%#v", work.deleteCalls, personal.deleteCalls)
 	}
 }
 

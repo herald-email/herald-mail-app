@@ -1650,9 +1650,13 @@ func (s *Server) handleBulkDelete(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusInternalServerError, "backend does not support scoped bulk delete")
 			return
 		}
-		for _, ref := range refs {
-			if err = mutator.DeleteEmailByRef(ref); err != nil {
-				break
+		if bulk, ok := s.backend.(backend.BulkMutationBackend); ok {
+			err = bulk.DeleteEmailsByRef(refs)
+		} else {
+			for _, ref := range refs {
+				if err = mutator.DeleteEmailByRef(ref); err != nil {
+					break
+				}
 			}
 		}
 	} else {

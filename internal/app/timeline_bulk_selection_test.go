@@ -365,6 +365,64 @@ func TestQueueRequests_CarriesScopedMessageRef(t *testing.T) {
 	}
 }
 
+func TestQueueRequests_TimelineSelectionBatchesDeletesBySourceFolder(t *testing.T) {
+	m := makeSizedModel(t, 120, 40)
+	m.activeTab = tabTimeline
+	m.currentFolder = "INBOX"
+	m.deletionRequestCh = make(chan models.DeletionRequest, 4)
+	m.deletionResultCh = make(chan models.DeletionResult, 4)
+	first := &models.EmailData{
+		SourceID:    "work-mail",
+		AccountID:   "work",
+		LocalID:     "mail:work-mail:work:INBOX:batch-1",
+		MessageID:   "batch-1",
+		UID:         101,
+		UIDValidity: 999,
+		Sender:      "alice@example.com",
+		Subject:     "Batch one",
+		Folder:      "INBOX",
+	}
+	second := &models.EmailData{
+		SourceID:    "work-mail",
+		AccountID:   "work",
+		LocalID:     "mail:work-mail:work:INBOX:batch-2",
+		MessageID:   "batch-2",
+		UID:         102,
+		UIDValidity: 999,
+		Sender:      "bob@example.com",
+		Subject:     "Batch two",
+		Folder:      "INBOX",
+	}
+	m.timeline.emails = []*models.EmailData{first, second}
+	m.timeline.selectedMessageIDs = map[string]bool{
+		timelineSelectionKey(first):  true,
+		timelineSelectionKey(second): true,
+	}
+	m.updateTimelineTable()
+
+	cmd := m.queueRequests(false)
+	if cmd == nil {
+		t.Fatal("expected queueRequests to return deletion listener command")
+	}
+
+	req := <-m.deletionRequestCh
+	if req.MessageID != "" {
+		t.Fatalf("expected batched delete request to avoid single MessageID, got %q", req.MessageID)
+	}
+	if len(req.MessageRefs) != 2 {
+		t.Fatalf("expected one batch with 2 refs, got %#v", req.MessageRefs)
+	}
+	if req.MessageRefs[0] != first.MessageRef() || req.MessageRefs[1] != second.MessageRef() {
+		t.Fatalf("MessageRefs = %#v, want [%#v %#v]", req.MessageRefs, first.MessageRef(), second.MessageRef())
+	}
+	if req.SourceID != first.SourceID || req.AccountID != first.AccountID || req.Folder != "INBOX" {
+		t.Fatalf("batch scope = (%q,%q,%q), want (%q,%q,INBOX)", req.SourceID, req.AccountID, req.Folder, first.SourceID, first.AccountID)
+	}
+	if got, want := m.deletionsTotal, 2; got != want || m.deletionsPending != want {
+		t.Fatalf("expected message-count progress %d/%d, got pending=%d total=%d", want, want, m.deletionsPending, got)
+	}
+}
+
 func TestTimelineDeleteKeyExitsRangeModeBeforeConfirmation(t *testing.T) {
 	m := makeSizedModel(t, 120, 40)
 	m.activeTab = tabTimeline
@@ -415,15 +473,21 @@ func TestTimelineImmediateDeleteKeyExitsRangeModeAndQueuesWithoutConfirmation(t 
 		t.Fatal("expected D to start listening for deletion results")
 	}
 
-	reqs := readDeletionRequests(t, updated.deletionRequestCh, 2)
-	got := map[string]bool{}
-	for _, req := range reqs {
-		got[req.MessageID] = true
+	reqs := readDeletionRequests(t, updated.deletionRequestCh, 1)
+	req := reqs[0]
+	if req.MessageID != "" {
+		t.Fatalf("expected immediate delete to queue a batch request, got single MessageID %q", req.MessageID)
 	}
-	for _, want := range []string{"msg-0", "msg-1"} {
-		if !got[want] {
-			t.Fatalf("expected immediate delete to queue %s, got %#v", want, got)
+	if len(req.MessageRefs) != 2 {
+		t.Fatalf("expected immediate delete to queue 2 refs in one batch, got %#v", req.MessageRefs)
+	}
+	for i, want := range []string{"msg-0", "msg-1"} {
+		if req.MessageRefs[i].MessageID != want {
+			t.Fatalf("expected ref %d to target %s, got %#v", i, want, req.MessageRefs[i])
 		}
+	}
+	if updated.deletionsPending != 2 || updated.deletionsTotal != 2 {
+		t.Fatalf("expected message-count progress 2/2, got pending=%d total=%d", updated.deletionsPending, updated.deletionsTotal)
 	}
 }
 

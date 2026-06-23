@@ -195,6 +195,20 @@ func (s *IMAPMailSource) DeleteEmail(ctx context.Context, messageID, folder stri
 	return mailSourceContextErr(ctx)
 }
 
+func (s *IMAPMailSource) DeleteEmailsByRef(ctx context.Context, refs []models.MessageRef) error {
+	client, err := s.ensureClient()
+	if err != nil {
+		return err
+	}
+	if err := mailSourceContextErr(ctx); err != nil {
+		return err
+	}
+	if err := client.DeleteEmailsByRef(refs); err != nil {
+		return err
+	}
+	return mailSourceContextErr(ctx)
+}
+
 func (s *IMAPMailSource) FetchMessageNoCache(ctx context.Context, ref models.MessageRef) (*models.EmailBody, error) {
 	client, err := s.ensureClient()
 	if err != nil {

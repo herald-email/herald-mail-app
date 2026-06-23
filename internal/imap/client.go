@@ -166,6 +166,7 @@ type Client struct {
 	groupByDomain bool
 	progressCh    chan models.ProgressInfo
 	mu            sync.Mutex
+	trashFolder   string
 
 	// IDLE support
 	idleStop chan struct{}

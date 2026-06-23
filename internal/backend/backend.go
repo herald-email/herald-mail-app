@@ -364,6 +364,12 @@ type Backend interface {
 	PreviewCleanupRulesDryRun(req models.RuleDryRunRequest) (*models.RuleDryRunReport, error)
 }
 
+// BulkMutationBackend is an optional fast path for callers that already have
+// source-scoped message refs and want one provider operation for a batch.
+type BulkMutationBackend interface {
+	DeleteEmailsByRef([]models.MessageRef) error
+}
+
 // ComposeSendRequest carries the full TUI compose payload across an optional
 // backend account boundary. Legacy single-account callers can keep using
 // SendEmail; multi-account callers use SourceID to pick the sending account.

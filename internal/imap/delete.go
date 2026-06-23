@@ -6,6 +6,7 @@ import (
 
 	"github.com/emersion/go-imap"
 	"github.com/herald-email/herald-mail-app/internal/logger"
+	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
 // DeleteSenderEmails deletes all emails from a sender in both IMAP and cache.
@@ -302,6 +303,160 @@ func (c *Client) deleteEmailLocked(messageID string, folder string) error {
 	}
 
 	return nil
+}
+
+// DeleteEmailsByRef deletes a batch of source-scoped messages. Fresh UID refs in
+// the same folder use one UID-set provider mutation; stale or incomplete refs
+// fall back to the legacy Message-ID search path.
+func (c *Client) DeleteEmailsByRef(refs []models.MessageRef) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	err := c.deleteEmailsByRefLocked(refs)
+	if err != nil && isConnectionError(err) {
+		logger.Info("DeleteEmailsByRef: connection error, reconnecting: %v", err)
+		if reconErr := c.Reconnect(); reconErr != nil {
+			return fmt.Errorf("reconnect failed: %w (original: %v)", reconErr, err)
+		}
+		err = c.deleteEmailsByRefLocked(refs)
+	}
+	return err
+}
+
+func (c *Client) deleteEmailsByRefLocked(refs []models.MessageRef) error {
+	byFolder := make(map[string][]models.MessageRef)
+	var folderOrder []string
+	for _, ref := range refs {
+		if parsed, ok := models.MessageRefFromLocalID(ref.LocalID); ok {
+			if ref.Folder == "" {
+				ref.Folder = parsed.Folder
+			}
+			if ref.MessageID == "" {
+				ref.MessageID = parsed.MessageID
+			}
+		}
+		ref = ref.WithDefaults()
+		if strings.TrimSpace(ref.MessageID) == "" || strings.TrimSpace(ref.Folder) == "" {
+			continue
+		}
+		if _, ok := byFolder[ref.Folder]; !ok {
+			folderOrder = append(folderOrder, ref.Folder)
+		}
+		byFolder[ref.Folder] = append(byFolder[ref.Folder], ref)
+	}
+
+	var firstErr error
+	for _, folder := range folderOrder {
+		group := byFolder[folder]
+		mbox, err := c.client.Select(folder, false)
+		if err != nil {
+			return fmt.Errorf("failed to select folder %s: %w", folder, err)
+		}
+		fresh, fallback := splitFreshUIDRefs(group, mbox.UidValidity)
+		if len(fresh) > 0 {
+			seqset := new(imap.SeqSet)
+			uids := make([]uint32, 0, len(fresh))
+			messageIDs := make([]string, 0, len(fresh))
+			for _, ref := range fresh {
+				uids = append(uids, ref.UID)
+				messageIDs = append(messageIDs, ref.MessageID)
+			}
+			seqset.AddNum(uids...)
+			if err := c.uidMoveToTrashLocked(seqset); err != nil {
+				logger.Warn("Batch UID delete failed for %d messages in %s, falling back per message: %v", len(fresh), folder, err)
+				fallback = append(fallback, fresh...)
+			} else if err := c.cache.DeleteEmailsByMessageIDs(folder, messageIDs); err != nil {
+				if firstErr == nil {
+					firstErr = fmt.Errorf("failed to delete batch from cache: %w", err)
+				}
+			}
+		}
+		for _, ref := range fallback {
+			if err := c.deleteEmailLocked(ref.MessageID, folder); err != nil && firstErr == nil {
+				firstErr = err
+			}
+		}
+	}
+	return firstErr
+}
+
+func splitFreshUIDRefs(refs []models.MessageRef, uidValidity uint32) (fresh, fallback []models.MessageRef) {
+	for _, ref := range refs {
+		ref = ref.WithDefaults()
+		if ref.UID != 0 && ref.UIDValidity != 0 && ref.UIDValidity == uidValidity {
+			fresh = append(fresh, ref)
+			continue
+		}
+		fallback = append(fallback, ref)
+	}
+	return fresh, fallback
+}
+
+func trashFoldersForDelete(cached string) []string {
+	base := []string{"Trash", "Deleted Items", "[Gmail]/Trash", "INBOX.Trash"}
+	cached = strings.TrimSpace(cached)
+	if cached == "" {
+		return base
+	}
+	out := []string{cached}
+	for _, folder := range base {
+		if folder != cached {
+			out = append(out, folder)
+		}
+	}
+	return out
+}
+
+func (c *Client) uidMoveToTrashLocked(seqset *imap.SeqSet) error {
+	var lastErr error
+	for _, trashFolder := range trashFoldersForDelete(c.trashFolder) {
+		if err := c.client.UidMove(seqset, trashFolder); err == nil {
+			c.trashFolder = trashFolder
+			logger.Info("Moved batch to %s", trashFolder)
+			return nil
+		} else {
+			lastErr = err
+			if trashFolder == c.trashFolder {
+				c.trashFolder = ""
+			}
+		}
+
+		copied, err := c.uidCopyStoreExpungeToTrashLocked(seqset, trashFolder)
+		if err == nil {
+			c.trashFolder = trashFolder
+			logger.Info("Copied and expunged batch to %s", trashFolder)
+			return nil
+		}
+		lastErr = err
+		if copied {
+			return err
+		}
+	}
+
+	logger.Warn("Could not move batch to any Trash folder, marking as deleted instead: %v", lastErr)
+	store := imap.FormatFlagsOp(imap.AddFlags, true)
+	if err := c.client.UidStore(seqset, store, []interface{}{imap.DeletedFlag}, nil); err != nil {
+		return fmt.Errorf("failed to mark batch as deleted: %w", err)
+	}
+	if err := c.client.Expunge(nil); err != nil {
+		return fmt.Errorf("failed to expunge batch: %w", err)
+	}
+	return nil
+}
+
+func (c *Client) uidCopyStoreExpungeToTrashLocked(seqset *imap.SeqSet, trashFolder string) (bool, error) {
+	if err := c.client.UidCopy(seqset, trashFolder); err != nil {
+		return false, err
+	}
+
+	store := imap.FormatFlagsOp(imap.AddFlags, true)
+	if err := c.client.UidStore(seqset, store, []interface{}{imap.DeletedFlag}, nil); err != nil {
+		return true, fmt.Errorf("failed to mark copied batch as deleted: %w", err)
+	}
+	if err := c.client.Expunge(nil); err != nil {
+		return true, fmt.Errorf("failed to expunge copied batch: %w", err)
+	}
+	return true, nil
 }
 
 // MoveEmail copies the message identified by messageID from fromFolder to toFolder,
