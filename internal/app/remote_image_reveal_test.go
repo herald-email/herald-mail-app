@@ -273,13 +273,13 @@ func applyRemoteRevealCmd(t *testing.T, m *Model, cmd tea.Cmd) *Model {
 	return model.(*Model)
 }
 
-func TestTimelineReplyKeyRemainsReplyAllAfterRemoteRevealKeyAdded(t *testing.T) {
+func TestTimelineReplyKeysRemainAlignedAfterRemoteRevealKeyAdded(t *testing.T) {
 	resolver := NewKeyboardResolver(nil)
-	if command, ok := resolver.Resolve("timeline", keyboardModeNormal, "r"); !ok || command != CommandMailReplyAll {
-		t.Fatalf("timeline r resolves to %q ok=%v, want reply all", command, ok)
+	if command, ok := resolver.Resolve("timeline", keyboardModeNormal, "r"); !ok || command != CommandMailReplySender {
+		t.Fatalf("timeline r resolves to %q ok=%v, want reply sender", command, ok)
 	}
-	if command, ok := resolver.Resolve("timeline", keyboardModeNormal, "R"); !ok || command != CommandMailReplySender {
-		t.Fatalf("timeline R resolves to %q ok=%v, want reply sender", command, ok)
+	if command, ok := resolver.Resolve("timeline", keyboardModeNormal, "R"); !ok || command != CommandMailReplyAll {
+		t.Fatalf("timeline R resolves to %q ok=%v, want reply all", command, ok)
 	}
 	if command, ok := resolver.Resolve("timeline", keyboardModeNormal, "o"); !ok || command != CommandPreviewRevealRemoteImages {
 		t.Fatalf("timeline o resolves to %q ok=%v, want remote image reveal", command, ok)

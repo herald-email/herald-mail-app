@@ -790,7 +790,7 @@ func (m *Model) timelineShortcutHelpSection() shortcutHelpSection {
 			m.commandHelpEntry("timeline", CommandMailForward, "forward"),
 			m.commandHelpEntry("timeline", CommandMailDeleteConfirm, "delete after confirmation"),
 			m.commandHelpEntry("timeline", CommandMailDeleteImmediate, "delete immediately"),
-			m.commandHelpEntry("timeline", CommandMailArchiveCurrent, "archive after confirmation"),
+			m.commandHelpEntry("timeline", CommandMailArchiveCurrent, "archive immediately"),
 			{"* / " + m.commandHelpKey("timeline", CommandMailReclassify), "star or re-classify"},
 			{"u / " + m.commandHelpKey("timeline", CommandMailHideFuture), "unsubscribe when available or hide future mail"},
 			m.commandHelpEntry("timeline", CommandPreviewRevealRemoteImages, "reveal linked remote images in this message"),
@@ -817,7 +817,7 @@ func (m *Model) timelineShortcutHelpSection() shortcutHelpSection {
 		m.commandHelpEntry("timeline", CommandMailForward, "forward highlighted non-draft email"),
 		m.commandHelpEntry("timeline", CommandMailDeleteConfirm, "delete highlighted or selected mail after confirmation"),
 		m.commandHelpEntry("timeline", CommandMailDeleteImmediate, "delete highlighted or selected mail immediately"),
-		m.commandHelpEntry("timeline", CommandMailArchiveCurrent, "archive highlighted or selected mail after confirmation"),
+		m.commandHelpEntry("timeline", CommandMailArchiveCurrent, "archive highlighted or selected mail immediately"),
 		{"Enter", "expand a thread or open an email preview"},
 		{"Space", "select highlighted messages"},
 		{"Shift+Up / Shift+Down", "toggle Timeline selection when supported"},
@@ -835,11 +835,11 @@ func (m *Model) timelineShortcutHelpSection() shortcutHelpSection {
 func (m *Model) defaultLegacyShortcutHelpSection() shortcutHelpSection {
 	return shortcutHelpSection{"Default Legacy Aliases", []shortcutHelpEntry{
 		{"c", "legacy alias for Ctrl+N new message"},
-		{"R / r", "legacy aliases for Ctrl+R reply sender and Ctrl+Shift+R reply all"},
+		{"r / R", "single-letter aliases for reply sender and reply all"},
 		{"f / F", "legacy alias for Ctrl+F forward in Timeline"},
 		{"d / Backspace", "legacy aliases for Delete confirmed delete"},
 		{"D / Shift+Backspace", "legacy aliases for Shift+Delete immediate delete"},
-		{"a / e / E", "legacy aliases for A archive when not editing a draft"},
+		{"e / E", "secondary aliases for a archive when not editing a draft"},
 		{"Tab / Shift+Tab", "legacy aliases for F6 / Shift+F6 pane focus"},
 		{"h/j/k/l", "legacy navigation aliases; Vim keeps them as primaries"},
 	}}

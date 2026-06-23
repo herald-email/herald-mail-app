@@ -131,7 +131,7 @@ func (m *Model) shiftModifierHintSegments(chrome ChromeState) []string {
 		}
 		segments := []string{"shift+tab: prev panel", "shift+↑/↓: toggle", m.commandHint("timeline", CommandTimelineGroupCycle, "group"), m.commandHint("timeline", CommandTimelineSortCycle, "sort"), m.commandHint("timeline", CommandComposeNew, "compose"), "S: settings"}
 		if m.currentTimelineRowEmail() != nil || m.timeline.selectedEmail != nil {
-			segments = append(segments, "R: sender", "D: delete now", "U: unread", "F: forward", "T/A: re-classify")
+			segments = append(segments, "R: reply all", "D: delete now", "U: unread", "F: forward", "T/A: re-classify")
 		}
 		if chrome.FocusedPanel == panelPreview {
 			segments = append(segments, "Y: copy all", "H: hide future mail")

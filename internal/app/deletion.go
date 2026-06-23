@@ -133,6 +133,31 @@ func (m *Model) archiveSelected() tea.Cmd {
 	return m.queueRequests(true)
 }
 
+func (m *Model) archiveSelectedImmediately() tea.Cmd {
+	if m.activeTab == tabTimeline {
+		m.finishTimelineRangeSelection()
+	}
+	if m.timelineIsReadOnlyDiagnostic() {
+		return nil
+	}
+	if m.loading || m.deleting {
+		return nil
+	}
+	if m.activeTab == tabTimeline && m.timelineSelectedCount() > 0 && len(m.selectedTimelineArchiveEmails()) == 0 {
+		m.statusMessage = "Selected drafts cannot be archived"
+		return nil
+	}
+	if m.buildArchiveDesc() == "" {
+		return nil
+	}
+	m.pendingDeleteConfirm = false
+	m.pendingDeleteAction = nil
+	m.pendingDeleteDesc = ""
+	m.pendingArchive = false
+	m.deleting = true
+	return m.archiveSelected()
+}
+
 // queueRequests builds deletion/archive requests and sends them to the worker.
 func (m *Model) queueRequests(isArchive bool) tea.Cmd {
 	type deleteTarget struct {

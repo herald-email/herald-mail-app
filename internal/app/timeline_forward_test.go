@@ -307,7 +307,7 @@ func TestTimelineReplyBodyResultOpensComposeWithPreservedContext(t *testing.T) {
 	backend := &forwardBodyBackend{body: &models.EmailBody{TextPlain: "reply body", TextHTML: "<p>reply body</p>"}}
 	m, _ := newTimelineForwardModel(backend)
 
-	model, cmd, _ := m.handleTimelineKey(keyRunes("R"))
+	model, cmd, _ := m.handleTimelineKey(keyRunes("r"))
 	updated := model.(*Model)
 	msg := cmd().(TimelineReplyBodyMsg)
 
@@ -337,6 +337,41 @@ func TestTimelineReplyBodyResultOpensComposeWithPreservedContext(t *testing.T) {
 	}
 }
 
+func TestTimelineReplyRawFallbackUsesIssue67SingleLetterMapping(t *testing.T) {
+	tests := []struct {
+		key          string
+		wantReplyAll bool
+	}{
+		{key: "r", wantReplyAll: false},
+		{key: "R", wantReplyAll: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.key, func(t *testing.T) {
+			backend := &forwardBodyBackend{body: &models.EmailBody{TextPlain: "reply body"}}
+			m, _ := newTimelineForwardModel(backend)
+			m.keyboard = &KeyboardResolver{
+				profile:       keyboardProfileDefault,
+				bindings:      keyboardBindingMap{},
+				primaryKeys:   keyboardCommandKeyMap{},
+				fieldDefaults: builtInKeyboardFieldDefaults(keyboardProfileDefault),
+			}
+
+			_, cmd, handled := m.handleTimelineKey(keyRunes(tt.key))
+			if !handled {
+				t.Fatalf("expected %s fallback to be handled", tt.key)
+			}
+			if cmd == nil {
+				t.Fatalf("expected %s fallback to return a reply body command", tt.key)
+			}
+			msg := cmd().(TimelineReplyBodyMsg)
+			if msg.ReplyAll != tt.wantReplyAll {
+				t.Fatalf("%s fallback ReplyAll = %v, want %v", tt.key, msg.ReplyAll, tt.wantReplyAll)
+			}
+		})
+	}
+}
+
 func TestTimelineReplyAllIncludesNonSelfToAndCcRecipients(t *testing.T) {
 	backend := &forwardBodyBackend{body: &models.EmailBody{
 		To:        "Rowan Finch <demo@demo.local>, Rae Stone <rae@cobalt-works.example>",
@@ -350,10 +385,10 @@ func TestTimelineReplyAllIncludesNonSelfToAndCcRecipients(t *testing.T) {
 	m.timeline.emails[0] = email
 	m.updateTimelineTable()
 
-	model, cmd, handled := m.handleTimelineKey(keyRunes("r"))
+	model, cmd, handled := m.handleTimelineKey(keyRunes("R"))
 	updated := model.(*Model)
 	if !handled {
-		t.Fatal("expected r reply-all key to be handled")
+		t.Fatal("expected R reply-all key to be handled")
 	}
 	if cmd == nil {
 		t.Fatal("expected reply-all to fetch body before opening compose")
@@ -398,10 +433,10 @@ func TestTimelineReplySenderIgnoresOriginalToAndCcRecipients(t *testing.T) {
 	m.timeline.emails[0] = email
 	m.updateTimelineTable()
 
-	model, cmd, handled := m.handleTimelineKey(keyRunes("R"))
+	model, cmd, handled := m.handleTimelineKey(keyRunes("r"))
 	updated := model.(*Model)
 	if !handled {
-		t.Fatal("expected R sender-only reply key to be handled")
+		t.Fatal("expected r sender-only reply key to be handled")
 	}
 	if cmd == nil {
 		t.Fatal("expected sender-only reply to fetch body before opening compose")

@@ -26,16 +26,15 @@ func TestKeyboardResolverProfilesAndLegacyAliases(t *testing.T) {
 		{name: "new compose primary", scope: "timeline", mode: "normal", key: "ctrl+n", command: CommandComposeNew},
 		{name: "new compose legacy", scope: "timeline", mode: "normal", key: "c", command: CommandComposeNew},
 		{name: "reply sender primary", scope: "timeline", mode: "normal", key: "ctrl+r", command: CommandMailReplySender},
-		{name: "reply sender legacy", scope: "timeline", mode: "normal", key: "R", command: CommandMailReplySender},
+		{name: "reply sender single-letter", scope: "timeline", mode: "normal", key: "r", command: CommandMailReplySender},
 		{name: "reply all primary", scope: "timeline", mode: "normal", key: "ctrl+shift+r", command: CommandMailReplyAll},
 		{name: "reply all terminal shifted alias", scope: "timeline", mode: "normal", key: "ctrl+R", command: CommandMailReplyAll},
-		{name: "reply all legacy", scope: "timeline", mode: "normal", key: "r", command: CommandMailReplyAll},
+		{name: "reply all single-letter", scope: "timeline", mode: "normal", key: "R", command: CommandMailReplyAll},
 		{name: "forward primary", scope: "timeline", mode: "normal", key: "ctrl+f", command: CommandMailForward},
 		{name: "forward legacy", scope: "timeline", mode: "normal", key: "f", command: CommandMailForward},
 		{name: "forward legacy", scope: "timeline", mode: "normal", key: "F", command: CommandMailForward},
-		{name: "archive primary", scope: "timeline", mode: "normal", key: "A", command: CommandMailArchiveCurrent},
-		{name: "archive legacy", scope: "timeline", mode: "normal", key: "a", command: CommandMailArchiveCurrent},
-		{name: "archive legacy", scope: "timeline", mode: "normal", key: "e", command: CommandMailArchiveCurrent},
+		{name: "archive primary", scope: "timeline", mode: "normal", key: "a", command: CommandMailArchiveCurrent},
+		{name: "archive secondary", scope: "timeline", mode: "normal", key: "e", command: CommandMailArchiveCurrent},
 		{name: "delete confirm primary", scope: "timeline", mode: "normal", key: "delete", command: CommandMailDeleteConfirm},
 		{name: "delete confirm legacy", scope: "timeline", mode: "normal", key: "d", command: CommandMailDeleteConfirm},
 		{name: "delete confirm backspace", scope: "timeline", mode: "normal", key: "backspace", command: CommandMailDeleteConfirm},
@@ -86,8 +85,8 @@ func TestVimKeyboardProfilePreservesTerminalPrimaries(t *testing.T) {
 		{"k", CommandPaneUp},
 		{"l", CommandPaneRight},
 		{"c", CommandComposeNew},
-		{"r", CommandMailReplyAll},
-		{"R", CommandMailReplySender},
+		{"r", CommandMailReplySender},
+		{"R", CommandMailReplyAll},
 		{"f", CommandMailForward},
 		{"a", CommandMailArchiveCurrent},
 		{"d", CommandMailDeleteConfirm},
@@ -190,6 +189,8 @@ bindings:
 func TestCustomKeymapRoutesTimelineMailActionsByCommand(t *testing.T) {
 	m := makeSizedModel(t, 220, 50)
 	m.activeTab = tabTimeline
+	m.deletionRequestCh = make(chan models.DeletionRequest, 4)
+	m.deletionResultCh = make(chan models.DeletionResult, 4)
 	m.timeline.emails = mockEmails()
 	m.updateTimelineTable()
 	resolver := NewKeyboardResolver(&config.Config{})
@@ -208,10 +209,15 @@ bindings:
 
 	model, _ := m.handleKeyMsg(keyRunes("x"))
 	updated := model.(*Model)
-	if !updated.pendingDeleteConfirm || !updated.pendingArchive {
-		t.Fatalf("custom archive command did not open archive confirmation: confirm=%v archive=%v desc=%q", updated.pendingDeleteConfirm, updated.pendingArchive, updated.pendingDeleteDesc)
+	if updated.pendingDeleteConfirm || updated.pendingArchive {
+		t.Fatalf("custom archive command opened confirmation: confirm=%v archive=%v desc=%q", updated.pendingDeleteConfirm, updated.pendingArchive, updated.pendingDeleteDesc)
+	}
+	reqs := readDeletionRequests(t, updated.deletionRequestCh, 1)
+	if !reqs[0].IsArchive {
+		t.Fatalf("custom archive command queued IsArchive=%v, want true", reqs[0].IsArchive)
 	}
 
+	updated.deleting = false
 	updated.pendingDeleteConfirm = false
 	updated.pendingArchive = false
 	updated.pendingDeleteDesc = ""
@@ -400,7 +406,7 @@ bindings:
 		"G: re-classify",
 		"b: sidebar",
 	)
-	for _, stale := range []string{"1-2: tabs", "1-3: tabs", "7-9: tabs", "c: compose", "r: all", "R: sender", "f: forward", "a: archive", "T: re-classify", "B: sidebar"} {
+	for _, stale := range []string{"1-2: tabs", "1-3: tabs", "7-9: tabs", "c: compose", "r: sender", "R: all", "f: forward", "a: archive", "T: re-classify", "B: sidebar"} {
 		if strings.Contains(hints, stale) {
 			t.Fatalf("expected custom keymap hints to omit stale %q, got:\n%s", stale, hints)
 		}
@@ -416,7 +422,7 @@ func TestTimelineDefaultHintAndHelpKeysResolveToHandlers(t *testing.T) {
 	hints := stripANSI(m.renderKeyHints())
 	helpEntries := m.shortcutHelpSections()
 	requireHintSegments(t, hints, "Enter: open", "Ctrl+N: new", "Ctrl+R: reply", "Del: delete", "/: search")
-	for _, legacy := range []string{"c: compose", "r: all", "R: sender", "f: forward", "d: delete", "D: delete now", "a: archive"} {
+	for _, legacy := range []string{"c: compose", "r: sender", "R: all", "f: forward", "d: delete", "D: delete now"} {
 		if strings.Contains(hints, legacy) {
 			t.Fatalf("Default bottom hints should omit legacy alias %q, got:\n%s", legacy, hints)
 		}
@@ -432,7 +438,7 @@ func TestTimelineDefaultHintAndHelpKeysResolveToHandlers(t *testing.T) {
 		{scope: "timeline", command: CommandMailForward, help: "forward highlighted"},
 		{scope: "timeline", command: CommandMailDeleteConfirm, help: "after confirmation"},
 		{scope: "timeline", command: CommandMailDeleteImmediate, help: "immediately"},
-		{scope: "timeline", command: CommandMailArchiveCurrent, help: "after confirmation"},
+		{scope: "timeline", command: CommandMailArchiveCurrent, help: "immediately"},
 		{scope: "timeline", command: CommandTimelineSortCycle, help: "cycle Timeline sorting"},
 		{scope: keyboardScopeGlobal, command: CommandSidebarToggle, help: "toggle sidebar"},
 	} {
@@ -483,8 +489,8 @@ bindings:
 
 	hints := stripANSI(m.renderKeyHints())
 	requireHintSegments(t, hints, "x: all", "r: archive")
-	if strings.Contains(hints, "r: all") {
-		t.Fatalf("expected overwritten default key not to be advertised for reply-all, got:\n%s", hints)
+	if hintContainsExactSegment(hints, "r: sender") {
+		t.Fatalf("expected overwritten default key not to be advertised for reply-sender, got:\n%s", hints)
 	}
 
 	for _, tc := range []struct {
@@ -505,6 +511,15 @@ bindings:
 			}
 		})
 	}
+}
+
+func hintContainsExactSegment(hints, segment string) bool {
+	for _, part := range strings.Split(hints, "│") {
+		if strings.TrimSpace(part) == segment {
+			return true
+		}
+	}
+	return false
 }
 
 func TestCustomKeymapTabBarAndShortcutHelpUseResolvedKeys(t *testing.T) {
@@ -770,6 +785,72 @@ func TestDeleteShortcutAliasesDoNotStealTextEntry(t *testing.T) {
 		}
 		if updated.pendingDeleteConfirm {
 			t.Fatal("prompt editor text entry must not open delete confirmation")
+		}
+	})
+}
+
+func TestMailActionShortcutAliasesDoNotStealTextEntry(t *testing.T) {
+	keys := []string{"r", "R", "a", "e"}
+	want := "rRae"
+
+	t.Run("compose", func(t *testing.T) {
+		m := makeSizedModel(t, 140, 40)
+		m.activeTab = tabCompose
+		m.composeField = composeFieldBody
+		m.composeBody.Focus()
+
+		for _, key := range keys {
+			model, _ := m.handleKeyMsg(keyRunes(key))
+			m = model.(*Model)
+		}
+
+		if got := m.composeBody.Value(); got != want {
+			t.Fatalf("compose body = %q, want literal mail-action text %q", got, want)
+		}
+		if m.pendingDeleteConfirm || m.pendingArchive || m.activeTab != tabCompose {
+			t.Fatalf("compose text entry fired mail action: confirm=%v archive=%v activeTab=%d", m.pendingDeleteConfirm, m.pendingArchive, m.activeTab)
+		}
+	})
+
+	t.Run("prompt editor", func(t *testing.T) {
+		m := makeSizedModel(t, 140, 40)
+		m.showPromptEditor = true
+		m.promptEditor = NewPromptEditor(nil, 140, 40)
+		if cmd := m.promptEditor.Init(); cmd != nil {
+			model, _ := m.Update(cmd())
+			m = model.(*Model)
+		}
+
+		for _, key := range keys {
+			model, _ := m.Update(keyRunes(key))
+			m = model.(*Model)
+		}
+
+		if got := m.promptEditor.name; got != want {
+			t.Fatalf("prompt editor name = %q, want literal mail-action text %q", got, want)
+		}
+		if m.pendingDeleteConfirm || m.pendingArchive {
+			t.Fatalf("prompt editor text entry fired mail action: confirm=%v archive=%v", m.pendingDeleteConfirm, m.pendingArchive)
+		}
+	})
+
+	t.Run("rule editor", func(t *testing.T) {
+		m := makeSizedModel(t, 140, 40)
+		m.showRuleEditor = true
+		m.ruleEditor = NewRuleEditor("", "", m.windowWidth, m.windowHeight)
+		_ = m.ruleEditor.Init()
+		_ = m.ruleEditor.form.NextField()
+
+		for _, key := range keys {
+			model, _ := m.Update(keyRunes(key))
+			m = model.(*Model)
+		}
+
+		if got := m.ruleEditor.triggerValue; got != want {
+			t.Fatalf("rule editor trigger value = %q, want literal mail-action text %q", got, want)
+		}
+		if m.pendingDeleteConfirm || m.pendingArchive {
+			t.Fatalf("rule editor text entry fired mail action: confirm=%v archive=%v", m.pendingDeleteConfirm, m.pendingArchive)
 		}
 	})
 }

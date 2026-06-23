@@ -101,7 +101,7 @@ func TestRenderKeyHints_ShowAttachmentNavigationWhenMultipleAttachments(t *testi
 	}
 
 	hints := stripANSI(m.renderKeyHints())
-	requireHintSegments(t, hints, "A: archive", "Del: delete", "Ctrl+R: reply", "Y: copy")
+	requireHintSegments(t, hints, "a: archive", "Del: delete", "Ctrl+R: reply", "Y: copy")
 	if strings.Contains(hints, "[") || strings.Contains(hints, "]") {
 		t.Fatalf("expected calm Default preview hints to omit attachment navigation aliases, got %q", hints)
 	}
@@ -389,8 +389,8 @@ func TestRenderKeyHints_TimelinePreviewFocusKeepsMessageActions(t *testing.T) {
 	m.focusedPanel = panelPreview
 
 	hints := stripANSI(m.renderKeyHints())
-	requireHintSegments(t, hints, "Esc: close", "A: archive", "Del: delete", "Ctrl+R: reply", "Y: copy")
-	for _, legacy := range []string{"r: all", "R: sender", "f: forward", "d: delete", "D: delete now", "a: archive"} {
+	requireHintSegments(t, hints, "Esc: close", "a: archive", "Del: delete", "Ctrl+R: reply", "Y: copy")
+	for _, legacy := range []string{"r: sender", "R: all", "f: forward", "d: delete", "D: delete now"} {
 		if strings.Contains(hints, legacy) {
 			t.Fatalf("Default preview hints should omit legacy alias %q, got:\n%s", legacy, hints)
 		}
@@ -413,8 +413,8 @@ func TestRenderKeyHints_TimelineSearchPreviewFocusKeepsMessageActions(t *testing
 	m.focusedPanel = panelPreview
 
 	hints := stripANSI(m.renderKeyHints())
-	requireHintSegments(t, hints, "Ctrl+R: reply", "Ctrl+Shift+R: reply all", "Ctrl+F: forward", "Del: delete", "Shift+Del: delete now", "A: archive", "T: re-classify")
-	for _, legacy := range []string{"r: all", "R: sender", "f: forward", "d: delete", "D: delete now", "a: archive"} {
+	requireHintSegments(t, hints, "Ctrl+R: reply", "Ctrl+Shift+R: reply all", "Ctrl+F: forward", "Del: delete", "Shift+Del: delete now", "a: archive", "T: re-classify")
+	for _, legacy := range []string{"r: sender", "R: all", "f: forward", "d: delete", "D: delete now"} {
 		if strings.Contains(hints, legacy) {
 			t.Fatalf("Default search preview hints should omit legacy alias %q, got:\n%s", legacy, hints)
 		}
@@ -438,7 +438,7 @@ func TestRenderKeyHints_TimelinePreviewActionsStayVisibleAt80Cols(t *testing.T) 
 
 	hints := m.renderKeyHints()
 	assertFitsWidth(t, 80, hints)
-	requireHintSegments(t, stripANSI(hints), "A: archive", "Del: delete", "Ctrl+R: reply", "Y: copy")
+	requireHintSegments(t, stripANSI(hints), "a: archive", "Del: delete", "Ctrl+R: reply", "Y: copy")
 }
 
 func TestRenderKeyHints_TimelineProtectedActionsStayVisibleAt80Cols(t *testing.T) {
@@ -469,7 +469,7 @@ func TestRenderKeyHints_TimelineProtectedActionsStayVisibleAt80Cols(t *testing.T
 				m.timeline.body = &models.EmailBody{TextPlain: "hello world"}
 				m.setFocusedPanel(panelPreview)
 			},
-			want: []string{"?: help", "A: archive", "Del: delete", "Ctrl+R: reply", "Y: copy"},
+			want: []string{"?: help", "a: archive", "Del: delete", "Ctrl+R: reply", "Y: copy"},
 		},
 		{
 			name: "search results",
@@ -490,7 +490,7 @@ func TestRenderKeyHints_TimelineProtectedActionsStayVisibleAt80Cols(t *testing.T
 			setup: func(m *Model) {
 				m.toggleTimelineSelection()
 			},
-			want: []string{"?: help", "Del: delete selected", "Shift+Del: delete now", "A: archive selected"},
+			want: []string{"?: help", "Del: delete selected", "Shift+Del: delete now", "a: archive selected"},
 		},
 		{
 			name: "chat filter",
@@ -533,7 +533,7 @@ func TestRenderKeyHints_ReadOnlyTimelinePreviewStillHidesMessageActions(t *testi
 	m.focusedPanel = panelPreview
 
 	hints := stripANSI(m.renderKeyHints())
-	for _, forbidden := range []string{"*: star", "r: all", "R: sender", "f: forward", "d: delete", "D: delete now", "a: archive", "T: re-classify"} {
+	for _, forbidden := range []string{"*: star", "r: sender", "R: all", "f: forward", "d: delete", "D: delete now", "a: archive", "T: re-classify"} {
 		if strings.Contains(hints, forbidden) {
 			t.Fatalf("expected read-only preview hints to omit %q, got %q", forbidden, hints)
 		}
@@ -561,7 +561,7 @@ func TestRenderKeyHints_PrefersChatControlsOverTimelineHints(t *testing.T) {
 	if strings.Contains(hints, "esc/tab: close chat") {
 		t.Fatalf("expected chat hints to separate Esc and Tab behavior, got %q", hints)
 	}
-	if strings.Contains(hints, "R: sender") {
+	if strings.Contains(hints, "R: all") {
 		t.Fatalf("expected timeline hints to be hidden while chat is visible, got %q", hints)
 	}
 }
@@ -577,7 +577,7 @@ func TestRenderKeyHints_PrefersLogControlsOverTimelineHints(t *testing.T) {
 	if !strings.Contains(hints, "L/esc: close logs") {
 		t.Fatalf("expected log controls when overlay is visible, got %q", hints)
 	}
-	if strings.Contains(hints, "R: sender") {
+	if strings.Contains(hints, "R: all") {
 		t.Fatalf("expected timeline hints to be hidden while logs are visible, got %q", hints)
 	}
 }

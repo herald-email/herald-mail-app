@@ -86,7 +86,7 @@ func TestRenderKeyHints_TimelinePreviewShowsHideFutureMailAndConditionalUnsubscr
 		m.timeline.body = &models.EmailBody{TextPlain: "hello", ListUnsubscribe: "<mailto:leave@example.com>"}
 
 		hints := stripANSI(m.renderKeyHints())
-		requireHintSegments(t, hints, "A: archive", "Del: delete", "Ctrl+R: reply", "Y: copy")
+		requireHintSegments(t, hints, "a: archive", "Del: delete", "Ctrl+R: reply", "Y: copy")
 		for _, quiet := range []string{"u: unsubscribe", "H: hide future mail"} {
 			if strings.Contains(hints, quiet) {
 				t.Fatalf("expected calm Default preview hints to omit %q, got %q", quiet, hints)
@@ -108,7 +108,7 @@ func TestRenderKeyHints_TimelinePreviewShowsHideFutureMailAndConditionalUnsubscr
 		m.timeline.body = &models.EmailBody{TextPlain: "hello"}
 
 		hints := stripANSI(m.renderKeyHints())
-		requireHintSegments(t, hints, "A: archive", "Del: delete", "Ctrl+R: reply", "Y: copy")
+		requireHintSegments(t, hints, "a: archive", "Del: delete", "Ctrl+R: reply", "Y: copy")
 		if strings.Contains(hints, "u: unsubscribe") || strings.Contains(hints, "H: hide future mail") {
 			t.Fatalf("expected calm Default preview hints to omit unsubscribe/hide-future extras, got %q", hints)
 		}

@@ -42,7 +42,7 @@ func TestTimelineHints_AllMailOnlyReadOnly(t *testing.T) {
 	if !ok {
 		t.Fatal("expected timeline hints")
 	}
-	for _, forbidden := range []string{"d: delete", "D: delete now", "a: archive", "r: all", "R: sender", "f: forward", "T: re-classify", "ctrl+q"} {
+	for _, forbidden := range []string{"d: delete", "D: delete now", "a: archive", "r: sender", "R: all", "f: forward", "T: re-classify", "ctrl+q"} {
 		if strings.Contains(hints, forbidden) {
 			t.Fatalf("expected read-only hints to omit %q, got: %s", forbidden, hints)
 		}

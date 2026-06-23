@@ -151,7 +151,7 @@ func TestShortcutHelpOwnsBottomHintsWhileOpen(t *testing.T) {
 				m.timeline.emails = mockEmails()
 				m.updateTimelineTable()
 			},
-			forbidden: []string{"c: compose", "r: all", "d: delete", "D: delete now"},
+			forbidden: []string{"c: compose", "r: sender", "d: delete", "D: delete now"},
 		},
 		{
 			name: "contacts",
@@ -198,7 +198,7 @@ func TestShortcutHelpSearchOwnsBottomHints(t *testing.T) {
 	searching := model.(*Model)
 
 	hints := stripANSI(searching.renderKeyHints())
-	for _, forbidden := range []string{"c: compose", "r: all", "d: delete", "D: delete now"} {
+	for _, forbidden := range []string{"c: compose", "r: sender", "d: delete", "D: delete now"} {
 		if strings.Contains(hints, forbidden) {
 			t.Fatalf("expected help search hints to hide underlying %q hint, got:\n%s", forbidden, hints)
 		}

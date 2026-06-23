@@ -93,7 +93,7 @@ Delete/archive operations mutate the configured IMAP mailbox and SQLite cache. D
 
 ## Troubleshooting
 
-If `d`, `D`, or `e` appears inactive, check for read-only folder mode, active deletion progress, or missing selection.
+If `d`, `D`, `a`, or `e` appears inactive, check for read-only folder mode, active deletion progress, or missing selection.
 
 If deletion progress stalls, open logs with `l` after the UI is usable and check provider connectivity.
 
@@ -102,10 +102,6 @@ If unsubscribe opens a browser or copies a URL instead of silently completing, t
 If mail reappears after delete/archive, refresh with `r` and verify provider Trash/Archive semantics.
 
 ## Screenshot Placeholders
-
-<!-- HERALD_SCREENSHOT id="destructive-archive-confirm" page="destructive-actions" alt="Archive confirmation status bar" state="demo mode, 120x40, Timeline grouped archive confirmation active" desc="Shows archive target description, confirmation controls, and selection context." capture="tmux demo 120x40; ./bin/herald --demo; press 1; press G; press space; press e" -->
-
-![Archive confirmation status bar](/screenshots/destructive-archive-confirm.png)
 
 <!-- HERALD_SCREENSHOT id="destructive-unsubscribe-confirm" page="destructive-actions" alt="Unsubscribe confirmation status bar" state="demo mode, 120x40, unsubscribe confirmation active" desc="Shows sender unsubscribe confirmation from a preview that includes List-Unsubscribe data." capture="tmux demo 120x40; ./bin/herald --demo; open a message with List-Unsubscribe; press u" -->
 

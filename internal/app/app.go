@@ -3725,7 +3725,7 @@ func (m *Model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, m.openSettingsPanel()
 
 	case "a", "e", "E":
-		return m, m.confirmArchiveSelected()
+		return m, m.archiveSelectedImmediately()
 
 	case "u":
 		if m.timelineIsReadOnlyDiagnostic() {

@@ -16,7 +16,7 @@ High-level milestones. Detailed feature status is in each section below.
 - [x] Compose, reply, forward
 - [x] Account-scoped default Compose signature configured in YAML and editable from Settings
 - [x] Email deletion (single, by sender, by domain — moves to Trash)
-- [x] Archive (`e` key — moves to an explicit archive folder; provider-aware fallback only)
+- [x] Archive (`a` / `e` keys — immediately moves to an explicit archive folder; provider-aware fallback only)
 - [x] Deletion confirmation prompt
 - [x] Attachment support (download + attach when composing, with terminal-style path completion)
 - [x] Markdown compose → HTML send (multipart HTML + plain)
@@ -169,7 +169,7 @@ A single persistent line at the bottom of the screen. Its content changes based 
 - [x] Sync countdown (↻ 42s to next poll, ↻ live when IDLE active)
 - [x] Global AI status chip that stays visible when AI is configured and summarizes the effective AI state (`idle`, `embedding`, `quick reply`, `semantic search`, `chat`, `deferred`, or `unavailable`)
 - [x] Global AI status chip reflects startup-detected missing or unreachable Ollama models as `AI down`, disables AI actions until repaired, and keeps repair details available from Settings > AI
-- [x] Profile-aware command layer: `1/2` are the advertised tab shortcuts, `Alt+1/Alt+2/Alt+3` are optional aliases, `F1/F2` mirror those tabs, `F3` remains a temporary Contacts alias, Default prefers GUI-mail-style shortcuts, Vim preserves `h/j/k/l`, and text fields keep printable input including `?`, `/`, and macOS Option-generated characters
+- [x] Profile-aware command layer: `1/2` are the advertised tab shortcuts, `Alt+1/Alt+2/Alt+3` are optional aliases, `F1/F2` mirror those tabs, `F3` remains a temporary Contacts alias, Default prefers GUI-mail-style shortcuts plus mail-style `r` sender / `R` reply-all and immediate `a` / `e` archive, Vim preserves `h/j/k/l`, and text fields keep printable input including `?`, `/`, and macOS Option-generated characters
 - [x] Timeline key hints advertise `Tab` / `Shift+Tab` panel switching whenever the bottom bar has room for navigation help
 - [x] Context-sensitive shortcut help overlay opens with `?` in browse and non-text contexts, lists every relevant key for the current tab, pane, overlay, and Compose mode in a compact centered modal over the current view, keeps editable Compose fields free to type literal `?`, and keeps semantic search available through `/` with a `? query` prefix
 - [x] Modifier-aware key hints: when the terminal reports Shift, Ctrl, or Alt key state, the bottom hint bar temporarily pivots to existing commands for that modifier without changing shortcut behavior; terminals without key-release support fall back to a brief modified-keypress hint

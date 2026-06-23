@@ -485,10 +485,12 @@ func TestTimelineBackspaceAliasesDeleteConfirmationAndImmediateDelete(t *testing
 	}
 }
 
-func TestTimelineArchiveKeyExitsRangeModeBeforeConfirmation(t *testing.T) {
+func TestTimelineArchiveKeyExitsRangeModeAndQueuesWithoutConfirmation(t *testing.T) {
 	m := makeSizedModel(t, 120, 40)
 	m.activeTab = tabTimeline
 	m.timeline.emails = timelineRangeEmails()
+	m.deletionRequestCh = make(chan models.DeletionRequest, 4)
+	m.deletionResultCh = make(chan models.DeletionResult, 4)
 	m.updateTimelineTable()
 	m.timelineTable.SetCursor(0)
 	m.setFocusedPanel(panelTimeline)
@@ -496,16 +498,29 @@ func TestTimelineArchiveKeyExitsRangeModeBeforeConfirmation(t *testing.T) {
 	m = timelineKeyPress(t, m, keyRunes("V"))
 	m = timelineKeyPress(t, m, keyRunes("j"))
 
-	model, _ := m.handleKeyMsg(keyRunes("e"))
+	model, cmd := m.handleKeyMsg(keyRunes("e"))
 	updated := model.(*Model)
 	if updated.timeline.rangeMode {
-		t.Fatal("expected e to exit Timeline range mode before confirmation")
+		t.Fatal("expected e to exit Timeline range mode before archive")
 	}
-	if !updated.pendingDeleteConfirm {
-		t.Fatal("expected e to open archive confirmation")
+	if updated.pendingDeleteConfirm {
+		t.Fatal("expected e to bypass archive confirmation")
 	}
-	if !updated.pendingArchive || !strings.Contains(updated.pendingDeleteDesc, "Archive 2 selected messages") {
-		t.Fatalf("expected selected-message archive confirmation, got archive=%v desc=%q", updated.pendingArchive, updated.pendingDeleteDesc)
+	if cmd == nil {
+		t.Fatal("expected e to start listening for archive results")
+	}
+	reqs := readDeletionRequests(t, updated.deletionRequestCh, 2)
+	got := map[string]bool{}
+	for _, req := range reqs {
+		if !req.IsArchive {
+			t.Fatalf("expected archive request, got IsArchive=false for %q", req.MessageID)
+		}
+		got[req.MessageID] = true
+	}
+	for _, want := range []string{"msg-0", "msg-1"} {
+		if !got[want] {
+			t.Fatalf("expected archive to queue %s, got %#v", want, got)
+		}
 	}
 	requireTimelineSelectedIDs(t, updated, "msg-0", "msg-1")
 }
@@ -610,8 +625,8 @@ func TestRenderKeyHints_TimelineSelectionActionsStayVisibleAt80Cols(t *testing.T
 	hints := m.renderKeyHints()
 	assertFitsWidth(t, 80, hints)
 	stripped := stripANSI(hints)
-	requireHintSegments(t, stripped, "Del: delete selected", "Shift+Del: delete now", "A: archive selected")
-	for _, legacy := range []string{"d: delete selected", "D: delete now", "a: archive selected"} {
+	requireHintSegments(t, stripped, "Del: delete selected", "Shift+Del: delete now", "a: archive selected")
+	for _, legacy := range []string{"d: delete selected", "D: delete now"} {
 		if strings.Contains(stripped, legacy) {
 			t.Fatalf("Default bottom hints should omit legacy alias %q, got:\n%s", legacy, stripped)
 		}

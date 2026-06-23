@@ -2632,7 +2632,7 @@ func (m *Model) timelineKeyHints(chrome ChromeState) (string, bool) {
 			return joinHintSegments(selectionHints...), true
 		}
 		if m.usesDefaultKeyboardProfile() && (m.timeline.selectedEmail == nil || !m.timeline.selectedEmail.IsDraft) {
-			return joinHintSegments("Esc: close", "A: archive", "Del: delete", "Ctrl+R: reply", "Y: copy"), true
+			return joinHintSegments("Esc: close", m.commandHint("timeline", CommandMailArchiveCurrent, "archive"), "Del: delete", "Ctrl+R: reply", "Y: copy"), true
 		}
 		segments := []string{m.timelinePanelSwitchHint(), m.commandHint("timeline", CommandComposeNew, "compose")}
 		segments = append(segments, m.timelineMessageActionHintSegments()...)
@@ -2760,7 +2760,7 @@ func (m *Model) timelinePrimaryMessageActionHintSegments() []string {
 		if m.timelineSelectedCount() > 0 {
 			segments := []string{"Del: delete selected", "Shift+Del: delete now"}
 			if len(m.selectedTimelineArchiveEmails()) > 0 {
-				segments = append(segments, "A: archive selected")
+				segments = append(segments, m.commandHint("timeline", CommandMailArchiveCurrent, "archive selected"))
 			}
 			return segments
 		}
@@ -2774,7 +2774,7 @@ func (m *Model) timelinePrimaryMessageActionHintSegments() []string {
 			segments = append(segments, "Shift+Del: delete now")
 			return segments
 		}
-		return []string{"Ctrl+R: reply", "Ctrl+Shift+R: reply all", "Ctrl+F: forward", "Del: delete", "Shift+Del: delete now", "A: archive"}
+		return []string{"Ctrl+R: reply", "Ctrl+Shift+R: reply all", "Ctrl+F: forward", "Del: delete", "Shift+Del: delete now", m.commandHint("timeline", CommandMailArchiveCurrent, "archive")}
 	}
 	if m.timelineSelectedCount() > 0 {
 		segments := []string{
@@ -3577,7 +3577,7 @@ func (m *Model) handleTimelineKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool
 		}
 		if !m.loading {
 			if email := m.currentTimelineRowEmail(); email != nil {
-				replyAll := key == "r" || key == "ctrl+R" || key == "ctrl+shift+r" || key == "ctrl+shift+R"
+				replyAll := key == "R" || key == "ctrl+R" || key == "ctrl+shift+r" || key == "ctrl+shift+R"
 				return m, m.startTimelineReply(email, replyAll), true
 			}
 		}
@@ -3704,7 +3704,7 @@ func (m *Model) handleTimelineResolvedCommand(command, key string) (tea.Model, t
 	case CommandMailDeleteImmediate:
 		return m, m.deleteSelectedImmediately(), true
 	case CommandMailArchiveCurrent:
-		return m, m.confirmArchiveSelected(), true
+		return m, m.archiveSelectedImmediately(), true
 	case CommandMailReclassify:
 		return m, m.reclassifyFocusedTimelineEmail(), true
 	case CommandMailHideFuture:
