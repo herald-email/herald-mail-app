@@ -1,5 +1,11 @@
 # Herald
 
+<p>
+  <a href="https://terminaltrove.com/herald/">
+    <img src="https://terminaltrove.com/static/assets/media/terminal_trove_tool_of_the_week_gold_on_black_bg.png" alt="Terminal Trove Tool of The Week" width="260">
+  </a>
+</p>
+
 > [!NOTE]
 > Herald v0.7.0-beta.1 is the current beta: Herald Memories, Compose Radar, Gollem-backed chat, macOS preview printing, Timeline range selection, and AI role assignment controls build on the Gmail API and Calendar source platform from v0.6.
 
