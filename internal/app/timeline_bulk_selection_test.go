@@ -573,17 +573,23 @@ func TestTimelineArchiveKeyExitsRangeModeAndQueuesWithoutConfirmation(t *testing
 	if cmd == nil {
 		t.Fatal("expected e to start listening for archive results")
 	}
-	reqs := readDeletionRequests(t, updated.deletionRequestCh, 2)
+	req := readDeletionRequests(t, updated.deletionRequestCh, 1)[0]
+	if !req.IsArchive {
+		t.Fatalf("expected archive request, got IsArchive=false for %q", req.MessageID)
+	}
+	if req.MessageID != "" {
+		t.Fatalf("expected archive selection to queue a batch request, got single MessageID %q", req.MessageID)
+	}
+	if len(req.MessageRefs) != 2 {
+		t.Fatalf("expected one archive batch with 2 refs, got %#v", req.MessageRefs)
+	}
 	got := map[string]bool{}
-	for _, req := range reqs {
-		if !req.IsArchive {
-			t.Fatalf("expected archive request, got IsArchive=false for %q", req.MessageID)
-		}
-		got[req.MessageID] = true
+	for _, ref := range req.MessageRefs {
+		got[ref.MessageID] = true
 	}
 	for _, want := range []string{"msg-0", "msg-1"} {
 		if !got[want] {
-			t.Fatalf("expected archive to queue %s, got %#v", want, got)
+			t.Fatalf("expected archive batch to include %s, got %#v", want, got)
 		}
 	}
 	requireTimelineSelectedIDs(t, updated, "msg-0", "msg-1")

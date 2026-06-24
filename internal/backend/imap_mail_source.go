@@ -281,6 +281,20 @@ func (s *IMAPMailSource) ArchiveEmail(ctx context.Context, messageID, folder str
 	return mailSourceContextErr(ctx)
 }
 
+func (s *IMAPMailSource) ArchiveEmailsByRef(ctx context.Context, refs []models.MessageRef) error {
+	client, err := s.ensureClient()
+	if err != nil {
+		return err
+	}
+	if err := mailSourceContextErr(ctx); err != nil {
+		return err
+	}
+	if err := client.ArchiveEmailsByRef(refs); err != nil {
+		return err
+	}
+	return mailSourceContextErr(ctx)
+}
+
 func (s *IMAPMailSource) ArchiveSenderEmails(ctx context.Context, sender, folder string) error {
 	client, err := s.ensureClient()
 	if err != nil {

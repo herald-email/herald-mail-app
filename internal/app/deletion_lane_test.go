@@ -57,6 +57,16 @@ func scopedDeletionRequest(sourceID models.SourceID, messageID string) models.De
 	}
 }
 
+type archiveBatchBackend struct {
+	stubBackend
+	refs [][]models.MessageRef
+}
+
+func (b *archiveBatchBackend) ArchiveEmailsByRef(refs []models.MessageRef) error {
+	b.refs = append(b.refs, append([]models.MessageRef(nil), refs...))
+	return nil
+}
+
 func waitDeletionStart(t *testing.T, ch <-chan string, want string) {
 	t.Helper()
 	select {
@@ -130,4 +140,28 @@ func TestDeletionWorkerSerializesMutationsWithinOneSource(t *testing.T) {
 		t.Fatal("timed out waiting for work-1 result")
 	}
 	waitDeletionStart(t, backend.startCh, "work-2")
+}
+
+func TestExecuteArchiveBatchUsesBulkBackend(t *testing.T) {
+	backend := &archiveBatchBackend{}
+	m := newStubModel(&backend.stubBackend)
+	m.backend = backend
+	refs := []models.MessageRef{
+		(models.MessageRef{SourceID: "work-mail", AccountID: "work", Folder: "INBOX", MessageID: "archive-1", UID: 101, UIDValidity: 999}).WithDefaults(),
+		(models.MessageRef{SourceID: "work-mail", AccountID: "work", Folder: "INBOX", MessageID: "archive-2", UID: 102, UIDValidity: 999}).WithDefaults(),
+	}
+
+	count, err := m.executeArchiveBatch(refs)
+	if err != nil {
+		t.Fatalf("executeArchiveBatch: %v", err)
+	}
+	if count != 2 {
+		t.Fatalf("count = %d, want 2", count)
+	}
+	if len(backend.refs) != 1 {
+		t.Fatalf("ArchiveEmailsByRef calls = %d, want 1", len(backend.refs))
+	}
+	if len(backend.refs[0]) != 2 || backend.refs[0][0] != refs[0] || backend.refs[0][1] != refs[1] {
+		t.Fatalf("ArchiveEmailsByRef refs = %#v, want %#v", backend.refs[0], refs)
+	}
 }

@@ -152,6 +152,76 @@ func TestLocalBackendDeleteEmailsByRefMovesBatchToTrashInVirtualMailLab(t *testi
 	}
 }
 
+func TestLocalBackendArchiveEmailsByRefMovesBatchToArchiveInVirtualMailLab(t *testing.T) {
+	lab := testmail.Start(t)
+	alice := lab.Account(testmail.DefaultAliceAddress)
+	bob := lab.Account(testmail.DefaultBobAddress)
+	cfg := alice.Config(filepath.Join(t.TempDir(), "alice-cache.db"))
+
+	b, err := NewLocal(cfg, "", nil)
+	if err != nil {
+		t.Fatalf("NewLocal: %v", err)
+	}
+	defer b.Close()
+	if err := b.mailSource.Connect(context.Background()); err != nil {
+		t.Fatalf("connect virtual IMAP: %v", err)
+	}
+
+	subjects := make([]string, 0, 5)
+	for i := 1; i <= 5; i++ {
+		subject := fmt.Sprintf("Bulk archive virtual lab %02d", i)
+		subjects = append(subjects, subject)
+		raw := []byte(fmt.Sprintf("From: %s\r\n"+
+			"To: %s\r\n"+
+			"Subject: %s\r\n"+
+			"Date: Wed, 20 May 2026 11:%02d:00 -0700\r\n"+
+			"Message-ID: <bulk-archive-%02d@herald.test>\r\n"+
+			"Content-Type: text/plain; charset=utf-8\r\n"+
+			"\r\n"+
+			"Bulk archive body %02d.\r\n", bob.Address, alice.Address, subject, i, i, i))
+		alice.AppendEML("INBOX", raw)
+	}
+
+	if err := b.mailSource.ProcessEmailsIncremental(context.Background(), "INBOX"); err != nil {
+		t.Fatalf("ProcessEmailsIncremental: %v", err)
+	}
+	emails, err := b.GetTimelineEmails("INBOX")
+	if err != nil {
+		t.Fatalf("GetTimelineEmails: %v", err)
+	}
+	refs := make([]models.MessageRef, 0, len(subjects))
+	for _, subject := range subjects {
+		var found *models.EmailData
+		for _, email := range emails {
+			if email.Subject == subject {
+				found = email
+				break
+			}
+		}
+		if found == nil {
+			t.Fatalf("cached subject %q not found", subject)
+		}
+		refs = append(refs, found.MessageRef())
+	}
+
+	if err := b.ArchiveEmailsByRef(refs); err != nil {
+		t.Fatalf("ArchiveEmailsByRef: %v", err)
+	}
+
+	emails, err = b.GetTimelineEmails("INBOX")
+	if err != nil {
+		t.Fatalf("GetTimelineEmails after archive: %v", err)
+	}
+	for _, subject := range subjects {
+		for _, email := range emails {
+			if email.Subject == subject {
+				t.Fatalf("archived subject %q remained in cache", subject)
+			}
+		}
+		lab.WaitForSubject(alice.Address, "Archive", subject)
+	}
+}
+
 func TestLocalBackendSendComposePreservesSignatureLineBreaksInVirtualMailLab(t *testing.T) {
 	lab := testmail.Start(t)
 	alice := lab.Account(testmail.DefaultAliceAddress)

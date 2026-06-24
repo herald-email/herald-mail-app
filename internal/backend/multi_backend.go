@@ -901,6 +901,47 @@ func (m *MultiBackend) ArchiveEmailByRef(ref models.MessageRef) error {
 	return slot.backend.ArchiveEmail(ref.MessageID, ref.Folder)
 }
 
+func (m *MultiBackend) ArchiveEmailsByRef(refs []models.MessageRef) error {
+	type batch struct {
+		slot *accountSlot
+		refs []models.MessageRef
+	}
+	batches := make(map[models.SourceID]*batch)
+	var order []models.SourceID
+	for _, ref := range refs {
+		slot, ref, err := m.slotForRef(ref)
+		if err != nil {
+			return err
+		}
+		ref = resolveMessageRefForSlot(slot, ref)
+		sourceID := slot.info.SourceID
+		group := batches[sourceID]
+		if group == nil {
+			group = &batch{slot: slot}
+			batches[sourceID] = group
+			order = append(order, sourceID)
+		}
+		group.refs = append(group.refs, ref)
+	}
+
+	var firstErr error
+	for _, sourceID := range order {
+		group := batches[sourceID]
+		if archiver, ok := group.slot.backend.(BulkArchiveMutationBackend); ok {
+			if err := archiver.ArchiveEmailsByRef(group.refs); err != nil && firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
+		for _, ref := range group.refs {
+			if err := group.slot.backend.ArchiveEmail(ref.MessageID, ref.Folder); err != nil && firstErr == nil {
+				firstErr = err
+			}
+		}
+	}
+	return firstErr
+}
+
 func (m *MultiBackend) MoveEmailByRef(ref models.MessageRef, to string) error {
 	slot, ref, err := m.slotForRef(ref)
 	if err != nil {

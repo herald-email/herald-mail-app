@@ -592,6 +592,132 @@ func (c *Client) archiveEmailLocked(messageID string, folder string) error {
 	return nil
 }
 
+// ArchiveEmailsByRef archives a batch of source-scoped messages. Fresh UID refs
+// in the same folder use one UID-set provider mutation; stale or incomplete refs
+// fall back to the legacy Message-ID search path.
+func (c *Client) ArchiveEmailsByRef(refs []models.MessageRef) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	err := c.archiveEmailsByRefLocked(refs)
+	if err != nil && isConnectionError(err) {
+		logger.Info("ArchiveEmailsByRef: connection error, reconnecting: %v", err)
+		if reconErr := c.Reconnect(); reconErr != nil {
+			return fmt.Errorf("reconnect failed: %w (original: %v)", reconErr, err)
+		}
+		err = c.archiveEmailsByRefLocked(refs)
+	}
+	return err
+}
+
+func (c *Client) archiveEmailsByRefLocked(refs []models.MessageRef) error {
+	byFolder := make(map[string][]models.MessageRef)
+	var folderOrder []string
+	for _, ref := range refs {
+		if parsed, ok := models.MessageRefFromLocalID(ref.LocalID); ok {
+			if ref.Folder == "" {
+				ref.Folder = parsed.Folder
+			}
+			if ref.MessageID == "" {
+				ref.MessageID = parsed.MessageID
+			}
+		}
+		ref = ref.WithDefaults()
+		if strings.TrimSpace(ref.MessageID) == "" || strings.TrimSpace(ref.Folder) == "" {
+			continue
+		}
+		if _, ok := byFolder[ref.Folder]; !ok {
+			folderOrder = append(folderOrder, ref.Folder)
+		}
+		byFolder[ref.Folder] = append(byFolder[ref.Folder], ref)
+	}
+
+	var firstErr error
+	for _, folder := range folderOrder {
+		group := byFolder[folder]
+		mbox, err := c.client.Select(folder, false)
+		if err != nil {
+			return fmt.Errorf("failed to select folder %s: %w", folder, err)
+		}
+		fresh, fallback := splitFreshUIDRefs(group, mbox.UidValidity)
+		if len(fresh) > 0 {
+			seqset := new(imap.SeqSet)
+			uids := make([]uint32, 0, len(fresh))
+			messageIDs := make([]string, 0, len(fresh))
+			for _, ref := range fresh {
+				uids = append(uids, ref.UID)
+				messageIDs = append(messageIDs, ref.MessageID)
+			}
+			seqset.AddNum(uids...)
+			if err := c.uidMoveToArchiveLocked(seqset); err != nil {
+				logger.Warn("Batch UID archive failed for %d messages in %s, falling back per message: %v", len(fresh), folder, err)
+				fallback = append(fallback, fresh...)
+			} else if err := c.cache.DeleteEmailsByMessageIDs(folder, messageIDs); err != nil {
+				if firstErr == nil {
+					firstErr = fmt.Errorf("failed to delete archived batch from cache: %w", err)
+				}
+			}
+		}
+		for _, ref := range fallback {
+			if err := c.archiveEmailLocked(ref.MessageID, folder); err != nil && firstErr == nil {
+				firstErr = err
+			}
+		}
+	}
+	return firstErr
+}
+
+func (c *Client) uidMoveToArchiveLocked(seqset *imap.SeqSet) error {
+	var lastErr error
+	vendor := ""
+	if c.cfg != nil {
+		vendor = c.cfg.Vendor
+	}
+	for _, archiveFolder := range archiveFoldersForVendor(vendor) {
+		if err := c.client.UidMove(seqset, archiveFolder); err == nil {
+			logger.Info("Moved batch to %s", archiveFolder)
+			return nil
+		} else {
+			lastErr = err
+		}
+
+		copied, err := c.uidCopyStoreExpungeToArchiveLocked(seqset, archiveFolder)
+		if err == nil {
+			logger.Info("Copied and expunged archive batch to %s", archiveFolder)
+			return nil
+		}
+		lastErr = err
+		if copied {
+			return err
+		}
+	}
+
+	logger.Warn("Could not move batch to any archive folder, marking as deleted instead: %v", lastErr)
+	store := imap.FormatFlagsOp(imap.AddFlags, true)
+	if err := c.client.UidStore(seqset, store, []interface{}{imap.DeletedFlag}, nil); err != nil {
+		return fmt.Errorf("failed to mark archive batch as deleted: %w", err)
+	}
+	if err := c.client.Expunge(nil); err != nil {
+		return fmt.Errorf("failed to expunge archive batch: %w", err)
+	}
+	return nil
+}
+
+func (c *Client) uidCopyStoreExpungeToArchiveLocked(seqset *imap.SeqSet, archiveFolder string) (bool, error) {
+	if err := c.client.UidCopy(seqset, archiveFolder); err != nil {
+		return false, err
+	}
+
+	store := imap.FormatFlagsOp(imap.AddFlags, true)
+	if err := c.client.UidStore(seqset, store, []interface{}{imap.DeletedFlag}, nil); err != nil {
+		return true, fmt.Errorf("failed to mark copied archive batch as deleted: %w", err)
+	}
+	if err := c.client.Expunge(nil); err != nil {
+		return true, fmt.Errorf("failed to expunge copied archive batch: %w", err)
+	}
+	return true, nil
+}
+
 // ArchiveSenderEmails moves all emails from a sender to an archive folder.
 // On connection errors it reconnects once and retries.
 func (c *Client) ArchiveSenderEmails(sender, folder string) error {

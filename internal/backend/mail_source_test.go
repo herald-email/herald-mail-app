@@ -163,6 +163,74 @@ func TestLocalBackendArchiveEmailPrunesSourceFolderValidity(t *testing.T) {
 	}
 }
 
+func TestLocalBackendArchiveEmailsByRefUsesBatchSourceAndPrunesValidity(t *testing.T) {
+	c := newMemoryCache(t)
+	emails := []*models.EmailData{
+		{
+			SourceID:    "work-mail",
+			AccountID:   "work",
+			MessageID:   "<archive-batch-1@example.test>",
+			UID:         101,
+			UIDValidity: 999,
+			Sender:      "sender@example.test",
+			Subject:     "Archive batch one",
+			Date:        time.Date(2026, 6, 23, 21, 0, 0, 0, time.UTC),
+			Folder:      "INBOX",
+		},
+		{
+			SourceID:    "work-mail",
+			AccountID:   "work",
+			MessageID:   "<archive-batch-2@example.test>",
+			UID:         102,
+			UIDValidity: 999,
+			Sender:      "sender@example.test",
+			Subject:     "Archive batch two",
+			Date:        time.Date(2026, 6, 23, 21, 1, 0, 0, time.UTC),
+			Folder:      "INBOX",
+		},
+	}
+	refs := make([]models.MessageRef, 0, len(emails))
+	for _, email := range emails {
+		if err := c.CacheEmail(email); err != nil {
+			t.Fatalf("CacheEmail(%s): %v", email.MessageID, err)
+		}
+		refs = append(refs, email.MessageRef())
+	}
+	source := newFakeMailSource()
+	b := &LocalBackend{
+		mailSource: source,
+		cache:      c,
+		cfg:        &config.Config{},
+		validIDsByFolder: map[string]map[string]bool{
+			"INBOX": {
+				emails[0].MessageID: true,
+				emails[1].MessageID: true,
+			},
+		},
+	}
+
+	if err := b.ArchiveEmailsByRef(refs); err != nil {
+		t.Fatalf("ArchiveEmailsByRef: %v", err)
+	}
+
+	wantCalls := []string{"archive-email-refs:INBOX:<archive-batch-1@example.test>,<archive-batch-2@example.test>"}
+	if got := source.callsSnapshot(); !reflect.DeepEqual(got, wantCalls) {
+		t.Fatalf("source calls = %#v, want %#v", got, wantCalls)
+	}
+	for _, email := range emails {
+		if b.validIDsByFolder["INBOX"][email.MessageID] {
+			t.Fatalf("archived message %s still marked valid for source folder", email.MessageID)
+		}
+	}
+	got, err := b.GetTimelineEmails("INBOX")
+	if err != nil {
+		t.Fatalf("GetTimelineEmails: %v", err)
+	}
+	if ids := backendEmailIDs(got); len(ids) != 0 {
+		t.Fatalf("archived messages reappeared in source folder timeline: %#v", ids)
+	}
+}
+
 func TestLocalBackendRunLoadUsesMailSourceInOrder(t *testing.T) {
 	source := newFakeMailSource()
 	source.folders = []string{"INBOX", "Archive"}
@@ -643,6 +711,20 @@ func (s *fakeMailSource) SetGroupByDomain(bool) {}
 
 func (s *fakeMailSource) ArchiveEmail(_ context.Context, messageID, folder string) error {
 	s.record("archive-email:" + folder + ":" + messageID)
+	return nil
+}
+
+func (s *fakeMailSource) ArchiveEmailsByRef(_ context.Context, refs []models.MessageRef) error {
+	ids := make([]string, 0, len(refs))
+	folder := ""
+	for _, ref := range refs {
+		ref = ref.WithDefaults()
+		if folder == "" {
+			folder = ref.Folder
+		}
+		ids = append(ids, ref.MessageID)
+	}
+	s.record("archive-email-refs:" + folder + ":" + stringsJoin(ids, ","))
 	return nil
 }
 

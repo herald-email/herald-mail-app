@@ -39,6 +39,10 @@ type deleteEmailsByRefBackend interface {
 	DeleteEmailsByRef([]models.MessageRef) error
 }
 
+type archiveEmailsByRefBackend interface {
+	ArchiveEmailsByRef([]models.MessageRef) error
+}
+
 type deleteTarget struct {
 	ref                models.MessageRef
 	messageID          string
@@ -245,7 +249,7 @@ func deletionRequestsFromTargets(targets []deleteTarget, isArchive bool) []model
 	if len(targets) == 0 {
 		return nil
 	}
-	if isArchive || len(targets) == 1 {
+	if len(targets) == 1 {
 		requests := make([]models.DeletionRequest, 0, len(targets))
 		for _, t := range targets {
 			requests = append(requests, singleDeletionRequestFromTarget(t, isArchive))
@@ -292,13 +296,14 @@ func deletionRequestsFromTargets(targets []deleteTarget, isArchive bool) []model
 				folder:             group.key.folder,
 				affectedMessageIDs: group.affected,
 			}
-			requests = append(requests, singleDeletionRequestFromTarget(t, false))
+			requests = append(requests, singleDeletionRequestFromTarget(t, isArchive))
 			continue
 		}
 		requests = append(requests, models.DeletionRequest{
 			SourceID:           group.key.sourceID,
 			AccountID:          group.key.accountID,
 			Folder:             group.key.folder,
+			IsArchive:          isArchive,
 			MessageRefs:        append([]models.MessageRef(nil), group.refs...),
 			AffectedMessageIDs: append([]string(nil), group.affected...),
 		})
@@ -399,6 +404,9 @@ func (m *Model) executeDeleteRefsIndividually(refs []models.MessageRef) (int, er
 }
 
 func (m *Model) executeArchiveBatch(refs []models.MessageRef) (int, error) {
+	if bulk, ok := m.backend.(archiveEmailsByRefBackend); ok {
+		return len(refs), bulk.ArchiveEmailsByRef(refs)
+	}
 	var firstErr error
 	for _, ref := range refs {
 		ref = ref.WithDefaults()

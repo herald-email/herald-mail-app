@@ -663,7 +663,7 @@ func (b *LocalBackend) DeleteEmail(messageID, folder string) error {
 }
 
 func (b *LocalBackend) DeleteEmailsByRef(refs []models.MessageRef) error {
-	normalized := normalizeMessageRefsForDelete(refs)
+	normalized := normalizeMessageRefsForMailboxMutation(refs)
 	if len(normalized) == 0 {
 		return nil
 	}
@@ -688,7 +688,7 @@ func (b *LocalBackend) DeleteEmailsByRef(refs []models.MessageRef) error {
 	return firstErr
 }
 
-func normalizeMessageRefsForDelete(refs []models.MessageRef) []models.MessageRef {
+func normalizeMessageRefsForMailboxMutation(refs []models.MessageRef) []models.MessageRef {
 	normalized := make([]models.MessageRef, 0, len(refs))
 	for _, ref := range refs {
 		if parsed, ok := models.MessageRefFromLocalID(ref.LocalID); ok {
@@ -1191,6 +1191,32 @@ func (b *LocalBackend) ArchiveEmail(messageID, folder string) error {
 		b.deleteCachedEmailAfterSourceMutation(models.MessageRef{MessageID: messageID, Folder: folder}, "archive moved source email from original folder")
 	}
 	return err
+}
+
+func (b *LocalBackend) ArchiveEmailsByRef(refs []models.MessageRef) error {
+	normalized := normalizeMessageRefsForMailboxMutation(refs)
+	if len(normalized) == 0 {
+		return nil
+	}
+	if archiver, ok := b.mailSource.(interface {
+		ArchiveEmailsByRef(context.Context, []models.MessageRef) error
+	}); ok {
+		if err := archiver.ArchiveEmailsByRef(context.Background(), normalized); err != nil {
+			return err
+		}
+		for _, ref := range normalized {
+			b.deleteCachedEmailAfterSourceMutation(ref, "bulk archive moved source email from original folder")
+		}
+		return nil
+	}
+
+	var firstErr error
+	for _, ref := range normalized {
+		if err := b.ArchiveEmail(ref.MessageID, ref.Folder); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	return firstErr
 }
 
 func (b *LocalBackend) ArchiveSenderEmails(sender, folder string) error {

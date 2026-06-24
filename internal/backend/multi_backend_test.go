@@ -24,6 +24,7 @@ type recordingAccountBackend struct {
 	deleteCalls           []string
 	deleteBatchRefs       [][]models.MessageRef
 	archiveCalls          []string
+	archiveBatchRefs      [][]models.MessageRef
 	moveCalls             []string
 	sendCalls             []string
 	composeSends          []ComposeSendRequest
@@ -149,6 +150,11 @@ func (b *recordingAccountBackend) DeleteEmailsByRef(refs []models.MessageRef) er
 
 func (b *recordingAccountBackend) ArchiveEmail(messageID, folder string) error {
 	b.archiveCalls = append(b.archiveCalls, folder+":"+messageID)
+	return nil
+}
+
+func (b *recordingAccountBackend) ArchiveEmailsByRef(refs []models.MessageRef) error {
+	b.archiveBatchRefs = append(b.archiveBatchRefs, append([]models.MessageRef(nil), refs...))
 	return nil
 }
 
@@ -881,6 +887,46 @@ func TestMultiBackendDeleteEmailsByRefBatchesByScopedAccount(t *testing.T) {
 	}
 	if len(work.deleteCalls) != 0 || len(personal.deleteCalls) != 0 {
 		t.Fatalf("expected no single-delete fallback, got work=%#v personal=%#v", work.deleteCalls, personal.deleteCalls)
+	}
+}
+
+func TestMultiBackendArchiveEmailsByRefBatchesByScopedAccount(t *testing.T) {
+	workFirst := scopedTestEmail(&models.EmailData{SourceID: "work-mail", AccountID: "work", MessageID: "work-1", UID: 11, Folder: "INBOX", Subject: "Work 1"})
+	workSecond := scopedTestEmail(&models.EmailData{SourceID: "work-mail", AccountID: "work", MessageID: "work-2", UID: 12, Folder: "INBOX", Subject: "Work 2"})
+	personalEmail := scopedTestEmail(&models.EmailData{SourceID: "personal-mail", AccountID: "personal", MessageID: "personal-1", UID: 21, Folder: "INBOX", Subject: "Personal"})
+	work := newRecordingAccountBackend("work", []string{"INBOX"}, workFirst, "")
+	personal := newRecordingAccountBackend("personal", []string{"INBOX"}, personalEmail, "")
+	mb, err := NewMultiBackend([]AccountBackend{
+		{Info: AccountInfo{SourceID: "work-mail", AccountID: "work", DisplayName: "Work"}, Backend: work},
+		{Info: AccountInfo{SourceID: "personal-mail", AccountID: "personal", DisplayName: "Personal"}, Backend: personal},
+	})
+	if err != nil {
+		t.Fatalf("NewMultiBackend: %v", err)
+	}
+
+	err = mb.ArchiveEmailsByRef([]models.MessageRef{
+		workFirst.MessageRef(),
+		personalEmail.MessageRef(),
+		workSecond.MessageRef(),
+	})
+	if err != nil {
+		t.Fatalf("ArchiveEmailsByRef: %v", err)
+	}
+
+	if got := len(work.archiveBatchRefs); got != 1 {
+		t.Fatalf("work archive batch calls = %d, want 1", got)
+	}
+	if got := len(personal.archiveBatchRefs); got != 1 {
+		t.Fatalf("personal archive batch calls = %d, want 1", got)
+	}
+	if got := work.archiveBatchRefs[0]; !reflect.DeepEqual(got, []models.MessageRef{workFirst.MessageRef(), workSecond.MessageRef()}) {
+		t.Fatalf("work archive batch refs = %#v", got)
+	}
+	if got := personal.archiveBatchRefs[0]; !reflect.DeepEqual(got, []models.MessageRef{personalEmail.MessageRef()}) {
+		t.Fatalf("personal archive batch refs = %#v", got)
+	}
+	if len(work.archiveCalls) != 0 || len(personal.archiveCalls) != 0 {
+		t.Fatalf("expected no single-archive fallback, got work=%#v personal=%#v", work.archiveCalls, personal.archiveCalls)
 	}
 }
 

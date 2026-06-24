@@ -370,6 +370,12 @@ type BulkMutationBackend interface {
 	DeleteEmailsByRef([]models.MessageRef) error
 }
 
+// BulkArchiveMutationBackend is an optional fast path for archive callers that
+// already have source-scoped message refs.
+type BulkArchiveMutationBackend interface {
+	ArchiveEmailsByRef([]models.MessageRef) error
+}
+
 // ComposeSendRequest carries the full TUI compose payload across an optional
 // backend account boundary. Legacy single-account callers can keep using
 // SendEmail; multi-account callers use SourceID to pick the sending account.
