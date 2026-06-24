@@ -1,6 +1,6 @@
 ---
 name: release
-description: Herald beta release workflow for requests to cut, tag, publish, or repair a Herald release. Use when Codex should read RELEASE.md, review changes since the last tag, recommend the next v0.X.Y-beta.Z version, create and push an annotated tag, monitor CI/CD, fix release blockers, move or supersede the tag when appropriate, and write release notes.
+description: Herald beta release workflow for requests to cut, tag, publish, or repair a Herald release. Use when Codex should read RELEASE.md, review changes since the last tag, recommend the next v0.X.Y-beta.Z version, update What's New docs pages, create and push an annotated tag, monitor CI/CD, fix release blockers, move or supersede the tag when appropriate, and write release notes.
 ---
 
 # Release
@@ -16,6 +16,12 @@ Read these before acting:
 - `.github/scripts/release-channel.sh`
 
 Also inspect `README.md` or product docs when the change summary needs user-facing release notes.
+
+For every small or large release, inspect the docs release surfaces before tagging:
+
+- `docs/src/content/docs/index.md`
+- `docs/src/content/docs/whats-new-in-v0-*.md`
+- `docs/astro.config.mjs`
 
 ## Release Contract
 
@@ -76,9 +82,23 @@ Why: <short rationale tied to the change review>
 Alternative: <next safest alternative if the choice is debatable>
 ```
 
+## What's New Docs
+
+Update the public docs release pages before tagging every beta, even for small patch-line releases. These pages are user-facing upgrade guidance, not a substitute for GitHub release notes.
+
+For the recommended tag `v0.X.Y-beta.Z`, use `docs/src/content/docs/whats-new-in-v0-X.md` as the current release-line page.
+
+- For a small release on an existing line, update that page's frontmatter description, opening summary, and `Beta Notes` checklist with the exact tag and user-visible fixes or changes.
+- For a large release or new `0.X` line, create the new page from the existing What's New pattern with `Release Delta`, `Beta Notes`, `How To Try It`, and `Previous Release` sections.
+- When creating a new line page, update `docs/astro.config.mjs` so the Getting Started `What's New` link and Release Archive include the new slug, update `docs/src/content/docs/index.md` so the `New in v0.X` section points to the new page, and add a `Next Release` link from the previous line page when appropriate.
+- Keep feature lists as checkboxes (`- [x]`) to match the docs progress-tracker convention.
+- Use committed screenshots or demo media when they exist; do not block the release solely to create new media unless the release's main user-facing story needs it.
+
+Record which docs pages changed and which docs verification command ran so the final response can distinguish public docs updates from GitHub release notes.
+
 ## Pre-Tag Verification
 
-Run the checks required by `RELEASE.md`:
+Run the checks required by `RELEASE.md` after the What's New docs are current:
 
 ```bash
 git status --short
@@ -86,7 +106,14 @@ make test
 make vet
 ```
 
-If release scripts changed, also run the focused tests or shell checks for those scripts. If these fail, fix the blocker on `main`, commit it, and rerun the failing command before tagging.
+If release scripts changed, also run the focused tests or shell checks for those scripts. If docs release pages changed, also run the docs build when available:
+
+```bash
+cd docs
+npm run build
+```
+
+If these fail, fix the blocker on `main`, commit it, and rerun the failing command before tagging.
 
 ## Tag And Push
 
@@ -192,5 +219,6 @@ Report:
 - local verification commands
 - GitHub Actions run URL and conclusion
 - asset, beta channel, and Homebrew checks performed
+- What's New docs pages updated and docs verification performed
 - release notes path and whether GitHub release notes were edited
 - any skipped hardware or credential-dependent checks
