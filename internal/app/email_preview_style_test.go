@@ -30,7 +30,7 @@ func TestRenderPreviewHeaderLines_StylesMetadataWithoutChangingText(t *testing.T
 		"Date: Wed, Apr 22, 2026 at 11:39 AM",
 		"Subj: This Week in Tech",
 		"Tags: news",
-		"Actions: u unsubscribe  H hide future mail",
+		"Actions: u unsubscribe  U now  H hide future mail",
 	} {
 		if !strings.Contains(stripped, want) {
 			t.Fatalf("expected stripped header to contain %q, got:\n%s", want, stripped)

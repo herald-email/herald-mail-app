@@ -122,16 +122,28 @@ func (m *Model) shiftModifierHintSegments(chrome ChromeState) []string {
 		return []string{m.primaryTabShortcutHint(), "shift+tab: prev panel", "?: semantic", "esc: clear"}
 	}
 	if m.activeTab == tabTimeline {
+		hasUnsubPreview := chrome.FocusedPanel == panelPreview &&
+			m.timeline.selectedEmail != nil &&
+			m.timeline.bodyMessageID == m.timeline.selectedEmail.MessageID &&
+			previewHasUnsubscribe(m.timeline.body)
 		if m.usesDefaultKeyboardProfile() {
 			segments := []string{"Shift+F6: previous panel", "Shift+Del: delete now", "Ctrl+Shift+R: reply all", "S: settings"}
 			if chrome.FocusedPanel == panelPreview {
-				segments = append(segments, "Y: copy all", "H: hide future mail")
+				segments = append(segments, "Y: copy all")
+				if hasUnsubPreview {
+					segments = append(segments, "U: unsubscribe now")
+				}
+				segments = append(segments, "H: hide future mail")
 			}
 			return segments
 		}
 		segments := []string{"shift+tab: prev panel", "shift+↑/↓: toggle", m.commandHint("timeline", CommandTimelineGroupCycle, "group"), m.commandHint("timeline", CommandTimelineSortCycle, "sort"), m.commandHint("timeline", CommandComposeNew, "compose"), "S: settings"}
 		if m.currentTimelineRowEmail() != nil || m.timeline.selectedEmail != nil {
-			segments = append(segments, "R: reply all", "D: delete now", "U: unread", "F: forward", "T/A: re-classify")
+			unreadOrUnsub := "U: unread"
+			if hasUnsubPreview {
+				unreadOrUnsub = "U: unsubscribe now"
+			}
+			segments = append(segments, "R: reply all", "D: delete now", unreadOrUnsub, "F: forward", "T/A: re-classify")
 		}
 		if chrome.FocusedPanel == panelPreview {
 			segments = append(segments, "Y: copy all", "H: hide future mail")

@@ -36,7 +36,7 @@ High-level milestones. Detailed feature status is in each section below.
 - [x] Vendor presets (Gmail, Outlook, Fastmail, iCloud — one-line config)
 - [x] Background new-email polling
 - [x] macOS notifications with Herald deep links for new mail and sync failures
-- [x] Unsubscribe from mailing-list emails via `List-Unsubscribe` (`u` in email preview when available)
+- [x] Unsubscribe from mailing-list emails via `List-Unsubscribe` (`u` confirms from email preview when available, `U` skips confirmation for the loaded preview)
 - [x] Incremental IMAP sync (UIDNEXT-based, instant on no new mail)
 - [x] Progressive startup sync UX that visibly refreshes rows and explains when the app is showing a current cache snapshot while live IMAP work continues
 - [x] Stream-first folder sync with latest-wins generation invalidation so stale folder loads do not repaint the visible mailbox
@@ -46,7 +46,7 @@ High-level milestones. Detailed feature status is in each section below.
 - [x] Config-specific SQLite cache paths persisted in YAML so separate account configs do not share one working-directory database
 - [x] IMAP IDLE (real push; currently polling only)
 - [x] Timeline grouped cleanup replaces the retired top-level cleanup browse surface for sender/domain workflows
-- [x] Hide Future Mail sender rule (`h` key; auto-moves future emails to a local folder)
+- [x] Hide Future Mail sender rule (`H` key; auto-moves future emails to a local folder without a confirmation prompt)
 - [x] Custom classification prompts (user-defined categories + data extraction)
 - [x] Classification actions (notify, command, webhook, move, archive, delete)
 - [ ] Classification action: flag on match (set IMAP `\Flagged`)
@@ -113,6 +113,7 @@ The TUI uses a title-row tab strip beside the `Herald` title, a collapsible fold
 - [x] Keyboard layouts with physical-key reporting prefer layout-correct printable characters for Latin/ASCII shortcuts, while Cyrillic and direct Japanese kana physical fallback aliases remain available when terminals do not report `BaseCode`
 - [x] Default keyboard profile uses calmer GUI-mail-style preferred shortcuts while preserving literal text entry in Compose, search, prompts, settings, and editor-like fields
 - [x] Delete shortcuts use a safe/fast split: `Delete` asks for confirmation, while `Shift+Delete` deletes immediately in browse contexts; `d`/`D` and Backspace variants remain legacy aliases
+- [x] Unsubscribe shortcuts use a safe/fast split in loaded Timeline previews: `u` asks for confirmation, while `Shift+U` / `U` unsubscribes immediately when the preview exposes `List-Unsubscribe`; otherwise `U` keeps its existing mark-unread behavior
 
 ### Tabs (top-level navigation)
 Keyboard (`1`-`3` as the primary visible shortcuts, with `F1`-`F2` supported as function aliases, `F3` as a temporary Contacts alias, and `F4` as a Calendar alias) and mouse clickable from the title row. Compose is a transient writing screen launched from Timeline, not a top-level tab.
@@ -394,11 +395,12 @@ Cleanup browsing now lives in Timeline instead of a separate top-level view. The
 
 ### Unsubscribe
 
-Unsubscribe and sender-hiding actions should be visible from the open email preview itself so the user does not have to remember hidden keybindings. `u` acts on the current email's mailing-list headers, while `H` acts on the sender and keeps future mail out of the inbox without pretending to be a real unsubscribe.
+Unsubscribe and sender-hiding actions should be visible from the open email preview itself so the user does not have to remember hidden keybindings. `u` acts on the current email's mailing-list headers after confirmation, `U` skips that confirmation for the loaded preview, and `H` acts on the sender immediately without pretending to be a real unsubscribe.
 
 - [x] Preview metadata shows explicit `Tags:` and `Actions:` rows so list/sender actions are visible in context
-- [x] `u` unsubscribes the currently open Timeline preview email when it exposes `List-Unsubscribe`
-- [x] `H` hides future mail from the currently open email's sender by moving new mail to `Disabled Subscriptions`
+- [x] `u` opens a confirmation before unsubscribing the currently open Timeline preview email when it exposes `List-Unsubscribe`
+- [x] `U` unsubscribes the currently open Timeline preview email immediately when it exposes `List-Unsubscribe`, while still marking unread outside that loaded-preview context
+- [x] `H` hides future mail from the currently open email's sender by moving new mail to `Disabled Subscriptions` without a confirmation prompt
 - [x] Timeline sender/domain groups expose `H` for the highlighted sender while `u` remains tied to an open message preview with real unsubscribe headers
 - [x] `u` performs RFC 8058 one-click POST when `List-Unsubscribe-Post` is available
 - [x] `u` falls back to `List-Unsubscribe` mailto handling when the message only exposes an email-action target

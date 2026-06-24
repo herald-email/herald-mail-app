@@ -744,7 +744,7 @@ func (m *Model) calendarCreateHint() string {
 
 func previewActionHintText(hasUnsubscribe bool) string {
 	if hasUnsubscribe {
-		return "H: hide future mail  │  u: unsubscribe"
+		return "u: unsubscribe  │  U: unsubscribe now  │  H: hide future mail"
 	}
 	return "H: hide future mail"
 }
@@ -752,7 +752,9 @@ func previewActionHintText(hasUnsubscribe bool) string {
 func (m *Model) previewActionHintText(scope string, hasUnsubscribe bool) string {
 	hide := m.commandHint(scope, CommandMailHideFuture, "hide future mail")
 	if hasUnsubscribe {
-		return joinHintSegments(hide, "u: unsubscribe")
+		unsub := m.commandHint(scope, CommandMailUnsubscribeConfirm, "unsubscribe")
+		unsubNow := m.commandHint(scope, CommandMailUnsubscribeImmediate, "unsubscribe now")
+		return joinHintSegments(unsub, unsubNow, hide)
 	}
 	return hide
 }

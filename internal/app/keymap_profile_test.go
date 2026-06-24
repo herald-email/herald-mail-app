@@ -42,6 +42,9 @@ func TestKeyboardResolverProfilesAndLegacyAliases(t *testing.T) {
 		{name: "delete immediate legacy", scope: "timeline", mode: "normal", key: "D", command: CommandMailDeleteImmediate},
 		{name: "delete immediate shift backspace", scope: "timeline", mode: "normal", key: "shift+backspace", command: CommandMailDeleteImmediate},
 		{name: "classify relocated", scope: "timeline", mode: "normal", key: "T", command: CommandMailReclassify},
+		{name: "unsubscribe confirm", scope: "timeline", mode: "normal", key: "u", command: CommandMailUnsubscribeConfirm},
+		{name: "unsubscribe immediate", scope: "timeline", mode: "normal", key: "U", command: CommandMailUnsubscribeImmediate},
+		{name: "hide future immediate", scope: "timeline", mode: "normal", key: "H", command: CommandMailHideFuture},
 		{name: "search ctrl+k alias", scope: "timeline", mode: "normal", key: "ctrl+k", command: CommandHelpSearch},
 		{name: "pane next primary", scope: "global", mode: "normal", key: "f6", command: CommandPaneNext},
 		{name: "pane prev primary", scope: "global", mode: "normal", key: "shift+f6", command: CommandPanePrev},
@@ -790,8 +793,8 @@ func TestDeleteShortcutAliasesDoNotStealTextEntry(t *testing.T) {
 }
 
 func TestMailActionShortcutAliasesDoNotStealTextEntry(t *testing.T) {
-	keys := []string{"r", "R", "a", "e"}
-	want := "rRae"
+	keys := []string{"r", "R", "a", "e", "u", "U", "H"}
+	want := "rRaeuUH"
 
 	t.Run("compose", func(t *testing.T) {
 		m := makeSizedModel(t, 140, 40)

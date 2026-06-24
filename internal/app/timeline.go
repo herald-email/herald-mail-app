@@ -1735,6 +1735,43 @@ func (m *Model) currentTimelineUnreadTarget() *models.EmailData {
 	return m.currentTimelinePreviewTarget()
 }
 
+func (m *Model) currentTimelineUnsubscribeTarget() (*models.EmailData, *models.EmailBody, bool) {
+	email := m.timeline.selectedEmail
+	body := m.timeline.body
+	if email == nil || body == nil || strings.TrimSpace(body.ListUnsubscribe) == "" {
+		return nil, nil, false
+	}
+	if m.timeline.bodyMessageID != "" && email.MessageID != "" && m.timeline.bodyMessageID != email.MessageID {
+		return nil, nil, false
+	}
+	return email, body, true
+}
+
+func (m *Model) confirmCurrentTimelineUnsubscribe() tea.Cmd {
+	if m.timelineIsReadOnlyDiagnostic() {
+		return nil
+	}
+	email, body, ok := m.currentTimelineUnsubscribeTarget()
+	if !ok {
+		return nil
+	}
+	m.pendingUnsubscribe = true
+	m.pendingUnsubscribeDesc = fmt.Sprintf("Unsubscribe from %s?", email.Sender)
+	m.pendingUnsubscribeAction = func() tea.Cmd { return unsubscribeCmd(body) }
+	return nil
+}
+
+func (m *Model) unsubscribeCurrentTimelineImmediately() (tea.Cmd, bool) {
+	if m.timelineIsReadOnlyDiagnostic() {
+		return nil, true
+	}
+	_, body, ok := m.currentTimelineUnsubscribeTarget()
+	if !ok {
+		return nil, false
+	}
+	return unsubscribeCmd(body), true
+}
+
 func (m *Model) markCurrentTimelineUnread() tea.Cmd {
 	email := m.currentTimelineUnreadTarget()
 	if email == nil {
@@ -2669,7 +2706,12 @@ func (m *Model) timelineKeyHints(chrome ChromeState) (string, bool) {
 		if calendarBodyHasInvitation(m.timeline.body) {
 			segments = append(segments, "i: create event")
 		}
-		segments = append(segments, "U: unread", m.previewActionHintText("timeline", hasUnsub), m.leftFocusHint("timeline", "Timeline"), m.movementHint("timeline", "scroll"))
+		if hasUnsub {
+			segments = append(segments, m.previewActionHintText("timeline", true))
+		} else {
+			segments = append(segments, "U: unread", m.previewActionHintText("timeline", false))
+		}
+		segments = append(segments, m.leftFocusHint("timeline", "Timeline"), m.movementHint("timeline", "scroll"))
 		if m.timelineRemoteRevealAvailable() {
 			segments = append(segments, m.commandHint("timeline", CommandPreviewRevealRemoteImages, "reveal images"))
 		}
@@ -3409,18 +3451,6 @@ func (m *Model) handleTimelineKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool
 			}
 		}
 		return m, nil, true
-	case "u":
-		if m.timelineIsReadOnlyDiagnostic() {
-			return m, nil, true
-		}
-		if m.timeline.body != nil && m.timeline.selectedEmail != nil && m.timeline.body.ListUnsubscribe != "" {
-			sender := m.timeline.selectedEmail.Sender
-			body := m.timeline.body
-			m.pendingUnsubscribe = true
-			m.pendingUnsubscribeDesc = fmt.Sprintf("Unsubscribe from %s?", sender)
-			m.pendingUnsubscribeAction = func() tea.Cmd { return unsubscribeCmd(body) }
-		}
-		return m, nil, true
 	case "H":
 		if m.timelineIsReadOnlyDiagnostic() {
 			return m, nil, true
@@ -3751,6 +3781,13 @@ func (m *Model) handleTimelineResolvedCommand(command, key string) (tea.Model, t
 		return m, m.archiveSelectedImmediately(), true
 	case CommandMailReclassify:
 		return m, m.reclassifyFocusedTimelineEmail(), true
+	case CommandMailUnsubscribeConfirm:
+		return m, m.confirmCurrentTimelineUnsubscribe(), true
+	case CommandMailUnsubscribeImmediate:
+		if cmd, handled := m.unsubscribeCurrentTimelineImmediately(); handled {
+			return m, cmd, true
+		}
+		return m, nil, false
 	case CommandMailHideFuture:
 		if m.timelineIsReadOnlyDiagnostic() {
 			return m, nil, true

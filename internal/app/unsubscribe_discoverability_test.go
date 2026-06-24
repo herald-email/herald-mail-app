@@ -46,6 +46,9 @@ func TestRenderEmailPreview_ShowsTagsAndActionsRows(t *testing.T) {
 	if !strings.Contains(rendered, "u unsubscribe") {
 		t.Fatalf("expected preview to advertise unsubscribe action, got:\n%s", rendered)
 	}
+	if !strings.Contains(rendered, "U now") {
+		t.Fatalf("expected preview to advertise fast unsubscribe action, got:\n%s", rendered)
+	}
 	if !strings.Contains(rendered, "H hide future mail") {
 		t.Fatalf("expected preview to advertise hide-future action, got:\n%s", rendered)
 	}
@@ -87,15 +90,23 @@ func TestRenderKeyHints_TimelinePreviewShowsHideFutureMailAndConditionalUnsubscr
 
 		hints := stripANSI(m.renderKeyHints())
 		requireHintSegments(t, hints, "a: archive", "Del: delete", "Ctrl+R: reply", "Y: copy")
-		for _, quiet := range []string{"u: unsubscribe", "H: hide future mail"} {
+		for _, quiet := range []string{"u: unsubscribe", "U: unsubscribe now", "H: hide future mail"} {
 			if strings.Contains(hints, quiet) {
 				t.Fatalf("expected calm Default preview hints to omit %q, got %q", quiet, hints)
 			}
 		}
 		help := m.timelineShortcutHelpSection()
-		if !shortcutHelpSectionsContain([]shortcutHelpSection{help}, "u / T", "unsubscribe") &&
-			!shortcutHelpSectionsContain([]shortcutHelpSection{help}, "u / H", "unsubscribe") {
-			t.Fatalf("expected shortcut help to document unsubscribe/hide-future actions: %#v", help)
+		for _, want := range []struct {
+			key  string
+			desc string
+		}{
+			{"u", "after confirmation"},
+			{"U", "immediately"},
+			{"H", "hide future mail"},
+		} {
+			if !shortcutHelpSectionsContain([]shortcutHelpSection{help}, want.key, want.desc) {
+				t.Fatalf("expected shortcut help to document %s %s: %#v", want.key, want.desc, help)
+			}
 		}
 	})
 
@@ -144,4 +155,59 @@ func TestHandleTimelineKey_HCreatesHideFutureMailRule(t *testing.T) {
 	if backend.sender != "Tech Weekly <newsletter@techweekly.example>" {
 		t.Fatalf("expected backend to receive sender, got %q", backend.sender)
 	}
+}
+
+func TestHandleTimelineKey_UnsubscribeSafeAndFastShortcuts(t *testing.T) {
+	makeModel := func() *Model {
+		m := New(&hideFutureBackend{}, nil, "", nil, false)
+		m.activeTab = tabTimeline
+		m.focusedPanel = panelPreview
+		m.loading = false
+		m.timeline.selectedEmail = &models.EmailData{
+			MessageID: "msg-1",
+			Sender:    "Tech Weekly <newsletter@techweekly.example>",
+		}
+		m.timeline.bodyMessageID = "msg-1"
+		m.timeline.body = &models.EmailBody{
+			TextPlain:       "hello",
+			ListUnsubscribe: "<mailto:leave@example.com>",
+		}
+		return m
+	}
+
+	t.Run("u asks for confirmation", func(t *testing.T) {
+		m := makeModel()
+		model, cmd, handled := m.handleTimelineKey(keyRune('u'))
+		if !handled {
+			t.Fatal("expected u to be handled")
+		}
+		if cmd != nil {
+			t.Fatalf("expected u to wait for confirmation before returning a command, got %T", cmd)
+		}
+		updated := model.(*Model)
+		if !updated.pendingUnsubscribe {
+			t.Fatal("expected u to open unsubscribe confirmation")
+		}
+		if updated.pendingUnsubscribeAction == nil {
+			t.Fatal("expected pending unsubscribe action to be saved")
+		}
+		if !strings.Contains(updated.pendingUnsubscribeDesc, "Tech Weekly") {
+			t.Fatalf("expected confirmation to name sender, got %q", updated.pendingUnsubscribeDesc)
+		}
+	})
+
+	t.Run("U skips confirmation", func(t *testing.T) {
+		m := makeModel()
+		model, cmd, handled := m.handleTimelineKey(keyRune('U'))
+		if !handled {
+			t.Fatal("expected U to be handled")
+		}
+		updated := model.(*Model)
+		if updated.pendingUnsubscribe {
+			t.Fatal("expected U to skip unsubscribe confirmation")
+		}
+		if cmd == nil {
+			t.Fatal("expected U to return immediate unsubscribe command")
+		}
+	})
 }

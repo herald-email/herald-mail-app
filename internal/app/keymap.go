@@ -44,14 +44,16 @@ const (
 	CommandComposeAttach  = "compose.attach"
 	CommandComposePreview = "compose.preview"
 
-	CommandMailReplyAll        = "mail.reply_all"
-	CommandMailReplySender     = "mail.reply_sender"
-	CommandMailForward         = "mail.forward"
-	CommandMailArchiveCurrent  = "mail.archive_current"
-	CommandMailDeleteConfirm   = "mail.delete_confirm"
-	CommandMailDeleteImmediate = "mail.delete_immediate"
-	CommandMailReclassify      = "mail.reclassify"
-	CommandMailHideFuture      = "mail.hide_future"
+	CommandMailReplyAll             = "mail.reply_all"
+	CommandMailReplySender          = "mail.reply_sender"
+	CommandMailForward              = "mail.forward"
+	CommandMailArchiveCurrent       = "mail.archive_current"
+	CommandMailDeleteConfirm        = "mail.delete_confirm"
+	CommandMailDeleteImmediate      = "mail.delete_immediate"
+	CommandMailReclassify           = "mail.reclassify"
+	CommandMailUnsubscribeConfirm   = "mail.unsubscribe_confirm"
+	CommandMailUnsubscribeImmediate = "mail.unsubscribe_immediate"
+	CommandMailHideFuture           = "mail.hide_future"
 
 	CommandHelpOpen        = "help.open"
 	CommandHelpSearch      = "help.search"
@@ -114,14 +116,16 @@ var commandCatalog = map[string]struct{}{
 	CommandComposeAttach:  {},
 	CommandComposePreview: {},
 
-	CommandMailReplyAll:        {},
-	CommandMailReplySender:     {},
-	CommandMailForward:         {},
-	CommandMailArchiveCurrent:  {},
-	CommandMailDeleteConfirm:   {},
-	CommandMailDeleteImmediate: {},
-	CommandMailReclassify:      {},
-	CommandMailHideFuture:      {},
+	CommandMailReplyAll:             {},
+	CommandMailReplySender:          {},
+	CommandMailForward:              {},
+	CommandMailArchiveCurrent:       {},
+	CommandMailDeleteConfirm:        {},
+	CommandMailDeleteImmediate:      {},
+	CommandMailReclassify:           {},
+	CommandMailUnsubscribeConfirm:   {},
+	CommandMailUnsubscribeImmediate: {},
+	CommandMailHideFuture:           {},
 
 	CommandHelpOpen:        {},
 	CommandHelpSearch:      {},
@@ -367,6 +371,8 @@ func builtInKeyboardProfile(profile string) (keyboardBindingMap, keyboardCommand
 	add("timeline", keyboardModeNormal, "D", CommandMailDeleteImmediate)
 	add("timeline", keyboardModeNormal, "shift+backspace", CommandMailDeleteImmediate)
 	add("timeline", keyboardModeNormal, "T", CommandMailReclassify)
+	add("timeline", keyboardModeNormal, "u", CommandMailUnsubscribeConfirm)
+	add("timeline", keyboardModeNormal, "U", CommandMailUnsubscribeImmediate)
 	add("timeline", keyboardModeNormal, "H", CommandMailHideFuture)
 	add("timeline", keyboardModeNormal, "G", CommandTimelineGroupCycle)
 	add("timeline", keyboardModeNormal, "O", CommandTimelineSortCycle)
@@ -578,6 +584,10 @@ func canonicalKeyForCommand(scope, command string) string {
 		return "D"
 	case CommandMailReclassify:
 		return "T"
+	case CommandMailUnsubscribeConfirm:
+		return "u"
+	case CommandMailUnsubscribeImmediate:
+		return "U"
 	case CommandMailHideFuture:
 		return "H"
 	case CommandHelpSearch:

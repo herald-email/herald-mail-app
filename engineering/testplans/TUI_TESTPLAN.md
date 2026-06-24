@@ -720,7 +720,7 @@ Check these states during every applicable lane:
 - `1/2` are the advertised mail tab keys in browse contexts; `3` joins the advertised tab keys only when Calendar is available, and `F1/F2/F3` remain supported as legacy mail aliases.
 - Compose and browse hints use the active keyboard profile's resolved catalog instead of hand-written shortcut strings, and Default bottom hints show preferred keys without listing legacy aliases.
 - A Custom keymap that remaps tab switching, Compose, reply, forward, archive, delete, re-classify, sidebar, logs, or chat shows the remapped primary keys in the bottom hint bar, title-row tabs, and `?` shortcut help.
-- Timeline `Ctrl+N` opens blank Compose, with `c` still accepted as a legacy alias; `r` and `Ctrl+R` reply sender-only in Timeline while refresh remains available in non-mail contexts; `R` and `Ctrl+Shift+R` reply all; `Ctrl+F` forwards; `a` and `e` archive immediately without a confirmation prompt; `Alt+A` opens the account switcher; `T` re-classifies; `L` opens logs; `B` toggles the sidebar/folder browser; chat remains reachable through the advertised chat command without stealing text.
+- Timeline `Ctrl+N` opens blank Compose, with `c` still accepted as a legacy alias; `r` and `Ctrl+R` reply sender-only in Timeline while refresh remains available in non-mail contexts; `R` and `Ctrl+Shift+R` reply all; `Ctrl+F` forwards; `a` and `e` archive immediately without a confirmation prompt; `u` opens unsubscribe confirmation in loaded previews with `List-Unsubscribe`; `U` unsubscribes that loaded preview immediately but continues to mark unread elsewhere; `H` hides future mail immediately; `Alt+A` opens the account switcher; `T` re-classifies; `L` opens logs; `B` toggles the sidebar/folder browser; chat remains reachable through the advertised chat command without stealing text.
 - Timeline search treats plain `q` as query text while `Ctrl+C` remains the universal quit path.
 - Settings shows the Custom Keymap path field only for Custom YAML, while persisting `keyboard.profile` and any configured `keyboard.custom_keymap` without losing unrelated config fields.
 - Custom keymaps that extend Default keep Compose insert-first until `fields.compose.default_mode` opts into a modal field mode.
@@ -782,7 +782,7 @@ Check these states during every applicable lane:
 **Expect:**
 - Modifier hint layers are presentation-only and never add a new shortcut.
 - Default hints still include primary actions and `?: help` in browse contexts where help is available.
-- The Shift layer advertises only existing shifted/uppercase actions valid for the current state.
+- The Shift layer advertises only existing shifted/uppercase actions valid for the current state, including `U` as unsubscribe-now only when the loaded Timeline preview exposes `List-Unsubscribe` and as unread elsewhere.
 - The Ctrl layer advertises only existing Ctrl actions valid for the current state.
 - The Alt layer advertises existing Alt actions where present, or a compact no-Alt-actions note without hiding primary default actions.
 - Multiple active modifiers prefer Ctrl, then Alt, then Shift.

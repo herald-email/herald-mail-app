@@ -775,6 +775,7 @@ func (m *Model) timelineShortcutHelpSection() shortcutHelpSection {
 				{"Esc", "close preview"},
 			}}
 		}
+		hasUnsub := m.timeline.selectedEmail != nil && m.timeline.bodyMessageID == m.timeline.selectedEmail.MessageID && previewHasUnsubscribe(m.timeline.body)
 		entries := []shortcutHelpEntry{
 			{"j/k or arrows", "scroll preview"},
 			{"Tab", "switch between list and preview"},
@@ -784,7 +785,6 @@ func (m *Model) timelineShortcutHelpSection() shortcutHelpSection {
 			m.commandHelpEntry("timeline", CommandComposeNew, "open a blank Compose screen"),
 			m.commandHelpEntry("timeline", CommandTimelineGroupCycle, "cycle Timeline grouping"),
 			m.commandHelpEntry("timeline", CommandTimelineSortCycle, "cycle Timeline sorting"),
-			{"U", "mark unread"},
 			m.commandHelpEntry("timeline", CommandMailReplyAll, "reply all"),
 			m.commandHelpEntry("timeline", CommandMailReplySender, "reply sender"),
 			m.commandHelpEntry("timeline", CommandMailForward, "forward"),
@@ -792,12 +792,22 @@ func (m *Model) timelineShortcutHelpSection() shortcutHelpSection {
 			m.commandHelpEntry("timeline", CommandMailDeleteImmediate, "delete immediately"),
 			m.commandHelpEntry("timeline", CommandMailArchiveCurrent, "archive immediately"),
 			{"* / " + m.commandHelpKey("timeline", CommandMailReclassify), "star or re-classify"},
-			{"u / " + m.commandHelpKey("timeline", CommandMailHideFuture), "unsubscribe when available or hide future mail"},
-			m.commandHelpEntry("timeline", CommandPreviewRevealRemoteImages, "reveal linked remote images in this message"),
-			{"z", "toggle full-screen preview"},
-			{"v / y / Y", "visual selection and copy"},
-			{"Esc", "close preview"},
 		}
+		if hasUnsub {
+			entries = append(entries,
+				m.commandHelpEntry("timeline", CommandMailUnsubscribeConfirm, "unsubscribe after confirmation"),
+				m.commandHelpEntry("timeline", CommandMailUnsubscribeImmediate, "unsubscribe immediately"),
+			)
+		} else {
+			entries = append(entries, shortcutHelpEntry{"U", "mark unread"})
+		}
+		entries = append(entries, m.commandHelpEntry("timeline", CommandMailHideFuture, "hide future mail"))
+		entries = append(entries,
+			m.commandHelpEntry("timeline", CommandPreviewRevealRemoteImages, "reveal linked remote images in this message"),
+			shortcutHelpEntry{"z", "toggle full-screen preview"},
+			shortcutHelpEntry{"v / y / Y", "visual selection and copy"},
+			shortcutHelpEntry{"Esc", "close preview"},
+		)
 		if m.timelinePrintablePreviewLoaded() {
 			if !m.previewPrinterUnsupported() {
 				entries = append(entries, m.commandHelpEntry("timeline", CommandPreviewPrint, "print the loaded preview"))

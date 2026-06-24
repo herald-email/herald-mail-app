@@ -64,6 +64,7 @@ func previewActionText(hasUnsubscribe, hasInvitation bool) string {
 	actions := []string{}
 	if hasUnsubscribe {
 		actions = append(actions, "u unsubscribe")
+		actions = append(actions, "U now")
 	}
 	if hasInvitation {
 		actions = append(actions, "i create calendar event")
