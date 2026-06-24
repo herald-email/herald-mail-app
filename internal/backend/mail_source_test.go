@@ -121,6 +121,48 @@ func TestLocalBackendRoutesProviderOperationsThroughMailSource(t *testing.T) {
 	}
 }
 
+func TestLocalBackendArchiveEmailPrunesSourceFolderValidity(t *testing.T) {
+	c := newMemoryCache(t)
+	email := &models.EmailData{
+		MessageID: "<archive-stale@example.test>",
+		UID:       42,
+		Sender:    "sender@example.test",
+		Subject:   "Archive me",
+		Date:      time.Date(2026, 6, 23, 21, 0, 0, 0, time.UTC),
+		Folder:    "INBOX",
+	}
+	if err := c.CacheEmail(email); err != nil {
+		t.Fatalf("CacheEmail: %v", err)
+	}
+
+	b := &LocalBackend{
+		mailSource: newFakeMailSource(),
+		cache:      c,
+		cfg:        &config.Config{},
+		validIDsByFolder: map[string]map[string]bool{
+			"INBOX": {
+				email.MessageID:        true,
+				"<other@example.test>": true,
+			},
+		},
+	}
+
+	if err := b.ArchiveEmail(email.MessageID, email.Folder); err != nil {
+		t.Fatalf("ArchiveEmail: %v", err)
+	}
+
+	if b.validIDsByFolder["INBOX"][email.MessageID] {
+		t.Fatalf("archived message still marked valid for source folder")
+	}
+	got, err := b.GetTimelineEmails("INBOX")
+	if err != nil {
+		t.Fatalf("GetTimelineEmails: %v", err)
+	}
+	if ids := backendEmailIDs(got); slices.Contains(ids, email.MessageID) {
+		t.Fatalf("archived message reappeared in source folder timeline: %#v", ids)
+	}
+}
+
 func TestLocalBackendRunLoadUsesMailSourceInOrder(t *testing.T) {
 	source := newFakeMailSource()
 	source.folders = []string{"INBOX", "Archive"}

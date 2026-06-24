@@ -637,7 +637,7 @@ func (b *LocalBackend) DeleteSenderEmails(sender, folder string) error {
 	})
 	err := b.mailSource.DeleteSenderEmails(context.Background(), sender, folder)
 	if err == nil {
-		b.markMemorySourcesMissingForEmails(matched, "sender delete removed source email")
+		b.deleteCachedEmailsAfterSourceMutation(matched, "sender delete removed source email")
 	}
 	return err
 }
@@ -649,7 +649,7 @@ func (b *LocalBackend) DeleteDomainEmails(domain, folder string) error {
 	})
 	err := b.mailSource.DeleteDomainEmails(context.Background(), domain, folder)
 	if err == nil {
-		b.markMemorySourcesMissingForEmails(matched, "domain delete removed source email")
+		b.deleteCachedEmailsAfterSourceMutation(matched, "domain delete removed source email")
 	}
 	return err
 }
@@ -657,7 +657,7 @@ func (b *LocalBackend) DeleteDomainEmails(domain, folder string) error {
 func (b *LocalBackend) DeleteEmail(messageID, folder string) error {
 	err := b.mailSource.DeleteEmail(context.Background(), messageID, folder)
 	if err == nil {
-		b.markMemoryMessageSourceMissing(models.MessageRef{MessageID: messageID, Folder: folder}, "delete removed source email")
+		b.deleteCachedEmailAfterSourceMutation(models.MessageRef{MessageID: messageID, Folder: folder}, "delete removed source email")
 	}
 	return err
 }
@@ -674,7 +674,7 @@ func (b *LocalBackend) DeleteEmailsByRef(refs []models.MessageRef) error {
 			return err
 		}
 		for _, ref := range normalized {
-			b.markMemoryMessageSourceMissing(ref, "bulk delete removed source email")
+			b.deleteCachedEmailAfterSourceMutation(ref, "bulk delete removed source email")
 		}
 		return nil
 	}
@@ -923,41 +923,40 @@ func (b *LocalBackend) InvalidatePreview(ref models.MessageRef) error {
 }
 
 func (b *LocalBackend) DeleteCachedEmail(ref models.MessageRef) error {
+	return b.deleteCachedEmail(ref, "cache cleanup removed source email")
+}
+
+func (b *LocalBackend) deleteCachedEmail(ref models.MessageRef, missingReason string) error {
 	rawRef := ref
 	ref = ref.WithDefaults()
-	if b.cache == nil {
-		return nil
-	}
-	useLocalID := strings.TrimSpace(rawRef.LocalID) != "" ||
-		(rawRef.SourceID != "" && rawRef.SourceID != models.DefaultMailSourceID) ||
-		(rawRef.AccountID != "" && rawRef.AccountID != models.DefaultAccountID)
-	if strings.HasPrefix(ref.LocalID, "mail:default-mail:default:") && strings.TrimSpace(rawRef.LocalID) == "" {
-		useLocalID = false
-	}
-	invalidateRef := ref
-	if !useLocalID {
-		invalidateRef.LocalID = ""
-	}
-	if err := b.cache.InvalidateMessageByRef(invalidateRef); err != nil {
-		return err
-	}
 	var err error
-	switch {
-	case useLocalID && strings.TrimSpace(ref.LocalID) != "":
-		err = b.cache.DeleteEmailByLocalID(ref.LocalID)
-	case strings.TrimSpace(ref.Folder) != "" && strings.TrimSpace(ref.MessageID) != "":
-		err = b.cache.DeleteEmailsByMessageIDs(ref.Folder, []string{ref.MessageID})
-	case strings.TrimSpace(ref.MessageID) != "":
-		err = b.cache.DeleteEmail(ref.MessageID)
-	case strings.TrimSpace(ref.Folder) != "" && ref.UID != 0:
-		err = b.cache.DeleteEmailsByUIDs(ref.Folder, []uint32{ref.UID})
-	default:
-		return nil
+	if b.cache != nil {
+		useLocalID := strings.TrimSpace(rawRef.LocalID) != "" ||
+			(rawRef.SourceID != "" && rawRef.SourceID != models.DefaultMailSourceID) ||
+			(rawRef.AccountID != "" && rawRef.AccountID != models.DefaultAccountID)
+		if strings.HasPrefix(ref.LocalID, "mail:default-mail:default:") && strings.TrimSpace(rawRef.LocalID) == "" {
+			useLocalID = false
+		}
+		invalidateRef := ref
+		if !useLocalID {
+			invalidateRef.LocalID = ""
+		}
+		if invalidateErr := b.cache.InvalidateMessageByRef(invalidateRef); invalidateErr != nil {
+			err = invalidateErr
+		} else {
+			switch {
+			case useLocalID && strings.TrimSpace(ref.LocalID) != "":
+				err = b.cache.DeleteEmailByLocalID(ref.LocalID)
+			case strings.TrimSpace(ref.Folder) != "" && strings.TrimSpace(ref.MessageID) != "":
+				err = b.cache.DeleteEmailsByMessageIDs(ref.Folder, []string{ref.MessageID})
+			case strings.TrimSpace(ref.MessageID) != "":
+				err = b.cache.DeleteEmail(ref.MessageID)
+			case strings.TrimSpace(ref.Folder) != "" && ref.UID != 0:
+				err = b.cache.DeleteEmailsByUIDs(ref.Folder, []uint32{ref.UID})
+			}
+		}
 	}
-	if err != nil {
-		return err
-	}
-	b.markMemoryMessageSourceMissing(ref, "cache cleanup removed source email")
+	b.markMemoryMessageSourceMissing(ref, missingReason)
 	b.bodyCacheMu.Lock()
 	b.bodyCache = nil
 	b.bodyCacheMu.Unlock()
@@ -968,7 +967,7 @@ func (b *LocalBackend) DeleteCachedEmail(ref models.MessageRef) error {
 		}
 		b.validIDsMu.Unlock()
 	}
-	return nil
+	return err
 }
 
 func (b *LocalBackend) ensureMessageService() *MessageService {
@@ -1189,7 +1188,7 @@ func (b *LocalBackend) Close() error {
 func (b *LocalBackend) ArchiveEmail(messageID, folder string) error {
 	err := b.mailSource.ArchiveEmail(context.Background(), messageID, folder)
 	if err == nil {
-		b.markMemoryMessageSourceMissing(models.MessageRef{MessageID: messageID, Folder: folder}, "archive moved source email from original folder")
+		b.deleteCachedEmailAfterSourceMutation(models.MessageRef{MessageID: messageID, Folder: folder}, "archive moved source email from original folder")
 	}
 	return err
 }
@@ -1200,7 +1199,7 @@ func (b *LocalBackend) ArchiveSenderEmails(sender, folder string) error {
 	})
 	err := b.mailSource.ArchiveSenderEmails(context.Background(), sender, folder)
 	if err == nil {
-		b.markMemorySourcesMissingForEmails(matched, "sender archive moved source email from original folder")
+		b.deleteCachedEmailsAfterSourceMutation(matched, "sender archive moved source email from original folder")
 	}
 	return err
 }
@@ -1535,7 +1534,7 @@ func (b *LocalBackend) StopPolling() {
 func (b *LocalBackend) MoveEmail(messageID, fromFolder, toFolder string) error {
 	err := b.mailSource.MoveEmail(context.Background(), messageID, fromFolder, toFolder)
 	if err == nil {
-		b.markMemoryMessageSourceMissing(models.MessageRef{MessageID: messageID, Folder: fromFolder}, "move removed source email from original folder")
+		b.deleteCachedEmailAfterSourceMutation(models.MessageRef{MessageID: messageID, Folder: fromFolder}, "move removed source email from original folder")
 	}
 	return err
 }
@@ -1935,11 +1934,17 @@ func (b *LocalBackend) cachedEmailsMatching(folder string, match func(*models.Em
 	return out
 }
 
-func (b *LocalBackend) markMemorySourcesMissingForEmails(emails []*models.EmailData, reason string) {
+func (b *LocalBackend) deleteCachedEmailsAfterSourceMutation(emails []*models.EmailData, reason string) {
 	for _, email := range emails {
 		if email != nil {
-			b.markMemoryMessageSourceMissing(email.MessageRef(), reason)
+			b.deleteCachedEmailAfterSourceMutation(email.MessageRef(), reason)
 		}
+	}
+}
+
+func (b *LocalBackend) deleteCachedEmailAfterSourceMutation(ref models.MessageRef, reason string) {
+	if err := b.deleteCachedEmail(ref, reason); err != nil {
+		logger.Warn("Failed to prune local source-folder state for %s: %v", ref.MessageID, err)
 	}
 }
 
