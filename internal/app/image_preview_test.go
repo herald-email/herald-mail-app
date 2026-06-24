@@ -265,6 +265,42 @@ func TestTimelineSplitPreview_ItermEscRequestsNativeImageClear(t *testing.T) {
 	}
 }
 
+func TestTimelineReplyFromItermRasterPreviewRequestsNativeImageClear(t *testing.T) {
+	t.Setenv("TERM_PROGRAM", "iTerm.app")
+	m := makeSizedModel(t, 100, 30)
+	defer m.cleanup()
+	m.activeTab = tabTimeline
+	m.focusedPanel = panelPreview
+	email := testImageEmail()
+	email.UID = 42
+	email.Folder = "INBOX"
+	m.timeline.emails = []*models.EmailData{email}
+	m.updateTimelineTable()
+	m.timelineTable.SetCursor(0)
+	m.timeline.selectedEmail = email
+	m.timeline.bodyMessageID = email.MessageID
+	m.timeline.body = &models.EmailBody{
+		TextHTML: `<p>Before image.</p><img alt="Landscape" src="cid:landscape"><p>After image.</p>`,
+		InlineImages: []models.InlineImage{
+			{ContentID: "landscape", MIMEType: "image/png", Data: tinyPNG(t, 960, 540)},
+		},
+	}
+
+	model, cmd, handled := m.handleTimelineKey(keyRunes("r"))
+	updated := model.(*Model)
+
+	if !handled {
+		t.Fatal("expected reply key to be handled")
+	}
+	if updated.activeTab != tabCompose {
+		t.Fatalf("activeTab = %d, want Compose", updated.activeTab)
+	}
+	messages := collectCommandMessagesForTest(cmd)
+	if !cmdMessagesContainClearScreen(messages) {
+		t.Fatalf("replying from an iTerm2 raster preview should clear stale native images; command messages: %#v", messages)
+	}
+}
+
 func TestTimelineSplitPreview_KittyTabSwitchDeletesVisiblePlacements(t *testing.T) {
 	clearTerminalImageEnv(t)
 	t.Setenv("TERM", "xterm-ghostty")
@@ -400,6 +436,15 @@ func cmdMessagesContainRawString(messages []tea.Msg, want string) bool {
 	for _, msg := range messages {
 		raw, ok := msg.(tea.RawMsg)
 		if ok && raw.Msg == want {
+			return true
+		}
+	}
+	return false
+}
+
+func cmdMessagesContainClearScreen(messages []tea.Msg) bool {
+	for _, msg := range messages {
+		if strings.Contains(reflect.TypeOf(msg).String(), "clearScreenMsg") {
 			return true
 		}
 	}

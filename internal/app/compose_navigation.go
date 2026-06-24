@@ -58,7 +58,18 @@ func (m *Model) clearComposeFieldsForBlankMessage() {
 	m.clearComposeExitPrompt()
 }
 
+func prependComposeEntryClearCmd(clearCmd, next tea.Cmd) tea.Cmd {
+	if clearCmd == nil {
+		return next
+	}
+	if next == nil {
+		return clearCmd
+	}
+	return tea.Sequence(clearCmd, next)
+}
+
 func (m *Model) openBlankComposeFromCurrent() tea.Cmd {
+	clearCmd := m.timelineNativeImageClearCmd()
 	m.clearContactsStatus()
 	m.finishTimelineRangeSelection()
 	m.rememberComposeReturn()
@@ -70,7 +81,7 @@ func (m *Model) openBlankComposeFromCurrent() tea.Cmd {
 	if m.windowWidth > 0 {
 		m.updateTableDimensions(m.windowWidth, m.windowHeight)
 	}
-	return nil
+	return clearCmd
 }
 
 func (m *Model) returnFromCompose() tea.Cmd {

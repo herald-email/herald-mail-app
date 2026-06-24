@@ -2100,8 +2100,9 @@ func (m *Model) startTimelineForward(email *models.EmailData) tea.Cmd {
 		return nil
 	}
 	if m.timelineBodyLoadedFor(email) {
+		clearCmd := m.timelineNativeImageClearCmd()
 		m.openTimelineForwardCompose(email, m.timeline.body, "")
-		return nil
+		return clearCmd
 	}
 	m.timeline.forwardRequestID++
 	requestID := m.timeline.forwardRequestID
@@ -2147,8 +2148,9 @@ func (m *Model) startTimelineDraft(email *models.EmailData) tea.Cmd {
 		return nil
 	}
 	if m.timelineBodyLoadedFor(email) {
+		clearCmd := m.timelineNativeImageClearCmd()
 		m.openTimelineDraftCompose(email, m.timeline.body, "")
-		return nil
+		return clearCmd
 	}
 	m.timeline.draftRequestID++
 	requestID := m.timeline.draftRequestID
@@ -2301,8 +2303,9 @@ func (m *Model) startTimelineReply(email *models.EmailData, replyAll bool) tea.C
 		return nil
 	}
 	if m.timelineBodyLoadedFor(email) {
+		clearCmd := m.timelineNativeImageClearCmd()
 		m.openTimelineReplyCompose(email, m.timeline.body, "", replyAll)
-		return m.startComposeMemoryRadar()
+		return prependComposeEntryClearCmd(clearCmd, m.startComposeMemoryRadar())
 	}
 	m.timeline.replyRequestID++
 	requestID := m.timeline.replyRequestID
@@ -3202,8 +3205,9 @@ func (m *Model) handleTimelineMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			composeStatus = "Forward body failed to load: " + msg.Err.Error()
 			body = &models.EmailBody{TextPlain: "(" + composeStatus + ")"}
 		}
+		clearCmd := m.timelineNativeImageClearCmd()
 		m.openTimelineForwardCompose(email, body, composeStatus)
-		return m, nil, true
+		return m, clearCmd, true
 
 	case TimelineReplyBodyMsg:
 		if msg.RequestID != m.timeline.replyRequestID || msg.MessageID != m.timeline.replyPendingMessage {
@@ -3224,8 +3228,9 @@ func (m *Model) handleTimelineMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			composeStatus = "Reply body failed to load: " + msg.Err.Error()
 			body = &models.EmailBody{TextPlain: "(" + composeStatus + ")"}
 		}
+		clearCmd := m.timelineNativeImageClearCmd()
 		m.openTimelineReplyCompose(email, body, composeStatus, msg.ReplyAll)
-		return m, m.startComposeMemoryRadar(), true
+		return m, prependComposeEntryClearCmd(clearCmd, m.startComposeMemoryRadar()), true
 
 	case TimelineDraftBodyMsg:
 		if msg.RequestID != m.timeline.draftRequestID || msg.MessageID != m.timeline.draftPendingMessage {
@@ -3246,8 +3251,9 @@ func (m *Model) handleTimelineMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			composeStatus = "Draft body failed to load: " + msg.Err.Error()
 			body = &models.EmailBody{Subject: email.Subject, TextPlain: "(" + composeStatus + ")"}
 		}
+		clearCmd := m.timelineNativeImageClearCmd()
 		m.openTimelineDraftCompose(email, body, composeStatus)
-		return m, nil, true
+		return m, clearCmd, true
 
 	case TimelineDraftSentMsg:
 		if msg.Err != nil {

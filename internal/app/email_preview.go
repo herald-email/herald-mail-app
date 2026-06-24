@@ -1094,6 +1094,7 @@ func generateQuickRepliesCmd(classifier ai.AIClient, sender, subject, bodyPrevie
 
 // openQuickReply pre-fills Compose with the selected reply template and switches to it.
 func (m *Model) openQuickReply(template string) (tea.Model, tea.Cmd) {
+	clearCmd := m.timelineNativeImageClearCmd()
 	m.timeline.quickReplyOpen = false
 	if m.timeline.selectedEmail == nil {
 		return m, nil
@@ -1121,7 +1122,7 @@ func (m *Model) openQuickReply(template string) (tea.Model, tea.Cmd) {
 	m.composeSubject.Blur()
 	m.composeBody.Focus()
 	m.resetFieldKeyMode()
-	return m, m.startComposeMemoryRadar()
+	return m, prependComposeEntryClearCmd(clearCmd, m.startComposeMemoryRadar())
 }
 
 // renderQuickReplyPicker renders the quick reply picker overlay appended to the preview panel.
