@@ -446,6 +446,7 @@ Check these states during every applicable lane:
 9. Focus the folder sidebar and press right arrow or `]`.
 10. Open a preview with multiple attachments, focus the preview panel, and press `[` / `]`.
 11. Press `U` from a previewed message, then repeat in a virtual read-only Timeline view such as `All Mail only`.
+12. Open an unread message preview, move to another message before 2 seconds elapse, and refresh or inspect row state; then open an unread message and leave the loaded preview open for 2-3 seconds.
 
 **Expect:**
 - Right arrow and `]` open the split preview without moving focus out of the Timeline list when no preview is open.
@@ -458,6 +459,7 @@ Check these states during every applicable lane:
 - Right arrow and `]` from folder focus return focus to the Timeline list.
 - When preview focus is active and the email has multiple attachments, brackets navigate attachments instead of closing/opening panes.
 - `U` marks the current previewed or focused Timeline message unread, updates the unread dot immediately, and is blocked in read-only diagnostic views.
+- Automatic read marking is dwell-based: quick scrolling away before the timeout keeps the first message unread, while leaving the same loaded preview open for 2-3 seconds marks that message read.
 - At `50x15`, the minimum-size guard appears instead of clipped horizontal-navigation UI.
 
 ### TC-05A — Timeline bulk selection for delete and archive

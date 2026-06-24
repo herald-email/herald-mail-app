@@ -251,6 +251,11 @@ type EmailBodyMsg struct {
 	LoadDuration   time.Duration
 }
 
+type timelinePreviewReadDwellMsg struct {
+	MessageID string
+	Token     int
+}
+
 type ProblemReportMsg struct {
 	Path string
 	Err  error

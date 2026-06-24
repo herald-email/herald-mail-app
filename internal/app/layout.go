@@ -69,6 +69,7 @@ type TimelineState struct {
 	bodyMessageID            string
 	bodyLoading              bool
 	previewLoad              previewLoadTelemetry
+	previewReadToken         int
 	inlineImageDescs         map[string]string
 	remoteImageLoads         map[string]previewRemoteImageState
 	remoteImageRevision      int

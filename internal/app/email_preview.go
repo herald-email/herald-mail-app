@@ -890,6 +890,7 @@ func (m *Model) maybeUpdatePreview() tea.Cmd {
 	}
 	clearCmd := m.timelineNativeImageClearCmd()
 	m.revokeImagePreviews()
+	m.timeline.previewReadToken++
 	m.timeline.selectedEmail = email
 	m.timeline.body = nil
 	m.timeline.bodyMessageID = ""

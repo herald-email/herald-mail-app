@@ -18,6 +18,8 @@ import (
 	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
+var timelinePreviewMarkReadDelay = 2500 * time.Millisecond
+
 // --- Thread grouping types ---
 
 // threadGroup holds all emails that share the same normalised subject.
@@ -1391,6 +1393,7 @@ func (m *Model) clearTimelinePreview() {
 	m.clearPreviewSelection()
 	m.revokeImagePreviews()
 	m.previewPrintPending = false
+	m.timeline.previewReadToken++
 	m.timeline.selectedEmail = nil
 	m.timeline.body = nil
 	m.timeline.bodyMessageID = ""
@@ -1707,6 +1710,22 @@ func (m *Model) setTimelineEmailReadState(email *models.EmailData, read bool) bo
 		}
 	}
 	return changed
+}
+
+func timelinePreviewReadDwellCmd(messageID string, token int) tea.Cmd {
+	messageID = strings.TrimSpace(messageID)
+	if messageID == "" {
+		return nil
+	}
+	delay := timelinePreviewMarkReadDelay
+	if delay <= 0 {
+		return func() tea.Msg {
+			return timelinePreviewReadDwellMsg{MessageID: messageID, Token: token}
+		}
+	}
+	return tea.Tick(delay, func(time.Time) tea.Msg {
+		return timelinePreviewReadDwellMsg{MessageID: messageID, Token: token}
+	})
 }
 
 func (m *Model) currentTimelineUnreadTarget() *models.EmailData {
@@ -2426,6 +2445,7 @@ func (m *Model) openTimelineEmail(email *models.EmailData) tea.Cmd {
 	}
 	clearCmd := m.timelineNativeImageClearCmd()
 	m.revokeImagePreviews()
+	m.timeline.previewReadToken++
 	m.timeline.selectedEmail = email
 	m.timeline.body = nil
 	m.timeline.bodyMessageID = ""
@@ -2926,9 +2946,7 @@ func (m *Model) handleTimelineMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 				m.timeline.quickReplies = buildCannedReplies(email.Sender)
 				body := msg.Body
 				if !email.IsRead && !m.timelineIsReadOnlyDiagnostic() {
-					m.setTimelineEmailReadState(email, true)
-					m.updateTimelineTable()
-					cmds = append(cmds, markReadEmailCmd(m.backend, email))
+					cmds = append(cmds, timelinePreviewReadDwellCmd(email.MessageID, m.timeline.previewReadToken))
 				}
 				if body != nil && (body.ListUnsubscribe != "" || body.ListUnsubscribePost != "") && !m.timelineIsReadOnlyDiagnostic() {
 					cmds = append(cmds, cacheUnsubscribeHeadersCmd(m.backend, email.MessageID, body.ListUnsubscribe, body.ListUnsubscribePost))
@@ -2986,6 +3004,26 @@ func (m *Model) handleTimelineMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		m.clearTimelinePreviewDocumentCache()
 		if len(cmds) > 0 {
 			return m, tea.Batch(cmds...), true
+		}
+		return m, nil, true
+
+	case timelinePreviewReadDwellMsg:
+		if m.timelineIsReadOnlyDiagnostic() || m.timeline.selectedEmail == nil {
+			return m, nil, true
+		}
+		email := m.timeline.selectedEmail
+		if msg.Token != m.timeline.previewReadToken ||
+			strings.TrimSpace(msg.MessageID) == "" ||
+			msg.MessageID != email.MessageID ||
+			m.timeline.bodyLoading ||
+			m.timeline.body == nil ||
+			m.timeline.bodyMessageID != email.MessageID ||
+			email.IsRead {
+			return m, nil, true
+		}
+		if m.setTimelineEmailReadState(email, true) {
+			m.updateTimelineTable()
+			return m, markReadEmailCmd(m.backend, email), true
 		}
 		return m, nil, true
 

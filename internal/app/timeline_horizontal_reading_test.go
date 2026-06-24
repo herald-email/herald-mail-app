@@ -323,9 +323,13 @@ func TestHorizontalTimelineBracketKeepsPreviewAttachmentPrecedence(t *testing.T)
 	}
 }
 
-func TestTimelineBodyLoadMarksReadAndRefreshesRows(t *testing.T) {
+func TestTimelineBodyLoadDefersMarkReadUntilPreviewDwell(t *testing.T) {
 	backend := &readTrackingBackend{}
 	m := makeHorizontalTimelineModel(t, backend)
+	previousDelay := timelinePreviewMarkReadDelay
+	timelinePreviewMarkReadDelay = 0
+	t.Cleanup(func() { timelinePreviewMarkReadDelay = previousDelay })
+
 	email := m.timeline.emails[0]
 	email.IsRead = false
 	m.timeline.selectedEmail = email
@@ -343,18 +347,97 @@ func TestTimelineBodyLoadMarksReadAndRefreshesRows(t *testing.T) {
 		t.Fatal("expected EmailBodyMsg to be handled")
 	}
 	updated := model.(*Model)
-	if !email.IsRead {
-		t.Fatal("expected successful body load to mark email read locally")
+	if email.IsRead {
+		t.Fatal("expected successful body load to keep email unread until preview dwell elapses")
 	}
-	if got := stripANSI(updated.timelineTable.Rows()[0][1]); strings.Contains(got, "●") {
-		t.Fatalf("expected unread dot to disappear after body load, got %q", got)
+	if got := stripANSI(updated.timelineTable.Rows()[0][1]); !strings.Contains(got, "●") {
+		t.Fatalf("expected unread dot to remain after body load, got %q", got)
 	}
 	if cmd == nil {
-		t.Fatal("expected mark-read command")
+		t.Fatal("expected delayed mark-read command")
+	}
+	if len(backend.markReadIDs) != 0 {
+		t.Fatalf("expected no immediate backend MarkRead, got %#v", backend.markReadIDs)
+	}
+	msg, ok := cmd().(timelinePreviewReadDwellMsg)
+	if !ok {
+		t.Fatalf("expected delayed command to emit timelinePreviewReadDwellMsg, got %T", msg)
+	}
+	if msg.MessageID != email.MessageID || msg.Token != updated.timeline.previewReadToken {
+		t.Fatalf("dwell msg = %#v, want message %q token %d", msg, email.MessageID, updated.timeline.previewReadToken)
+	}
+}
+
+func TestTimelinePreviewDwellMarksReadForStableLoadedPreview(t *testing.T) {
+	backend := &readTrackingBackend{}
+	m := makeHorizontalTimelineModel(t, backend)
+	email := m.timeline.emails[0]
+	email.IsRead = false
+	m.timeline.selectedEmail = email
+	m.timeline.body = &models.EmailBody{TextPlain: "loaded body"}
+	m.timeline.bodyMessageID = email.MessageID
+	m.timeline.bodyLoading = false
+	m.timeline.previewReadToken = 7
+	m.updateTimelineTable()
+
+	model, cmd, handled := m.handleTimelineMsg(timelinePreviewReadDwellMsg{
+		MessageID: email.MessageID,
+		Token:     7,
+	})
+	if !handled {
+		t.Fatal("expected preview dwell msg to be handled")
+	}
+	updated := model.(*Model)
+	if !email.IsRead {
+		t.Fatal("expected stable loaded preview dwell to mark email read locally")
+	}
+	if got := stripANSI(updated.timelineTable.Rows()[0][1]); strings.Contains(got, "●") {
+		t.Fatalf("expected unread dot to disappear after dwell, got %q", got)
+	}
+	if cmd == nil {
+		t.Fatal("expected backend mark-read command after dwell")
 	}
 	cmd()
 	if len(backend.markReadIDs) != 1 || backend.markReadIDs[0] != email.MessageID {
 		t.Fatalf("expected backend MarkRead for %q, got %#v", email.MessageID, backend.markReadIDs)
+	}
+}
+
+func TestTimelinePreviewDwellIgnoresStaleTokenAfterNavigation(t *testing.T) {
+	backend := &readTrackingBackend{}
+	m := makeHorizontalTimelineModel(t, backend)
+	first := m.timeline.emails[0]
+	second := m.timeline.emails[1]
+	first.IsRead = false
+	second.IsRead = false
+	m.timeline.selectedEmail = second
+	m.timeline.body = &models.EmailBody{TextPlain: "second body"}
+	m.timeline.bodyMessageID = second.MessageID
+	m.timeline.bodyLoading = false
+	m.timeline.previewReadToken = 2
+
+	model, cmd, handled := m.handleTimelineMsg(timelinePreviewReadDwellMsg{
+		MessageID: first.MessageID,
+		Token:     1,
+	})
+	if !handled {
+		t.Fatal("expected stale preview dwell msg to be handled")
+	}
+	if cmd != nil {
+		t.Fatalf("expected stale dwell to have no command, got %T", cmd)
+	}
+	updated := model.(*Model)
+	if first.IsRead {
+		t.Fatal("expected stale dwell not to mark first email read")
+	}
+	if second.IsRead {
+		t.Fatal("expected stale dwell not to mark current email read")
+	}
+	if updated.timeline.selectedEmail == nil || updated.timeline.selectedEmail.MessageID != second.MessageID {
+		t.Fatalf("expected current preview to remain on second email, got %#v", updated.timeline.selectedEmail)
+	}
+	if len(backend.markReadIDs) != 0 {
+		t.Fatalf("expected no backend MarkRead for stale dwell, got %#v", backend.markReadIDs)
 	}
 }
 
