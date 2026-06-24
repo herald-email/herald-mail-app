@@ -140,7 +140,7 @@ func BuildDraftMessage(from, to, cc, bcc, subject, body string) ([]byte, error) 
 	if rcpts.CCHeader != "" {
 		msg.WriteString(fmt.Sprintf("Cc: %s\r\n", rcpts.CCHeader))
 	}
-	msg.WriteString(fmt.Sprintf("Subject: %s\r\n", subject))
+	msg.WriteString(fmt.Sprintf("Subject: %s\r\n", EncodeHeaderValue(subject)))
 	msg.WriteString(fmt.Sprintf("Date: %s\r\n", time.Now().Format(time.RFC1123Z)))
 	msg.WriteString("MIME-Version: 1.0\r\n")
 	msg.WriteString("Content-Type: text/plain; charset=utf-8\r\n")

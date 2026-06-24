@@ -207,7 +207,7 @@ func buildMIMEMessage(from, to, subject, plainText, htmlBody, cc string) string 
 	if cc != "" {
 		msg.WriteString(fmt.Sprintf("Cc: %s\r\n", cc))
 	}
-	msg.WriteString(fmt.Sprintf("Subject: %s\r\n", subject))
+	msg.WriteString(fmt.Sprintf("Subject: %s\r\n", EncodeHeaderValue(subject)))
 	msg.WriteString("MIME-Version: 1.0\r\n")
 
 	if htmlBody == "" {
@@ -259,7 +259,7 @@ func (c *Client) SendWithAttachments(from, to, subject, plainText, htmlBody stri
 	var msg strings.Builder
 	msg.WriteString(fmt.Sprintf("From: %s\r\n", fromHeader))
 	msg.WriteString(fmt.Sprintf("To: %s\r\n", rcpts.ToHeader))
-	msg.WriteString(fmt.Sprintf("Subject: %s\r\n", subject))
+	msg.WriteString(fmt.Sprintf("Subject: %s\r\n", EncodeHeaderValue(subject)))
 	msg.WriteString("MIME-Version: 1.0\r\n")
 	msg.WriteString(fmt.Sprintf("Content-Type: multipart/mixed; boundary=%q\r\n", outerBoundary))
 	msg.WriteString("\r\n")
@@ -389,7 +389,7 @@ func (c *Client) SendWithInlineImages(from, to, subject, plainText, htmlBody, cc
 	if rcpts.CCHeader != "" {
 		msg.WriteString(fmt.Sprintf("Cc: %s\r\n", rcpts.CCHeader))
 	}
-	msg.WriteString(fmt.Sprintf("Subject: %s\r\n", subject))
+	msg.WriteString(fmt.Sprintf("Subject: %s\r\n", EncodeHeaderValue(subject)))
 	msg.WriteString("MIME-Version: 1.0\r\n")
 	msg.WriteString(fmt.Sprintf("Content-Type: multipart/mixed; boundary=%q\r\n", outerBoundary))
 	msg.WriteString("\r\n")
@@ -512,7 +512,7 @@ func buildReplyMIMEMessage(from, to, subject, plainText, htmlBody, inReplyTo, re
 	var msg strings.Builder
 	msg.WriteString(fmt.Sprintf("From: %s\r\n", from))
 	msg.WriteString(fmt.Sprintf("To: %s\r\n", to))
-	msg.WriteString(fmt.Sprintf("Subject: %s\r\n", subject))
+	msg.WriteString(fmt.Sprintf("Subject: %s\r\n", EncodeHeaderValue(subject)))
 	msg.WriteString(fmt.Sprintf("In-Reply-To: %s\r\n", inReplyTo))
 	if references != "" {
 		msg.WriteString(fmt.Sprintf("References: %s %s\r\n", references, inReplyTo))

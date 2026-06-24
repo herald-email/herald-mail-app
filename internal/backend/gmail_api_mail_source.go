@@ -576,9 +576,11 @@ func (s *GmailAPIMailSource) FetchMessagePreviewNoCache(ctx context.Context, ref
 }
 
 func (s *GmailAPIMailSource) SendEmail(ctx context.Context, from, to, subject, body string) error {
-	raw := buildGmailAPIRawMessage(from, to, "", "", subject, body)
-	err := s.sendRawMessage(ctx, raw)
-	return err
+	raw, err := buildGmailAPIRawMessage(from, to, "", "", subject, body)
+	if err != nil {
+		return err
+	}
+	return s.sendRawMessage(ctx, raw)
 }
 
 func (s *GmailAPIMailSource) SendCompose(ctx context.Context, req ComposeSendRequest) error {
@@ -596,7 +598,7 @@ func (s *GmailAPIMailSource) SendCompose(ctx context.Context, req ComposeSendReq
 		}
 		raw, err = appsmtp.BuildPreservedMIMEMessage(preserved)
 		if err == nil && strings.TrimSpace(preserved.BCC) != "" {
-			raw = insertGmailAPIBccHeader(raw, preserved.BCC)
+			raw, err = insertGmailAPIBccHeader(raw, preserved.BCC)
 		}
 	} else {
 		raw, err = buildGmailAPIComposeRaw(req)
@@ -1424,22 +1426,38 @@ func maxGmailAPIHistoryID(current, candidate string) string {
 	return current
 }
 
-func buildGmailAPIRawMessage(from, to, cc, bcc, subject, body string) string {
+func buildGmailAPIRawMessage(from, to, cc, bcc, subject, body string) (string, error) {
+	fromHeader, err := appsmtp.NormalizeMailboxHeader("From", from)
+	if err != nil {
+		return "", err
+	}
+	toHeader, err := appsmtp.NormalizeAddressListHeader("To", to, true)
+	if err != nil {
+		return "", err
+	}
+	ccHeader, err := appsmtp.NormalizeAddressListHeader("Cc", cc, false)
+	if err != nil {
+		return "", err
+	}
+	bccHeader, err := appsmtp.NormalizeAddressListHeader("Bcc", bcc, false)
+	if err != nil {
+		return "", err
+	}
 	var b strings.Builder
-	b.WriteString("From: " + from + "\r\n")
-	b.WriteString("To: " + to + "\r\n")
-	if strings.TrimSpace(cc) != "" {
-		b.WriteString("Cc: " + cc + "\r\n")
+	b.WriteString("From: " + fromHeader + "\r\n")
+	b.WriteString("To: " + toHeader + "\r\n")
+	if ccHeader != "" {
+		b.WriteString("Cc: " + ccHeader + "\r\n")
 	}
-	if strings.TrimSpace(bcc) != "" {
-		b.WriteString("Bcc: " + bcc + "\r\n")
+	if bccHeader != "" {
+		b.WriteString("Bcc: " + bccHeader + "\r\n")
 	}
-	b.WriteString("Subject: " + subject + "\r\n")
+	b.WriteString("Subject: " + appsmtp.EncodeHeaderValue(subject) + "\r\n")
 	b.WriteString("MIME-Version: 1.0\r\n")
 	b.WriteString("Content-Type: text/plain; charset=utf-8\r\n")
 	b.WriteString("\r\n")
 	b.WriteString(body)
-	return b.String()
+	return b.String(), nil
 }
 
 func buildGmailAPIComposeRaw(req ComposeSendRequest) (string, error) {
@@ -1450,7 +1468,23 @@ func buildGmailAPIComposeRaw(req ComposeSendRequest) (string, error) {
 	}
 	_, plainText := appsmtp.MarkdownToHTMLAndPlain(req.MarkdownBody)
 	if htmlBody == "" && len(req.Attachments) == 0 && len(inlines) == 0 {
-		return buildGmailAPIRawMessage(req.From, req.To, req.CC, req.BCC, req.Subject, plainText), nil
+		return buildGmailAPIRawMessage(req.From, req.To, req.CC, req.BCC, req.Subject, plainText)
+	}
+	fromHeader, err := appsmtp.NormalizeMailboxHeader("From", req.From)
+	if err != nil {
+		return "", err
+	}
+	toHeader, err := appsmtp.NormalizeAddressListHeader("To", req.To, true)
+	if err != nil {
+		return "", err
+	}
+	ccHeader, err := appsmtp.NormalizeAddressListHeader("Cc", req.CC, false)
+	if err != nil {
+		return "", err
+	}
+	bccHeader, err := appsmtp.NormalizeAddressListHeader("Bcc", req.BCC, false)
+	if err != nil {
+		return "", err
 	}
 
 	outerBoundary := fmt.Sprintf("gmail_outer_%d", time.Now().UnixNano())
@@ -1458,15 +1492,15 @@ func buildGmailAPIComposeRaw(req ComposeSendRequest) (string, error) {
 	altBoundary := fmt.Sprintf("gmail_alt_%d", time.Now().UnixNano()+2)
 
 	var msg strings.Builder
-	msg.WriteString("From: " + req.From + "\r\n")
-	msg.WriteString("To: " + req.To + "\r\n")
-	if strings.TrimSpace(req.CC) != "" {
-		msg.WriteString("Cc: " + req.CC + "\r\n")
+	msg.WriteString("From: " + fromHeader + "\r\n")
+	msg.WriteString("To: " + toHeader + "\r\n")
+	if ccHeader != "" {
+		msg.WriteString("Cc: " + ccHeader + "\r\n")
 	}
-	if strings.TrimSpace(req.BCC) != "" {
-		msg.WriteString("Bcc: " + req.BCC + "\r\n")
+	if bccHeader != "" {
+		msg.WriteString("Bcc: " + bccHeader + "\r\n")
 	}
-	msg.WriteString("Subject: " + req.Subject + "\r\n")
+	msg.WriteString("Subject: " + appsmtp.EncodeHeaderValue(req.Subject) + "\r\n")
 	msg.WriteString("MIME-Version: 1.0\r\n")
 	msg.WriteString(fmt.Sprintf("Content-Type: multipart/mixed; boundary=%q\r\n\r\n", outerBoundary))
 
@@ -1520,18 +1554,25 @@ func writeGmailAPIBinaryPart(msg *strings.Builder, boundary, mimeType, dispositi
 	}
 }
 
-func insertGmailAPIBccHeader(raw, bcc string) string {
+func insertGmailAPIBccHeader(raw, bcc string) (string, error) {
 	bcc = strings.TrimSpace(bcc)
 	if bcc == "" || strings.Contains(strings.ToLower(raw), "\r\nbcc:") {
-		return raw
+		return raw, nil
+	}
+	bccHeader, err := appsmtp.NormalizeAddressListHeader("Bcc", bcc, false)
+	if err != nil {
+		return "", err
+	}
+	if bccHeader == "" {
+		return raw, nil
 	}
 	if idx := strings.Index(raw, "\r\nSubject:"); idx >= 0 {
-		return raw[:idx] + "\r\nBcc: " + bcc + raw[idx:]
+		return raw[:idx] + "\r\nBcc: " + bccHeader + raw[idx:], nil
 	}
 	if idx := strings.Index(raw, "\r\nMIME-Version:"); idx >= 0 {
-		return raw[:idx] + "\r\nBcc: " + bcc + raw[idx:]
+		return raw[:idx] + "\r\nBcc: " + bccHeader + raw[idx:], nil
 	}
-	return "Bcc: " + bcc + "\r\n" + raw
+	return "Bcc: " + bccHeader + "\r\n" + raw, nil
 }
 
 func gmailAPIExtFromMIME(mimeType string) string {

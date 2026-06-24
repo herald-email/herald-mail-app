@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/mail"
 	"net/url"
 	"path"
 	"strconv"
@@ -596,6 +597,40 @@ func TestGmailAPIMailSourcePaginationRetryAndComposeMIME(t *testing.T) {
 		if !strings.Contains(raw, want) {
 			t.Fatalf("raw MIME missing %q:\n%s", want, raw)
 		}
+	}
+}
+
+func TestBuildGmailAPIComposeRaw_EncodesNonASCIIDisplayNameHeaders(t *testing.T) {
+	raw, err := buildGmailAPIComposeRaw(ComposeSendRequest{
+		From:         "Me <me@example.com>",
+		To:           "Любимая Катюшка <evgolubtsova@gmail.com>",
+		CC:           "Команда <team@example.com>",
+		BCC:          "Скрытая Копия <blind@example.com>",
+		Subject:      "MIME parity",
+		MarkdownBody: "hello",
+	})
+	if err != nil {
+		t.Fatalf("buildGmailAPIComposeRaw: %v", err)
+	}
+	msg, err := mail.ReadMessage(strings.NewReader(raw))
+	if err != nil {
+		t.Fatalf("ReadMessage: %v", err)
+	}
+	for _, field := range []string{"To", "Cc", "Bcc"} {
+		header := msg.Header.Get(field)
+		if strings.ContainsAny(header, "ЛюбКомандСкрыт") {
+			t.Fatalf("%s header contains raw UTF-8 display name; want RFC 2047 encoded word: %q", field, header)
+		}
+		if !strings.Contains(strings.ToLower(header), "=?utf-8?") {
+			t.Fatalf("%s header = %q, want UTF-8 encoded word", field, header)
+		}
+	}
+	to, err := mail.ParseAddress(msg.Header.Get("To"))
+	if err != nil {
+		t.Fatalf("ParseAddress(To): %v", err)
+	}
+	if to.Name != "Любимая Катюшка" || to.Address != "evgolubtsova@gmail.com" {
+		t.Fatalf("decoded To = %q <%s>, want Russian display name and address", to.Name, to.Address)
 	}
 }
 

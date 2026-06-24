@@ -2,6 +2,7 @@ package smtp
 
 import (
 	"fmt"
+	"mime"
 	"net/mail"
 	"strings"
 )
@@ -25,6 +26,23 @@ func normalizeMailbox(field, raw string) (header string, envelope string, err er
 		return "", "", fmt.Errorf("%s address %q is invalid: %w", field, raw, err)
 	}
 	return formatHeaderAddress(addr), addr.Address, nil
+}
+
+// NormalizeMailboxHeader returns an RFC-compliant mailbox header value.
+func NormalizeMailboxHeader(field, raw string) (string, error) {
+	header, _, err := normalizeMailbox(field, raw)
+	return header, err
+}
+
+// NormalizeAddressListHeader returns an RFC-compliant address-list header value.
+func NormalizeAddressListHeader(field, raw string, required bool) (string, error) {
+	header, _, err := normalizeAddressList(field, raw, required)
+	return header, err
+}
+
+// EncodeHeaderValue returns an RFC 2047 encoded-word header value when needed.
+func EncodeHeaderValue(value string) string {
+	return mime.QEncoding.Encode("utf-8", strings.TrimSpace(value))
 }
 
 func normalizeRecipientFields(to, cc, bcc string) (normalizedRecipients, error) {

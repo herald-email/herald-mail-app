@@ -109,6 +109,18 @@ func BuildPreservedMIMEMessage(req PreservedMessageRequest) (string, error) {
 	if req.Kind == "" {
 		req.Kind = models.PreservedMessageKindForward
 	}
+	fromHeader, _, err := normalizeMailbox("From", req.From)
+	if err != nil {
+		return "", err
+	}
+	rcpts, err := normalizeRecipientFields(req.To, req.CC, req.BCC)
+	if err != nil {
+		return "", err
+	}
+	req.From = fromHeader
+	req.To = rcpts.ToHeader
+	req.CC = rcpts.CCHeader
+	req.Subject = EncodeHeaderValue(req.Subject)
 
 	outerBoundary := fmt.Sprintf("outer_%d", time.Now().UnixNano())
 	relatedBoundary := fmt.Sprintf("related_%d", time.Now().UnixNano()+1)

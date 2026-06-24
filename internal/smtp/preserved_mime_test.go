@@ -1,6 +1,7 @@
 package smtp
 
 import (
+	"net/mail"
 	"strings"
 	"testing"
 	"time"
@@ -49,6 +50,43 @@ func TestBuildPreservedMIMEMessage_SafeModePreservesHTMLAndCIDImages(t *testing.
 		if strings.Contains(msg, forbidden) {
 			t.Fatalf("safe mode should strip %q:\n%s", forbidden, msg)
 		}
+	}
+}
+
+func TestBuildPreservedMIMEMessage_EncodesNonASCIIDisplayNameHeaders(t *testing.T) {
+	msg, err := BuildPreservedMIMEMessage(PreservedMessageRequest{
+		Kind:            models.PreservedMessageKindForward,
+		Mode:            models.PreservationModeSafe,
+		From:            "me@example.com",
+		To:              "Любимая Катюшка <evgolubtsova@gmail.com>",
+		Subject:         "Fwd: Camp update",
+		TopNoteMarkdown: "Forwarding this along.",
+		Original: models.PreservedMessageOriginal{
+			Sender:    "sender@example.com",
+			Subject:   "Camp update",
+			TextPlain: "Original body",
+		},
+	})
+	if err != nil {
+		t.Fatalf("BuildPreservedMIMEMessage: %v", err)
+	}
+	parsed, err := mail.ReadMessage(strings.NewReader(msg))
+	if err != nil {
+		t.Fatalf("ReadMessage: %v", err)
+	}
+	toHeader := parsed.Header.Get("To")
+	if strings.Contains(toHeader, "Любимая") {
+		t.Fatalf("To header contains raw UTF-8 display name; want RFC 2047 encoded word: %q", toHeader)
+	}
+	if !strings.Contains(strings.ToLower(toHeader), "=?utf-8?") {
+		t.Fatalf("To header = %q, want UTF-8 encoded word", toHeader)
+	}
+	to, err := mail.ParseAddress(toHeader)
+	if err != nil {
+		t.Fatalf("ParseAddress(%q): %v", toHeader, err)
+	}
+	if to.Name != "Любимая Катюшка" || to.Address != "evgolubtsova@gmail.com" {
+		t.Fatalf("decoded To = %q <%s>, want Russian display name and address", to.Name, to.Address)
 	}
 }
 
