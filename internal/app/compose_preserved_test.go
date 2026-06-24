@@ -1,11 +1,13 @@
 package app
 
 import (
+	"errors"
 	"strings"
 	"testing"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	backendpkg "github.com/herald-email/herald-mail-app/internal/backend"
 	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
@@ -125,6 +127,7 @@ func TestComposeForwardedAttachmentFocusDoesNotRestoreUnavailableAttachment(t *t
 	m.composePreserved.selectedAttachment = 1
 	m.composePreserved.forwardedAttachments[1].Include = false
 	m.composePreserved.forwardedAttachments[1].Attachment.Data = nil
+	m.composePreserved.forwardedAttachments[1].LoadError = "fetch failed"
 
 	model, _ := m.handleComposeKey(keyRunes("x"))
 	updated := model.(*Model)
@@ -385,6 +388,140 @@ func TestBuildPreservedComposeRequestOmitsRemovedForwardedAttachments(t *testing
 	}
 	if len(req.OmittedOriginalAttachmentNames) != 1 || req.OmittedOriginalAttachmentNames[0] != "secret.pdf" {
 		t.Fatalf("omitted attachments = %#v, want secret.pdf", req.OmittedOriginalAttachmentNames)
+	}
+}
+
+type preservedForwardSendBackend struct {
+	stubBackend
+	composeSends     []backendpkg.ComposeSendRequest
+	fetchedMessageID string
+	fetchedLookup    string
+	attachment       *models.Attachment
+	fetchErr         error
+}
+
+func (b *preservedForwardSendBackend) SendCompose(req backendpkg.ComposeSendRequest) error {
+	b.composeSends = append(b.composeSends, req)
+	return nil
+}
+
+func (b *preservedForwardSendBackend) SaveDraftForAccount(models.SourceID, string, string, string, string, string) (uint32, string, error) {
+	return 0, "", nil
+}
+
+func (b *preservedForwardSendBackend) SaveRawDraftForAccount(models.SourceID, []byte) (uint32, string, error) {
+	return 0, "", nil
+}
+
+func (b *preservedForwardSendBackend) DeleteDraftForAccount(models.SourceID, uint32, string) error {
+	return nil
+}
+
+func (b *preservedForwardSendBackend) SendDraftForAccount(models.SourceID, uint32, string) error {
+	return nil
+}
+
+func (b *preservedForwardSendBackend) GetAttachment(messageID, lookup string) (*models.Attachment, error) {
+	b.fetchedMessageID = messageID
+	b.fetchedLookup = lookup
+	if b.fetchErr != nil {
+		return nil, b.fetchErr
+	}
+	if b.attachment == nil {
+		return nil, nil
+	}
+	att := *b.attachment
+	if len(b.attachment.Data) > 0 {
+		att.Data = append([]byte(nil), b.attachment.Data...)
+	}
+	return &att, nil
+}
+
+func TestSendPreservedForwardLoadsMetadataOnlyOriginalAttachmentBeforeSend(t *testing.T) {
+	backend := &preservedForwardSendBackend{
+		attachment: &models.Attachment{
+			Filename: "camp-info.pdf",
+			MIMEType: "application/pdf",
+			PartPath: "2",
+			Data:     []byte("pdf"),
+		},
+	}
+	m := New(backend, nil, "me@example.com", nil, false)
+	m.loading = false
+	email := &models.EmailData{
+		MessageID: "msg-preserved",
+		Sender:    "sender@example.com",
+		Subject:   "Camp info",
+		Date:      time.Date(2026, 6, 9, 18, 12, 0, 0, time.UTC),
+	}
+	body := &models.EmailBody{
+		MessageID: "msg-preserved",
+		TextPlain: "Please read the attached PDF.",
+		Attachments: []models.Attachment{
+			{Filename: "camp-info.pdf", MIMEType: "application/pdf", PartPath: "2"},
+		},
+	}
+
+	m.openTimelineForwardCompose(email, body, "")
+	if len(m.composePreserved.forwardedAttachments) != 1 || !m.composePreserved.forwardedAttachments[0].Include {
+		t.Fatalf("metadata-only forwarded attachment should default to included, got %#v", m.composePreserved.forwardedAttachments)
+	}
+	m.composeTo.SetValue("you@example.com")
+	m.composeSubject.SetValue("Fwd: Camp info")
+
+	msg := m.sendCompose()().(ComposeStatusMsg)
+	if msg.Err != nil {
+		t.Fatalf("sendCompose returned error: %v", msg.Err)
+	}
+	if backend.fetchedMessageID != "msg-preserved" || backend.fetchedLookup != "2" {
+		t.Fatalf("GetAttachment called with %q/%q, want msg-preserved/2", backend.fetchedMessageID, backend.fetchedLookup)
+	}
+	if len(backend.composeSends) != 1 {
+		t.Fatalf("compose sends = %d, want 1", len(backend.composeSends))
+	}
+	req := backend.composeSends[0].Preserved
+	if req == nil {
+		t.Fatal("expected preserved compose send request")
+	}
+	if len(req.Original.Attachments) != 1 || string(req.Original.Attachments[0].Data) != "pdf" {
+		t.Fatalf("forwarded attachment data = %#v, want fetched pdf bytes", req.Original.Attachments)
+	}
+}
+
+func TestSendPreservedForwardDoesNotLoadRemovedMetadataOnlyAttachment(t *testing.T) {
+	backend := &preservedForwardSendBackend{
+		fetchErr: errors.New("removed attachment should not be fetched"),
+	}
+	m := New(backend, nil, "me@example.com", nil, false)
+	m.loading = false
+	email := &models.EmailData{
+		MessageID: "msg-preserved",
+		Sender:    "sender@example.com",
+		Subject:   "Camp info",
+		Date:      time.Date(2026, 6, 9, 18, 12, 0, 0, time.UTC),
+	}
+	body := &models.EmailBody{
+		MessageID: "msg-preserved",
+		TextPlain: "Please read the attached PDF.",
+		Attachments: []models.Attachment{
+			{Filename: "camp-info.pdf", MIMEType: "application/pdf", PartPath: "2"},
+		},
+	}
+	m.openTimelineForwardCompose(email, body, "")
+	m.composePreserved.forwardedAttachments[0].Include = false
+	m.composeTo.SetValue("you@example.com")
+	m.composeSubject.SetValue("Fwd: Camp info")
+
+	msg := m.sendCompose()().(ComposeStatusMsg)
+	if msg.Err != nil {
+		t.Fatalf("sendCompose returned error for removed attachment: %v", msg.Err)
+	}
+	if backend.fetchedLookup != "" {
+		t.Fatalf("removed attachment was fetched with lookup %q", backend.fetchedLookup)
+	}
+	req := backend.composeSends[0].Preserved
+	if len(req.OmittedOriginalAttachmentNames) != 1 || req.OmittedOriginalAttachmentNames[0] != "camp-info.pdf" {
+		t.Fatalf("omitted attachments = %#v, want camp-info.pdf", req.OmittedOriginalAttachmentNames)
 	}
 }
 

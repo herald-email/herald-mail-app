@@ -2041,7 +2041,7 @@ func newComposePreservedContext(kind models.PreservedMessageKind, email *models.
 		for _, att := range body.Attachments {
 			ctx.forwardedAttachments = append(ctx.forwardedAttachments, models.ForwardedAttachment{
 				Attachment: att,
-				Include:    len(att.Data) > 0,
+				Include:    true,
 			})
 		}
 	}

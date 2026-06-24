@@ -900,7 +900,7 @@ func (m *Model) handleForwardedAttachmentKey(msg tea.KeyPressMsg) (tea.Model, te
 		idx := m.composePreserved.selectedAttachment
 		if idx >= 0 && idx < len(m.composePreserved.forwardedAttachments) {
 			item := &m.composePreserved.forwardedAttachments[idx]
-			if len(item.Attachment.Data) > 0 {
+			if item.LoadError == "" {
 				item.Include = !item.Include
 			}
 		}
@@ -1269,7 +1269,7 @@ func (m *Model) buildPreservedComposeRequest(from, to, subject string, attachmen
 		originalAttachments = make([]models.Attachment, 0, len(ctx.forwardedAttachments))
 		for _, item := range ctx.forwardedAttachments {
 			originalAttachments = append(originalAttachments, item.Attachment)
-			if !item.Include || len(item.Attachment.Data) == 0 {
+			if !item.Include || item.LoadError != "" {
 				omitted = append(omitted, item.Attachment.Filename)
 			}
 		}
@@ -1299,6 +1299,58 @@ func (m *Model) buildPreservedComposeRequest(from, to, subject string, attachmen
 		ManualAttachments:              attachments,
 		OmittedOriginalAttachmentNames: omitted,
 	}, nil
+}
+
+func hydratePreservedForwardAttachments(b backend.Backend, req *appsmtp.PreservedMessageRequest) error {
+	if req == nil || req.Kind != models.PreservedMessageKindForward || req.OmitOriginalAttachments {
+		return nil
+	}
+	messageID := strings.TrimSpace(req.Original.MessageID)
+	omitted := make(map[string]bool, len(req.OmittedOriginalAttachmentNames))
+	for _, name := range req.OmittedOriginalAttachmentNames {
+		if name = strings.TrimSpace(name); name != "" {
+			omitted[name] = true
+		}
+	}
+	for i := range req.Original.Attachments {
+		att := &req.Original.Attachments[i]
+		if strings.TrimSpace(att.Filename) == "" || len(att.Data) > 0 {
+			continue
+		}
+		if omitted[att.Filename] {
+			continue
+		}
+		if b == nil {
+			return fmt.Errorf("forwarded attachment %q is not loaded", att.Filename)
+		}
+		lookup := strings.TrimSpace(att.PartPath)
+		if lookup == "" {
+			lookup = att.Filename
+		}
+		fetched, err := b.GetAttachment(messageID, lookup)
+		if err != nil {
+			return fmt.Errorf("load forwarded attachment %q: %w", att.Filename, err)
+		}
+		if fetched == nil || len(fetched.Data) == 0 {
+			return fmt.Errorf("forwarded attachment %q is not loaded", att.Filename)
+		}
+		loaded := *fetched
+		if strings.TrimSpace(loaded.Filename) == "" {
+			loaded.Filename = att.Filename
+		}
+		if strings.TrimSpace(loaded.MIMEType) == "" {
+			loaded.MIMEType = att.MIMEType
+		}
+		if strings.TrimSpace(loaded.PartPath) == "" {
+			loaded.PartPath = att.PartPath
+		}
+		if loaded.Size == 0 {
+			loaded.Size = att.Size
+		}
+		loaded.Data = append([]byte(nil), fetched.Data...)
+		req.Original.Attachments[i] = loaded
+	}
+	return nil
 }
 
 func firstNonEmptyString(values ...string) string {
@@ -1359,6 +1411,9 @@ func (m *Model) sendCompose() tea.Cmd {
 			if preserved != nil && preservedErr != nil {
 				return ComposeStatusMsg{Message: fmt.Sprintf("Send failed: %v", preservedErr), Err: preservedErr}
 			}
+			if err := hydratePreservedForwardAttachments(b, req.Preserved); err != nil {
+				return ComposeStatusMsg{Message: fmt.Sprintf("Send failed: %v", err), Err: err}
+			}
 			if err := accountSender.SendCompose(req); err != nil {
 				return ComposeStatusMsg{Message: fmt.Sprintf("Send failed: %v", err), Err: err}
 			}
@@ -1378,6 +1433,9 @@ func (m *Model) sendCompose() tea.Cmd {
 		if preserved != nil {
 			if preservedErr != nil {
 				return ComposeStatusMsg{Message: fmt.Sprintf("Send failed: %v", preservedErr), Err: preservedErr}
+			}
+			if err := hydratePreservedForwardAttachments(b, &preservedReq); err != nil {
+				return ComposeStatusMsg{Message: fmt.Sprintf("Send failed: %v", err), Err: err}
 			}
 			if err := mailer.SendPreserved(preservedReq); err != nil {
 				return ComposeStatusMsg{Message: fmt.Sprintf("Send failed: %v", err), Err: err}
@@ -1858,7 +1916,7 @@ func (m *Model) renderComposePreservedSummary(width int) string {
 	}
 	included, total := 0, len(ctx.forwardedAttachments)
 	for _, item := range ctx.forwardedAttachments {
-		if item.Include && len(item.Attachment.Data) > 0 {
+		if item.Include && item.LoadError == "" {
 			included++
 		}
 	}
@@ -1886,7 +1944,7 @@ func (m *Model) renderComposePreservedSummary(width int) string {
 			status := "include"
 			action := "x remove"
 			style := normalStyle
-			if len(item.Attachment.Data) == 0 {
+			if item.LoadError != "" {
 				status = "unavailable"
 				action = "not loaded"
 				style = removedStyle
