@@ -187,6 +187,7 @@ func (m *MultiBackend) startFanIn(slot *accountSlot) {
 				if notification.CollectionID == "" {
 					notification.CollectionID = notification.Folder
 				}
+				notification.Emails = emailsForAccountSlot(slot, notification.Emails)
 				if m.isActive(slot.info.SourceID) {
 					m.sendNewEmails(notification)
 				}

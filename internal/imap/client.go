@@ -163,6 +163,8 @@ type Client struct {
 	configPath    string // path to write refreshed OAuth tokens back to disk
 	client        *client.Client
 	cache         *cache.Cache
+	sourceID      models.SourceID
+	accountID     models.AccountID
 	groupByDomain bool
 	progressCh    chan models.ProgressInfo
 	mu            sync.Mutex
@@ -181,6 +183,53 @@ func New(cfg *config.Config, configPath string, cache *cache.Cache, progressCh c
 		configPath: configPath,
 		cache:      cache,
 		progressCh: progressCh,
+	}
+}
+
+// SetSourceScope assigns the source identity used for emails fetched through
+// this IMAP connection. Legacy single-account clients leave this unset and use
+// the default mail scope.
+func (c *Client) SetSourceScope(sourceID models.SourceID, accountID models.AccountID) {
+	c.sourceID = models.NormalizeSourceID(sourceID, models.DefaultMailSourceID)
+	c.accountID = models.NormalizeAccountID(accountID)
+}
+
+func (c *Client) sourceScope() (models.SourceID, models.AccountID) {
+	if c == nil {
+		return models.DefaultMailSourceID, models.DefaultAccountID
+	}
+	return models.NormalizeSourceID(c.sourceID, models.DefaultMailSourceID), models.NormalizeAccountID(c.accountID)
+}
+
+func (c *Client) applySourceScope(email *models.EmailData) *models.EmailData {
+	if email == nil {
+		return nil
+	}
+	sourceID, accountID := c.sourceScope()
+	if email.SourceID != sourceID || email.AccountID != accountID {
+		email.LocalID = ""
+	}
+	email.SourceID = sourceID
+	email.AccountID = accountID
+	ref := email.MessageRef()
+	email.SourceID = ref.SourceID
+	email.AccountID = ref.AccountID
+	email.LocalID = ref.LocalID
+	email.UIDValidity = ref.UIDValidity
+	return email
+}
+
+func (c *Client) newEmailsNotification(folder string, emails []*models.EmailData) models.NewEmailsNotification {
+	sourceID, accountID := c.sourceScope()
+	for _, email := range emails {
+		c.applySourceScope(email)
+	}
+	return models.NewEmailsNotification{
+		SourceID:     sourceID,
+		AccountID:    accountID,
+		CollectionID: folder,
+		Emails:       emails,
+		Folder:       folder,
 	}
 }
 
@@ -1122,6 +1171,7 @@ func (c *Client) batchFetchDetails(seqNums []uint32, folder string, uidValidity 
 		if !ok {
 			return nil
 		}
+		c.applySourceScope(emailData)
 		if emailData.Sender == "" {
 			logger.Warn("batchFetchDetails: empty sender for seq %d, skipping", msg.SeqNum)
 			return nil
@@ -1189,6 +1239,7 @@ func (c *Client) processMessage(seqNum uint32, folder string, uidValidity uint32
 	if !ok {
 		return nil
 	}
+	c.applySourceScope(emailData)
 	if emailData.Sender == "" {
 		logger.Warn("Empty sender for message %d, skipping", seqNum)
 		return nil
@@ -1312,6 +1363,7 @@ func (c *Client) SearchIMAP(folder, query string) ([]*models.EmailData, error) {
 		if !ok {
 			continue
 		}
+		c.applySourceScope(emailData)
 		emails = append(emails, emailData)
 	}
 	if err := <-done; err != nil {
@@ -1357,6 +1409,7 @@ func (c *Client) PollForNewEmails(folder string, sinceDate time.Time) ([]*models
 		if !ok {
 			continue
 		}
+		c.applySourceScope(emailData)
 		emails = append(emails, emailData)
 	}
 	if err := <-done; err != nil {
@@ -1529,12 +1582,7 @@ func (c *Client) StartIDLE(folder string, newEmailsCh chan<- models.NewEmailsNot
 					if len(emails) > 0 {
 						lastPoll = time.Now()
 						select {
-						case newEmailsCh <- models.NewEmailsNotification{
-							SourceID:  models.DefaultMailSourceID,
-							AccountID: models.DefaultAccountID,
-							Emails:    emails,
-							Folder:    folder,
-						}:
+						case newEmailsCh <- c.newEmailsNotification(folder, emails):
 						default:
 						}
 					}

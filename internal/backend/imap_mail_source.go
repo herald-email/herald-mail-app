@@ -15,11 +15,25 @@ import (
 // Queueing, cache policy, stale-result filtering, and UI priority stay owned by
 // Herald services and callers above this adapter.
 type IMAPMailSource struct {
-	client *imap.Client
+	client    *imap.Client
+	sourceID  models.SourceID
+	accountID models.AccountID
 }
 
 func NewIMAPMailSource(cfg *config.Config, configPath string, cache *cache.Cache, progressCh chan models.ProgressInfo) *IMAPMailSource {
-	return &IMAPMailSource{client: imap.New(cfg, configPath, cache, progressCh)}
+	return NewScopedIMAPMailSource(cfg, configPath, cache, progressCh, models.DefaultMailSourceID, models.DefaultAccountID)
+}
+
+func NewScopedIMAPMailSource(cfg *config.Config, configPath string, cache *cache.Cache, progressCh chan models.ProgressInfo, sourceID models.SourceID, accountID models.AccountID) *IMAPMailSource {
+	sourceID = models.NormalizeSourceID(sourceID, models.DefaultMailSourceID)
+	accountID = models.NormalizeAccountID(accountID)
+	client := imap.New(cfg, configPath, cache, progressCh)
+	client.SetSourceScope(sourceID, accountID)
+	return &IMAPMailSource{
+		client:    client,
+		sourceID:  sourceID,
+		accountID: accountID,
+	}
 }
 
 func (s *IMAPMailSource) ensureClient() (*imap.Client, error) {

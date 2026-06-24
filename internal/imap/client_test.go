@@ -6,6 +6,7 @@ import (
 	"time"
 
 	goimap "github.com/emersion/go-imap"
+	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
 // --- decideSyncStrategy ---
@@ -172,6 +173,32 @@ func TestEmailDataFromIMAPMessageCarriesUIDValidity(t *testing.T) {
 	}
 	if email.InReplyTo != "<original@example.test>" {
 		t.Fatalf("InReplyTo = %q, want provider envelope In-Reply-To", email.InReplyTo)
+	}
+}
+
+func TestClientApplySourceScopeRewritesDefaultEmailScope(t *testing.T) {
+	client := New(nil, "", nil, nil)
+	client.SetSourceScope(models.SourceID("personal-mail"), models.AccountID("personal"))
+	email := &models.EmailData{
+		SourceID:    models.DefaultMailSourceID,
+		AccountID:   models.DefaultAccountID,
+		LocalID:     "mail:default-mail:default:INBOX:fresh-personal",
+		MessageID:   "fresh-personal",
+		UID:         2516,
+		UIDValidity: 103948725,
+		Folder:      "INBOX",
+	}
+
+	client.applySourceScope(email)
+
+	if email.SourceID != "personal-mail" || email.AccountID != "personal" {
+		t.Fatalf("email scope = %q/%q, want personal-mail/personal", email.SourceID, email.AccountID)
+	}
+	if email.LocalID != "mail:personal-mail:personal:INBOX:fresh-personal" {
+		t.Fatalf("local id = %q, want personal scoped local id", email.LocalID)
+	}
+	if ref := email.MessageRef(); ref.SourceID != "personal-mail" || ref.AccountID != "personal" || ref.UIDValidity != 103948725 {
+		t.Fatalf("message ref = %#v, want personal scope with UIDVALIDITY", ref)
 	}
 }
 

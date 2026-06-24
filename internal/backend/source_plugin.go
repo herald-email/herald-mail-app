@@ -329,10 +329,12 @@ func (IMAPSourcePlugin) Open(ctx context.Context, source config.SourceConfig, de
 	if progressCh == nil {
 		progressCh = make(chan models.ProgressInfo, 100)
 	}
-	mailSource := NewIMAPMailSource(childCfg, imapConfigPath, deps.Cache, progressCh)
+	sourceID := models.NormalizeSourceID(models.SourceID(source.ID), models.DefaultMailSourceID)
+	accountID := models.NormalizeAccountID(models.AccountID(source.AccountID))
+	mailSource := NewScopedIMAPMailSource(childCfg, imapConfigPath, deps.Cache, progressCh, sourceID, accountID)
 	return &OpenedSource{
-		SourceID:   models.NormalizeSourceID(models.SourceID(source.ID), models.DefaultMailSourceID),
-		Account:    models.NormalizeAccountID(models.AccountID(source.AccountID)),
+		SourceID:   sourceID,
+		Account:    accountID,
 		SourceKind: models.SourceKindMail,
 		Provider:   source.Provider,
 		Name:       displayNameForSource(source),

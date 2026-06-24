@@ -649,6 +649,61 @@ func TestMultiBackendAllAccountsTimelineAggregatesAndKeepsDuplicateIDsScoped(t *
 	}
 }
 
+func TestMultiBackendNewEmailFanInScopesPayloadEmails(t *testing.T) {
+	work := newRecordingAccountBackend("work", []string{"INBOX"}, nil, "")
+	personal := newRecordingAccountBackend("personal", []string{"INBOX"}, nil, "")
+
+	mb, err := NewMultiBackend([]AccountBackend{
+		{Info: AccountInfo{SourceID: "work-mail", AccountID: "work", DisplayName: "Work Mail"}, Backend: work},
+		{Info: AccountInfo{SourceID: "personal-mail", AccountID: "personal", DisplayName: "Personal"}, Backend: personal},
+	})
+	if err != nil {
+		t.Fatalf("NewMultiBackend: %v", err)
+	}
+	if err := mb.SwitchAccount(AllAccountsSourceID); err != nil {
+		t.Fatalf("SwitchAccount all accounts: %v", err)
+	}
+
+	personal.newEmailsCh <- models.NewEmailsNotification{
+		SourceID:  models.DefaultMailSourceID,
+		AccountID: models.DefaultAccountID,
+		Folder:    "INBOX",
+		Emails: []*models.EmailData{{
+			SourceID:    models.DefaultMailSourceID,
+			AccountID:   models.DefaultAccountID,
+			MessageID:   "fresh-personal",
+			UID:         2516,
+			UIDValidity: 103948725,
+			Folder:      "INBOX",
+			Subject:     "Fresh personal",
+			Date:        time.Date(2026, 6, 23, 16, 17, 0, 0, time.UTC),
+		}},
+	}
+
+	var got models.NewEmailsNotification
+	select {
+	case got = <-mb.NewEmailsCh():
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for multi-backend new email fan-in")
+	}
+	if got.SourceID != "personal-mail" || got.AccountID != "personal" {
+		t.Fatalf("notification scope = %q/%q, want personal-mail/personal", got.SourceID, got.AccountID)
+	}
+	if len(got.Emails) != 1 {
+		t.Fatalf("email count = %d, want 1", len(got.Emails))
+	}
+	email := got.Emails[0]
+	if email.SourceID != "personal-mail" || email.AccountID != "personal" {
+		t.Fatalf("email scope = %q/%q, want personal-mail/personal", email.SourceID, email.AccountID)
+	}
+	if email.LocalID != "mail:personal-mail:personal:INBOX:fresh-personal" {
+		t.Fatalf("local id = %q, want personal scoped local id", email.LocalID)
+	}
+	if ref := email.MessageRef(); ref.SourceID != "personal-mail" || ref.AccountID != "personal" {
+		t.Fatalf("message ref = %#v, want personal scope", ref)
+	}
+}
+
 func TestMultiBackendAllAccountsSearchAggregatesVisibleAccounts(t *testing.T) {
 	workEmail := scopedTestEmail(&models.EmailData{SourceID: "work-mail", AccountID: "work", MessageID: "work-1", UID: 11, Folder: "INBOX", Subject: "roadmap", Date: time.Date(2026, 5, 23, 13, 0, 0, 0, time.UTC)})
 	personalEmail := scopedTestEmail(&models.EmailData{SourceID: "personal-mail", AccountID: "personal", MessageID: "personal-1", UID: 22, Folder: "INBOX", Subject: "roadmap", Date: time.Date(2026, 5, 23, 14, 0, 0, 0, time.UTC)})
