@@ -80,6 +80,56 @@ func TestTimelineGroupingDefaultPreservesThreadMode(t *testing.T) {
 	}
 }
 
+func TestTimelineExpandedThreadReplyRowsStayIndented(t *testing.T) {
+	m := makeSizedModel(t, 120, 40)
+	m.activeTab = tabTimeline
+	subject := "Fractional AI - Anthropic Basecamp"
+	m.timeline.emails = []*models.EmailData{
+		{
+			MessageID: "ran-reply-newest",
+			Sender:    "Ran Ji <ran@example.com>",
+			Subject:   "Re: " + subject,
+			Date:      time.Date(2026, 6, 24, 11, 4, 0, 0, time.UTC),
+			Folder:    "INBOX",
+		},
+		{
+			MessageID: "me-reply-1",
+			Sender:    "logrusadm@gmail.com",
+			Subject:   "Re: " + subject,
+			Date:      time.Date(2026, 6, 24, 9, 58, 0, 0, time.UTC),
+			Folder:    "Sent",
+		},
+		{
+			MessageID: "me-reply-2",
+			Sender:    "logrusadm@gmail.com",
+			Subject:   "Re: " + subject,
+			Date:      time.Date(2026, 6, 24, 9, 53, 0, 0, time.UTC),
+			Folder:    "Sent",
+		},
+		{
+			MessageID: "ran-original",
+			Sender:    "Ran Ji <ran@example.com>",
+			Subject:   subject,
+			Date:      time.Date(2026, 6, 19, 17, 37, 0, 0, time.UTC),
+			Folder:    "INBOX",
+		},
+	}
+	m.timeline.expandedThreads[normalizeSubject(subject)] = true
+
+	m.updateTimelineTable()
+
+	rows := m.timelineTable.Rows()
+	if len(rows) != 4 {
+		t.Fatalf("expanded thread rows = %d, want 4: %#v", len(rows), rows)
+	}
+	for _, idx := range []int{1, 2} {
+		got := stripANSI(rows[idx][1])
+		if !strings.Contains(got, threadNestedPrefix) || !strings.Contains(got, threadReplyPrefix) {
+			t.Fatalf("reply child row %d sender cell = %q, want nested reply prefix", idx, got)
+		}
+	}
+}
+
 func TestTimelineGroupingKeyCyclesSenderDomainThread(t *testing.T) {
 	m := newTimelineGroupingModel(t)
 

@@ -1025,11 +1025,14 @@ func timelineExpandedRowPrefix(g *threadGroup, email *models.EmailData, idx int)
 			}
 			return prefix
 		}
+		if idx > 0 {
+			if email != nil && isReplySubject(email.Subject) {
+				return threadNestedPrefix + threadReplyPrefix
+			}
+			return threadNestedPrefix
+		}
 		if email != nil && isReplySubject(email.Subject) {
 			return threadReplyPrefix
-		}
-		if idx > 0 {
-			return threadNestedPrefix
 		}
 		return ""
 	}
