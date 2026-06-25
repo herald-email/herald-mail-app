@@ -1357,6 +1357,40 @@ func TestSettingsWizardProviderSwitchDoesNotKeepStaleGmailServers(t *testing.T) 
 	}
 }
 
+func TestSettingsAddMailProviderSelectionRefreshesFastmailServerFields(t *testing.T) {
+	s := NewSettings(SettingsModePanel, nil)
+	s.panelSection = settingsPanelSectionAccounts
+	s.buildForm()
+
+	s, _ = updateAndPumpSettingsForTest(t, s, tea.KeyPressMsg{Code: tea.KeyEnter})
+	if s.panelSection != settingsPanelSectionAccount || s.accountEditMode != settingsAccountEditAddMail {
+		t.Fatalf("expected add-mail detail, section=%q mode=%q", s.panelSection, s.accountEditMode)
+	}
+	s.setSize(100, 32)
+
+	for i := 0; i < 4; i++ {
+		s = updateSettingsForTest(t, s, tea.KeyPressMsg{Code: tea.KeyDown})
+	}
+	updated, cmd := s.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	s = updated.(*Settings)
+	s.consumeFormNavigationCmd(cmd, 0)
+	if s.provider != "fastmail" {
+		t.Fatalf("provider = %q, want fastmail", s.provider)
+	}
+
+	rendered := stripANSI(s.renderPanel())
+	for _, want := range []string{"IMAP Host> imap.fastmail.com", "SMTP Host> smtp.fastmail.com"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("expected Fastmail field value %q after provider selection, state provider=%q imap=%q smtp=%q, got:\n%s", want, s.provider, s.imapHost, s.smtpHost, rendered)
+		}
+	}
+	for _, notWant := range []string{"IMAP Host> imap.gmail.com", "SMTP Host> smtp.gmail.com"} {
+		if strings.Contains(rendered, notWant) {
+			t.Fatalf("provider detail kept stale Gmail field value %q, got:\n%s", notWant, rendered)
+		}
+	}
+}
+
 func TestSettingsAddCalendarStartsBlankInsteadOfReusingSelectedCalendar(t *testing.T) {
 	existing := &config.Config{Sources: []config.SourceConfig{
 		{

@@ -3609,6 +3609,10 @@ func (s *Settings) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if prevProvider != s.provider {
 		s.syncProviderDefaults(prevProvider, s.provider)
 		s.syncCalendarPairingForProviderChange(prevProvider, s.provider)
+		currentFormView := s.form.View()
+		if s.needsPresetFieldRefresh(currentFormView) {
+			s.refreshFormPreservingVisibleGroup(s.visibleSettingsGroupTarget(currentFormView))
+		}
 	}
 	if prevCalendarProvider != s.calendarProvider {
 		s.syncCalendarProviderDefaults(prevCalendarProvider, s.calendarProvider)
@@ -3771,7 +3775,12 @@ func (s *Settings) View() tea.View {
 }
 
 func (s *Settings) renderPanel() string {
-	return s.renderPanelWithFormView(strings.TrimRight(s.form.View(), "\n"))
+	currentFormView := s.form.View()
+	if s.ensureProviderDefaults() || s.needsPresetFieldRefresh(currentFormView) {
+		s.refreshFormPreservingVisibleGroup(s.visibleSettingsGroupTarget(currentFormView))
+		currentFormView = s.form.View()
+	}
+	return s.renderPanelWithFormView(strings.TrimRight(currentFormView, "\n"))
 }
 
 func (s *Settings) renderPanelWithFormView(currentFormView string) string {
@@ -4940,7 +4949,7 @@ func (s *Settings) refreshFormPreservingVisibleGroup(target string) {
 	}
 	s.buildForm()
 	for i := 0; i < 20; i++ {
-		if strings.Contains(s.form.View(), target) {
+		if strings.Contains(ansi.Strip(s.form.View()), target) {
 			return
 		}
 		s.consumeFormNavigationCmd(s.form.NextGroup(), 0)
@@ -4948,6 +4957,7 @@ func (s *Settings) refreshFormPreservingVisibleGroup(target string) {
 }
 
 func (s *Settings) visibleSettingsGroupTarget(view string) string {
+	plain := ansi.Strip(view)
 	for _, target := range []string{
 		"Email address>",
 		"Gmail address>",
@@ -4967,7 +4977,7 @@ func (s *Settings) visibleSettingsGroupTarget(view string) string {
 		"Email Signature",
 		"Settings",
 	} {
-		if strings.Contains(view, target) {
+		if strings.Contains(plain, target) {
 			return target
 		}
 	}
@@ -4975,15 +4985,24 @@ func (s *Settings) visibleSettingsGroupTarget(view string) string {
 }
 
 func (s *Settings) needsPresetFieldRefresh(view string) bool {
-	if !strings.Contains(view, "IMAP Host>") {
+	plain := ansi.Strip(view)
+	if !strings.Contains(plain, "IMAP Host>") {
 		return false
 	}
-	imapHost, imapPort, smtpHost, smtpPort, ok := providerPresetValues(s.provider)
+	_, _, _, _, ok := providerPresetValues(s.provider)
 	if !ok {
 		return false
 	}
-	for _, want := range []string{imapHost, imapPort, smtpHost, smtpPort} {
-		if want != "" && !strings.Contains(view, want) {
+	for _, field := range []struct {
+		label string
+		value string
+	}{
+		{label: "IMAP Host", value: strings.TrimSpace(s.imapHost)},
+		{label: "IMAP Port", value: strings.TrimSpace(s.imapPort)},
+		{label: "SMTP Host", value: strings.TrimSpace(s.smtpHost)},
+		{label: "SMTP Port", value: strings.TrimSpace(s.smtpPort)},
+	} {
+		if field.value != "" && !strings.Contains(plain, field.label+"> "+field.value) {
 			return true
 		}
 	}
