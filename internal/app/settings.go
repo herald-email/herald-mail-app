@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -2460,7 +2461,7 @@ func accountListHasOption(options []huh.Option[string], value string) bool {
 	return false
 }
 
-func accountGroupProviderLabel(group config.AccountGroup) string {
+func accountGroupProviderLabels(group config.AccountGroup) []string {
 	seen := make(map[string]bool)
 	var labels []string
 	add := func(label string) {
@@ -2504,27 +2505,64 @@ func accountGroupProviderLabel(group config.AccountGroup) string {
 		}
 	}
 	if len(labels) == 0 {
-		return strings.TrimSpace(group.Provider)
+		if provider := strings.TrimSpace(group.Provider); provider != "" {
+			return []string{provider}
+		}
+	}
+	return labels
+}
+
+func accountGroupCompactProviderLabel(group config.AccountGroup) string {
+	labels := accountGroupProviderLabels(group)
+	if len(labels) == 0 {
+		return ""
+	}
+	if strings.TrimSpace(group.Capability) == "Mail + Calendar" && slices.Contains(labels, "Google Calendar") {
+		for _, label := range labels {
+			switch label {
+			case "Gmail OAuth", "Gmail IMAP", "Gmail API":
+				return label
+			}
+		}
 	}
 	return strings.Join(labels, " + ")
+}
+
+func accountListOptionLabel(group config.AccountGroup) string {
+	label := strings.TrimSpace(group.DisplayName)
+	address := strings.TrimSpace(group.Address)
+	if label == "" {
+		label = address
+	}
+	if label == "" {
+		label = group.AccountID
+	}
+
+	var meta []string
+	if address != "" && !strings.EqualFold(label, address) {
+		meta = append(meta, address)
+	}
+	capability := strings.TrimSpace(group.Capability)
+	provider := accountGroupCompactProviderLabel(group)
+	switch {
+	case capability != "" && provider != "":
+		meta = append(meta, capability+" via "+provider)
+	case capability != "":
+		meta = append(meta, capability)
+	case provider != "":
+		meta = append(meta, provider)
+	}
+	if len(meta) == 0 {
+		return label
+	}
+	return label + " · " + strings.Join(meta, " · ")
 }
 
 func (s *Settings) accountListOptions() []huh.Option[string] {
 	var options []huh.Option[string]
 	if s.cfg != nil {
 		for _, group := range s.cfg.AccountGroups() {
-			label := strings.TrimSpace(group.DisplayName)
-			if label == "" {
-				label = group.AccountID
-			}
-			meta := []string{group.Capability}
-			if address := strings.TrimSpace(group.Address); address != "" {
-				meta = append(meta, address)
-			}
-			if provider := accountGroupProviderLabel(group); provider != "" {
-				meta = append(meta, provider)
-			}
-			options = append(options, huh.NewOption(label+" · "+strings.Join(meta, " · "), "account:"+group.AccountID))
+			options = append(options, huh.NewOption(accountListOptionLabel(group), "account:"+group.AccountID))
 		}
 	}
 	options = append(options,

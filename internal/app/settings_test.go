@@ -848,13 +848,49 @@ func TestSettingsAccountsListLabelsGoogleOAuthSources(t *testing.T) {
 	s.buildForm()
 
 	plain := stripANSI(renderSettingsViewForTest(t, s, 160, 40))
-	for _, want := range []string{"Work", "Mail + Calendar", "work@example.com", "Gmail OAuth + Google", "Calendar"} {
+	for _, want := range []string{"Work", "Mail + Calendar via Gmail OAuth", "work@example.com"} {
 		if !strings.Contains(plain, want) {
 			t.Fatalf("expected accounts list to include %q, got:\n%s", want, plain)
 		}
 	}
+	if strings.Contains(plain, "Gmail OAuth + Google Calendar") {
+		t.Fatalf("accounts list should collapse paired Google mail/calendar provider text:\n%s", plain)
+	}
 	if strings.Contains(plain, " · imap") {
 		t.Fatalf("accounts list exposed raw imap provider for OAuth source:\n%s", plain)
+	}
+}
+
+func TestSettingsAccountsListDoesNotRepeatAddressWhenDisplayNameIsAddress(t *testing.T) {
+	const address = "logrusadm@gmail.com"
+	existing := &config.Config{Sources: []config.SourceConfig{
+		{
+			ID:          "gmail-mail",
+			Kind:        "mail",
+			Provider:    "imap",
+			DisplayName: address,
+			AccountID:   "gmail",
+			Google:      config.GoogleConfig{Email: address, RefreshToken: "refresh-token"},
+		},
+		{
+			ID:          "gmail-calendar",
+			Kind:        "calendar",
+			Provider:    "google_calendar",
+			DisplayName: address,
+			AccountID:   "gmail",
+			Google:      config.GoogleConfig{Email: address, RefreshToken: "refresh-token"},
+		},
+	}}
+	s := NewSettings(SettingsModePanel, existing)
+	s.panelSection = settingsPanelSectionAccounts
+	s.buildForm()
+
+	plain := stripANSI(renderSettingsViewForTest(t, s, 160, 40))
+	if count := strings.Count(plain, address); count != 1 {
+		t.Fatalf("expected accounts list to render %s once, got %d occurrences:\n%s", address, count, plain)
+	}
+	if !strings.Contains(plain, "Mail + Calendar") || !strings.Contains(plain, "Gmail OAuth") {
+		t.Fatalf("expected compact capability and provider context, got:\n%s", plain)
 	}
 }
 
