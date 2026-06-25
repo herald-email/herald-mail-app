@@ -1415,7 +1415,7 @@ func (m *Model) renderTimelineViewFrame(mainTopRow int) timelineViewRender {
 
 	var tableView string
 	if m.timeline.emails != nil && len(m.timeline.emails) == 0 {
-		notice := "No emails in this folder  •  press r to refresh"
+		notice := "No emails in this folder  •  press Alt+R to refresh"
 		if m.timelineIsReadOnlyDiagnostic() {
 			if m.timeline.virtualNotice != "" {
 				notice = m.timeline.virtualNotice

@@ -2,7 +2,7 @@
 
 ## Summary
 
-Herald owns a central command catalog for keyboard routing, bottom hints, shortcut help, safety metadata, and profile defaults. The Default profile keeps text-entry surfaces insert-first and uses calmer GUI-mail-style preferred shortcuts: `Ctrl+N` new message, `r`/`Ctrl+R` reply sender, `R`/`Ctrl+Shift+R` reply all, `Ctrl+F` forward, `Delete` confirmed delete, `Shift+Delete` immediate delete, `a` or `e` immediate archive, `/` or `Ctrl+K` search, and `F6`/`Shift+F6` pane focus. Legacy terminal/Vim aliases remain active where they match the mail-style convention, and the Vim profile preserves terminal-oriented navigation primaries.
+Herald owns a central command catalog for keyboard routing, bottom hints, shortcut help, safety metadata, and profile defaults. The Default profile keeps text-entry surfaces insert-first and uses calmer GUI-mail-style preferred shortcuts: `Ctrl+N` new message, `r`/`Ctrl+R` reply sender, `R`/`Ctrl+Shift+R` reply all, `Ctrl+F` forward, `Delete` confirmed delete, `Shift+Delete` immediate delete, `a` or `e` immediate archive, `/` or `Ctrl+K` search, `Alt+R` refresh, and `F6`/`Shift+F6` pane focus. Legacy terminal/Vim aliases remain active where they match the mail-style convention, and the Vim profile preserves terminal-oriented navigation primaries.
 
 ## User-Visible Behavior
 
@@ -13,6 +13,7 @@ Herald owns a central command catalog for keyboard routing, bottom hints, shortc
 - [x] Vim profile Compose fields use a minimal modal wrapper with normal/insert/visual modes and `i`/`a`/`A`.
 - [x] Legacy aliases remain where they do not conflict with text entry; Default bottom hints show preferred keys only, while `?` help and docs list secondary aliases.
 - [x] Default assigns `a` and `e` to immediate archive; account switching remains on `Alt+A` in Default browse contexts and re-classify stays on `T`.
+- [x] Refresh is advertised on `Alt+R` so Timeline `Ctrl+R` remains an unambiguous reply-sender command; `Ctrl+R` remains a refresh fallback only in non-Timeline contexts where no reply command owns it.
 
 ## Configuration
 

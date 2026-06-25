@@ -330,6 +330,7 @@ func builtInKeyboardProfile(profile string) (keyboardBindingMap, keyboardCommand
 	prefer(keyboardScopeGlobal, keyboardModeNormal, "q", CommandAppQuit)
 	add(keyboardScopeGlobal, keyboardModeNormal, "?", CommandHelpOpen)
 	add(keyboardScopeGlobal, keyboardModeNormal, "S", CommandAppSettings)
+	prefer(keyboardScopeGlobal, keyboardModeNormal, "alt+r", CommandAppRefresh)
 	add(keyboardScopeGlobal, keyboardModeNormal, "ctrl+r", CommandAppRefresh)
 	add(keyboardScopeGlobal, keyboardModeNormal, "B", CommandSidebarToggle)
 	add(keyboardScopeGlobal, keyboardModeNormal, "L", CommandLogsToggle)
@@ -527,7 +528,7 @@ func canonicalKeyForCommand(scope, command string) string {
 	case CommandAppQuit:
 		return "q"
 	case CommandAppRefresh:
-		return "ctrl+r"
+		return "alt+r"
 	case CommandAppSettings:
 		return "S"
 	case CommandTabTimeline:
@@ -632,6 +633,8 @@ func shortcutKeyPressMsg(key string) tea.KeyPressMsg {
 		return tea.KeyPressMsg{Code: '3', Mod: tea.ModAlt}
 	case "alt+A":
 		return tea.KeyPressMsg{Code: 'A', BaseCode: 'a', Mod: tea.ModAlt | tea.ModShift}
+	case "alt+r":
+		return tea.KeyPressMsg{Code: 'r', Mod: tea.ModAlt}
 	case "f1":
 		return tea.KeyPressMsg{Code: tea.KeyF1}
 	case "f2":

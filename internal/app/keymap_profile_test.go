@@ -55,7 +55,8 @@ func TestKeyboardResolverProfilesAndLegacyAliases(t *testing.T) {
 		{name: "sort cycle primary", scope: "timeline", mode: "normal", key: "O", command: CommandTimelineSortCycle},
 		{name: "sidebar primary", scope: "global", mode: "normal", key: "B", command: CommandSidebarToggle},
 		{name: "logs primary", scope: "global", mode: "normal", key: "L", command: CommandLogsToggle},
-		{name: "refresh primary", scope: "global", mode: "normal", key: "ctrl+r", command: CommandAppRefresh},
+		{name: "refresh primary", scope: "global", mode: "normal", key: "alt+r", command: CommandAppRefresh},
+		{name: "refresh legacy ctrl fallback", scope: "global", mode: "normal", key: "ctrl+r", command: CommandAppRefresh},
 		{name: "contacts function alias", scope: "global", mode: "normal", key: "f2", command: CommandTabContacts},
 		{name: "contacts primary", scope: "global", mode: "normal", key: "2", command: CommandTabContacts},
 		{name: "contacts legacy f3", scope: "global", mode: "normal", key: "f3", command: CommandTabContacts},
@@ -71,6 +72,37 @@ func TestKeyboardResolverProfilesAndLegacyAliases(t *testing.T) {
 				t.Fatalf("Resolve(%q,%q,%q) = %q, want %q", tc.scope, tc.mode, tc.key, got, tc.command)
 			}
 		})
+	}
+}
+
+func TestRefreshPrimaryKeyDoesNotConflictWithTimelineReply(t *testing.T) {
+	m := makeSizedModel(t, 220, 50)
+	m.activeTab = tabTimeline
+	m.timeline.emails = mockEmails()
+	m.updateTimelineTable()
+	m.showSidebar = true
+	m.setFocusedPanel(panelSidebar)
+
+	if key := m.commandKey(keyboardScopeGlobal, CommandAppRefresh); key != "alt+r" {
+		t.Fatalf("refresh primary key = %q, want alt+r so Timeline Ctrl+R can stay reply", key)
+	}
+	if got, ok := m.keyboard.Resolve("timeline", keyboardModeNormal, "ctrl+r"); !ok || got != CommandMailReplySender {
+		t.Fatalf("Timeline Ctrl+R resolves to %q ok=%v, want reply sender", got, ok)
+	}
+
+	hints := stripANSI(m.renderKeyHints())
+	if strings.Contains(hints, "ctrl+r: refresh") || strings.Contains(hints, "Ctrl+R: refresh") {
+		t.Fatalf("Timeline hints must not advertise Ctrl+R as refresh while Ctrl+R replies, got:\n%s", hints)
+	}
+
+	m.timeline.emails = []*models.EmailData{}
+	m.updateTimelineTable()
+	rendered := stripANSI(m.renderTimelineView())
+	if !strings.Contains(rendered, "press Alt+R to refresh") {
+		t.Fatalf("empty Timeline refresh copy should point at Alt+R, got:\n%s", rendered)
+	}
+	if strings.Contains(rendered, "press r to refresh") {
+		t.Fatalf("empty Timeline refresh copy must not point at reply key r, got:\n%s", rendered)
 	}
 }
 
@@ -812,6 +844,26 @@ func TestMailActionShortcutAliasesDoNotStealTextEntry(t *testing.T) {
 		}
 		if m.pendingDeleteConfirm || m.pendingArchive || m.activeTab != tabCompose {
 			t.Fatalf("compose text entry fired mail action: confirm=%v archive=%v activeTab=%d", m.pendingDeleteConfirm, m.pendingArchive, m.activeTab)
+		}
+	})
+
+	t.Run("search prompt", func(t *testing.T) {
+		m := makeSizedModel(t, 140, 40)
+		m.activeTab = tabTimeline
+		m.timeline.emails = mockEmails()
+		m.updateTimelineTable()
+		m.openTimelineSearch()
+
+		for _, key := range keys {
+			model, _ := m.handleKeyMsg(keyRunes(key))
+			m = model.(*Model)
+		}
+
+		if got := m.timeline.searchInput.Value(); got != want {
+			t.Fatalf("search prompt = %q, want literal mail-action text %q", got, want)
+		}
+		if m.pendingDeleteConfirm || m.pendingArchive || m.activeTab != tabTimeline || !m.timeline.searchMode {
+			t.Fatalf("search prompt text entry fired mail action: confirm=%v archive=%v activeTab=%d search=%v", m.pendingDeleteConfirm, m.pendingArchive, m.activeTab, m.timeline.searchMode)
 		}
 	})
 

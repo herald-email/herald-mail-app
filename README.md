@@ -463,7 +463,7 @@ The full tool catalog is in the [MCP docs](docs/src/content/docs/advanced/mcp.md
 | `B`                                | Toggle folder sidebar                                                                       |
 | `g`                                | Toggle the AI chat panel                                                                    |
 | `L`                                | Toggle logs                                                                                 |
-| `Ctrl+R` outside Timeline mail contexts | Refresh current folder                                                                  |
+| `Alt+R` (`Ctrl+R` outside Timeline mail contexts) | Refresh current folder                                                      |
 | `/` / `Ctrl+K`                     | Contextual search; in mailbox search type `? query` for semantic search when available      |
 | `?`                                | Open context-sensitive shortcut help outside editable text fields                            |
 | `F6` / `Shift+F6`                  | Cycle pane focus forward/backward (`Tab` / `Shift+Tab` remain aliases)                      |
