@@ -1214,6 +1214,7 @@ func New(b backend.Backend, mailer *appsmtp.Client, fromAddress string, classifi
 	}
 
 	m.syncAccountsFromBackend()
+	m.selectStartupAccountScope()
 	m.refreshCalendarAvailability()
 
 	// Detect demo mode via DemoBackendMarker interface

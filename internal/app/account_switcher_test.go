@@ -125,6 +125,29 @@ func accountSwitcherSnapshots(accounts []backend.AccountInfo) []backend.AccountF
 	return snapshots
 }
 
+func TestNewModelDefaultsMultiAccountStartupToAllInboxes(t *testing.T) {
+	accounts := []backend.AccountInfo{
+		{SourceID: "rare-mail", AccountID: "rare", DisplayName: "Rare Mail"},
+		{SourceID: "daily-mail", AccountID: "daily", DisplayName: "Daily Mail"},
+	}
+	b := newAccountAwareStubBackend(accounts)
+
+	m := New(b, nil, "", nil, false)
+
+	if b.activeSource != backend.AllAccountsSourceID {
+		t.Fatalf("backend active source=%q, want all accounts", b.activeSource)
+	}
+	if m.activeSourceID != backend.AllAccountsSourceID {
+		t.Fatalf("model active source=%q, want all accounts", m.activeSourceID)
+	}
+	if m.currentFolder != "INBOX" {
+		t.Fatalf("currentFolder=%q, want INBOX", m.currentFolder)
+	}
+	if got := m.accountSelectedFolders[backend.AllAccountsSourceID]; got != "INBOX" {
+		t.Fatalf("all-account selected folder=%q, want INBOX", got)
+	}
+}
+
 func findSidebarItem(t *testing.T, m *Model, label string, account models.SourceID, folder string) int {
 	t.Helper()
 	for i, item := range m.visibleSidebarItems() {
@@ -191,11 +214,11 @@ func TestMultiAccountSidebarStatusAndSwitcherRenderAccountIdentity(t *testing.T)
 			t.Fatalf("sidebar missing %q:\n%s", want, sidebar)
 		}
 	}
-	if title := stripANSI(m.renderTitleBar(120)); !strings.Contains(title, "Work Mail") {
-		t.Fatalf("title missing active account: %q", title)
+	if title := stripANSI(m.renderTitleBar(120)); !strings.Contains(title, "All Accounts") {
+		t.Fatalf("title missing all-account scope: %q", title)
 	}
-	if status := stripANSI(m.renderStatusBar()); !strings.Contains(status, "Work Mail") {
-		t.Fatalf("status missing active account: %q", status)
+	if status := stripANSI(m.renderStatusBar()); !strings.Contains(status, "All Accounts") {
+		t.Fatalf("status missing all-account scope: %q", status)
 	}
 
 	model, _ := m.handleKeyMsg(shortcutKeyPressMsg("alt+A"))
@@ -376,6 +399,7 @@ func TestAccountSwitcherEnterSwitchesActiveAccountAndRestoresFolder(t *testing.T
 	model, _ := m.handleKeyMsg(shortcutKeyPressMsg("alt+A"))
 	opened := model.(*Model)
 	model, _ = opened.handleKeyMsg(keyRunes("j"))
+	model, _ = model.(*Model).handleKeyMsg(keyRunes("j"))
 	selected := model.(*Model)
 	if selected.accountSwitcherCursor != 2 {
 		t.Fatalf("cursor=%d, want 2", selected.accountSwitcherCursor)

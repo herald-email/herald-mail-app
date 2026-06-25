@@ -53,6 +53,10 @@ func newComposeAccountTestModel(active models.SourceID) (*Model, *composeAccount
 	}
 	b := &composeAccountStubBackend{accountAwareStubBackend: base}
 	m := New(b, nil, "legacy@example.test", nil, false)
+	if active != "" {
+		_ = b.SwitchAccount(active)
+		m.syncAccountIdentityFromBackend()
+	}
 	m.loading = false
 	m.windowWidth = 120
 	m.windowHeight = 40

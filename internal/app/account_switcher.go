@@ -16,6 +16,23 @@ func (m *Model) syncAccountsFromBackend() {
 	m.syncAccountsFromBackendWithStatus(true)
 }
 
+func (m *Model) selectStartupAccountScope() {
+	aware, ok := m.backend.(backend.AccountAwareBackend)
+	if !ok || !aware.HasMultipleAccounts() {
+		return
+	}
+	if err := aware.SwitchAccount(backend.AllAccountsSourceID); err != nil {
+		m.statusMessage = "Account default failed: " + err.Error()
+		return
+	}
+	if m.accountSelectedFolders == nil {
+		m.accountSelectedFolders = make(map[models.SourceID]string)
+	}
+	m.accountSelectedFolders[backend.AllAccountsSourceID] = "INBOX"
+	m.currentFolder = "INBOX"
+	m.syncAccountIdentityFromBackend()
+}
+
 func (m *Model) syncAccountIdentityFromBackend() {
 	m.syncAccountsFromBackendWithStatus(false)
 }
