@@ -80,6 +80,51 @@ func TestTimelineGroupingDefaultPreservesThreadMode(t *testing.T) {
 	}
 }
 
+func TestTimelineGroupingUsesProviderThreadWhenSubjectChanges(t *testing.T) {
+	m := makeSizedModel(t, 120, 40)
+	m.activeTab = tabTimeline
+	m.timeline.emails = []*models.EmailData{
+		{
+			MessageID:        "<newest@example.test>",
+			Sender:           "Sam Marsh <sam@example.test>",
+			Subject:          "Re: Logistics for next week",
+			InReplyTo:        "<middle@example.test>",
+			References:       "<root@example.test> <middle@example.test>",
+			ProviderThreadID: "gmail-thread-1",
+			Date:             time.Date(2026, 6, 9, 15, 39, 0, 0, time.UTC),
+			Folder:           "INBOX",
+		},
+		{
+			MessageID:        "<middle@example.test>",
+			Sender:           "me@example.test",
+			Subject:          "Re: Anton Golubtsov and Sam Marsh",
+			InReplyTo:        "<root@example.test>",
+			References:       "<root@example.test>",
+			ProviderThreadID: "gmail-thread-1",
+			Date:             time.Date(2026, 6, 2, 9, 32, 0, 0, time.UTC),
+			Folder:           "Sent",
+		},
+		{
+			MessageID:        "<root@example.test>",
+			Sender:           "John Doe <john@example.test>",
+			Subject:          "Anton Golubtsov and Sam Marsh",
+			ProviderThreadID: "gmail-thread-1",
+			Date:             time.Date(2026, 5, 18, 8, 8, 0, 0, time.UTC),
+			Folder:           "INBOX",
+		},
+	}
+
+	m.updateTimelineTable()
+
+	rows := m.timelineTable.Rows()
+	if len(rows) != 1 {
+		t.Fatalf("provider-thread messages with changed subjects should collapse into 1 row, got %d rows: %#v", len(rows), rows)
+	}
+	if got := stripANSI(rows[0][2]); !strings.Contains(got, "[3]") || !strings.Contains(got, "Logistics for next week") {
+		t.Fatalf("collapsed provider-thread subject = %q, want newest subject with count", got)
+	}
+}
+
 func TestTimelineExpandedThreadReplyRowsStayIndented(t *testing.T) {
 	m := makeSizedModel(t, 120, 40)
 	m.activeTab = tabTimeline

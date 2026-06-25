@@ -22,7 +22,7 @@ var timelinePreviewMarkReadDelay = 2500 * time.Millisecond
 
 // --- Thread grouping types ---
 
-// threadGroup holds all emails that share the same normalised subject.
+// threadGroup holds all emails that share a Timeline grouping key.
 type threadGroup struct {
 	normalizedSubject string
 	emails            []*models.EmailData // newest first (inherited from sorted input)
@@ -509,32 +509,196 @@ func buildTimelineGroups(emails []*models.EmailData, mode timelineGroupingMode) 
 }
 
 func buildThreadSubjectGroups(emails []*models.EmailData) []threadGroup {
-	var groups []threadGroup
-	seen := make(map[string]int) // normalised subject → index in groups
+	if len(emails) == 0 {
+		return nil
+	}
 
-	for _, e := range emails {
-		ns := normalizeSubject(e.Subject)
-		if ns == "" {
-			// Empty subjects are never grouped; each stands alone.
+	parent := make([]int, len(emails))
+	for i := range parent {
+		parent[i] = i
+	}
+	var find func(int) int
+	find = func(i int) int {
+		if parent[i] != i {
+			parent[i] = find(parent[i])
+		}
+		return parent[i]
+	}
+	union := func(a, b int) {
+		ra, rb := find(a), find(b)
+		if ra == rb {
+			return
+		}
+		if ra < rb {
+			parent[rb] = ra
+		} else {
+			parent[ra] = rb
+		}
+	}
+
+	keyOwner := make(map[string]int)
+	hasThreadMetadata := make([]bool, len(emails))
+	for idx, email := range emails {
+		if email == nil {
+			continue
+		}
+		hasThreadMetadata[idx] = timelineEmailHasThreadMetadata(email)
+		for _, key := range timelineThreadMetadataKeys(email) {
+			if owner, ok := keyOwner[key]; ok {
+				union(idx, owner)
+				continue
+			}
+			keyOwner[key] = idx
+		}
+	}
+
+	type component struct {
+		emails            []*models.EmailData
+		hasThreadMetadata bool
+	}
+	components := make(map[int]*component)
+	var componentOrder []int
+	for idx, email := range emails {
+		if email == nil {
+			continue
+		}
+		root := find(idx)
+		comp := components[root]
+		if comp == nil {
+			comp = &component{}
+			components[root] = comp
+			componentOrder = append(componentOrder, root)
+		}
+		comp.emails = append(comp.emails, email)
+		if hasThreadMetadata[idx] {
+			comp.hasThreadMetadata = true
+		}
+	}
+
+	var groups []threadGroup
+	seenSubject := make(map[string]int) // normalised subject -> index in groups
+	for _, root := range componentOrder {
+		comp := components[root]
+		if comp == nil || len(comp.emails) == 0 {
+			continue
+		}
+		if comp.hasThreadMetadata || len(comp.emails) > 1 {
 			groups = append(groups, threadGroup{
-				normalizedSubject: ns,
-				emails:            []*models.EmailData{e},
+				normalizedSubject: timelineThreadGroupKey(comp.emails),
+				emails:            comp.emails,
 				groupingMode:      timelineGroupingThread,
 			})
 			continue
 		}
-		if idx, ok := seen[ns]; ok {
-			groups[idx].emails = append(groups[idx].emails, e)
-		} else {
-			seen[ns] = len(groups)
+
+		email := comp.emails[0]
+		ns := normalizeSubject(email.Subject)
+		if ns == "" {
+			// Empty subjects are never grouped unless provider/RFC metadata links them.
 			groups = append(groups, threadGroup{
 				normalizedSubject: ns,
-				emails:            []*models.EmailData{e},
+				emails:            []*models.EmailData{email},
+				groupingMode:      timelineGroupingThread,
+			})
+			continue
+		}
+		if idx, ok := seenSubject[ns]; ok {
+			groups[idx].emails = append(groups[idx].emails, email)
+		} else {
+			seenSubject[ns] = len(groups)
+			groups = append(groups, threadGroup{
+				normalizedSubject: ns,
+				emails:            []*models.EmailData{email},
 				groupingMode:      timelineGroupingThread,
 			})
 		}
 	}
 	return groups
+}
+
+func timelineEmailHasThreadMetadata(email *models.EmailData) bool {
+	if email == nil {
+		return false
+	}
+	return strings.TrimSpace(email.ProviderThreadID) != "" ||
+		strings.TrimSpace(email.InReplyTo) != "" ||
+		strings.TrimSpace(email.References) != ""
+}
+
+func timelineThreadMetadataKeys(email *models.EmailData) []string {
+	if email == nil {
+		return nil
+	}
+	prefix := timelineThreadScopePrefix(email)
+	keys := make([]string, 0, 4)
+	if threadID := strings.TrimSpace(email.ProviderThreadID); threadID != "" {
+		keys = append(keys, "provider:"+prefix+threadID)
+	}
+	if id := normalizeTimelineThreadMessageID(email.MessageID); id != "" {
+		keys = append(keys, "rfc:"+prefix+id)
+	}
+	if id := normalizeTimelineThreadMessageID(email.InReplyTo); id != "" {
+		keys = append(keys, "rfc:"+prefix+id)
+	}
+	for _, id := range timelineExtractThreadMessageIDs(email.References) {
+		keys = append(keys, "rfc:"+prefix+id)
+	}
+	return keys
+}
+
+func timelineThreadGroupKey(emails []*models.EmailData) string {
+	for _, email := range emails {
+		if email == nil {
+			continue
+		}
+		if threadID := strings.TrimSpace(email.ProviderThreadID); threadID != "" {
+			return "thread:" + timelineThreadScopePrefix(email) + threadID
+		}
+	}
+	for _, email := range emails {
+		if email == nil {
+			continue
+		}
+		if id := normalizeTimelineThreadMessageID(email.MessageID); id != "" {
+			return "thread:" + timelineThreadScopePrefix(email) + id
+		}
+		if id := normalizeTimelineThreadMessageID(email.InReplyTo); id != "" {
+			return "thread:" + timelineThreadScopePrefix(email) + id
+		}
+		for _, id := range timelineExtractThreadMessageIDs(email.References) {
+			return "thread:" + timelineThreadScopePrefix(email) + id
+		}
+	}
+	if len(emails) > 0 && emails[0] != nil {
+		return normalizeSubject(emails[0].Subject)
+	}
+	return ""
+}
+
+func timelineThreadScopePrefix(email *models.EmailData) string {
+	ref := email.MessageRef()
+	return string(ref.SourceID) + ":" + string(ref.AccountID) + ":"
+}
+
+func timelineExtractThreadMessageIDs(header string) []string {
+	header = strings.NewReplacer(",", " ", "\r", " ", "\n", " ", "\t", " ").Replace(header)
+	fields := strings.Fields(header)
+	ids := make([]string, 0, len(fields))
+	for _, field := range fields {
+		if id := normalizeTimelineThreadMessageID(field); id != "" {
+			ids = append(ids, id)
+		}
+	}
+	return ids
+}
+
+func normalizeTimelineThreadMessageID(id string) string {
+	id = strings.TrimSpace(id)
+	id = strings.Trim(id, ",;")
+	if id == "" {
+		return ""
+	}
+	return strings.ToLower(id)
 }
 
 func timelineGroupingKeyAndLabel(email *models.EmailData, mode timelineGroupingMode) (string, string) {
