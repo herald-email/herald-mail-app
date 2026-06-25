@@ -955,6 +955,22 @@ func TestSettingsAccountsListShowsAddAccountAndCalendarOnlyWithoutSubmenu(t *tes
 	}
 }
 
+func TestSettingsAccountsListRendersAddActionsAsButtons(t *testing.T) {
+	existing := &config.Config{Sources: []config.SourceConfig{
+		{ID: "work-mail", Kind: "mail", AccountID: "work", DisplayName: "Work", Credentials: config.CredentialsConfig{Username: "work@example.com"}},
+	}}
+	s := NewSettings(SettingsModePanel, existing)
+	s.panelSection = settingsPanelSectionAccounts
+	s.buildForm()
+
+	plain := stripANSI(renderSettingsViewForTest(t, s, 100, 32))
+	for _, want := range []string{"[ Add account ]", "[ Add calendar only ]"} {
+		if !strings.Contains(plain, want) {
+			t.Fatalf("expected add action to render as button %q, got:\n%s", want, plain)
+		}
+	}
+}
+
 func TestSettingsAccountsListFooterShowsAccountActions(t *testing.T) {
 	existing := &config.Config{Sources: []config.SourceConfig{
 		{ID: "work-mail", Kind: "mail", AccountID: "work", DisplayName: "Work", Credentials: config.CredentialsConfig{Username: "work@example.com"}},

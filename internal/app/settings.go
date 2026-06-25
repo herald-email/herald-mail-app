@@ -2427,7 +2427,7 @@ func (s *Settings) buildAccountsListForm() {
 			s.accountsMenuChoice = options[0].Value
 		}
 	}
-	description := "Choose an account or source to edit. Disconnecting removes Herald settings only."
+	description := "Choose a source. Disconnecting only removes Herald settings."
 	if status := strings.TrimSpace(s.panelStatus); status != "" {
 		description = status + "\n" + description
 	}
@@ -2566,8 +2566,8 @@ func (s *Settings) accountListOptions() []huh.Option[string] {
 		}
 	}
 	options = append(options,
-		huh.NewOption("Add account", settingsAccountEditAddMail),
-		huh.NewOption("Add calendar only", settingsAccountEditAddCalendar),
+		huh.NewOption("[ Add account ]", settingsAccountEditAddMail),
+		huh.NewOption("[ Add calendar only ]", settingsAccountEditAddCalendar),
 	)
 	return options
 }

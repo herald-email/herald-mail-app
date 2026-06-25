@@ -1037,6 +1037,22 @@ func TestSettingsPanelFitsAt80ColsAsModal(t *testing.T) {
 	}
 }
 
+func TestSettingsAccountsListIntroDoesNotOrphanHeraldAt80Cols(t *testing.T) {
+	existing := &config.Config{Sources: []config.SourceConfig{
+		{ID: "work-mail", Kind: "mail", AccountID: "work", DisplayName: "Work", Credentials: config.CredentialsConfig{Username: "work@example.com"}},
+	}}
+	s := NewSettings(SettingsModePanel, existing)
+	s.panelSection = settingsPanelSectionAccounts
+	s.buildForm()
+
+	rendered := renderSettingsViewForTest(t, s, 80, 24)
+	for _, line := range strings.Split(rendered, "\n") {
+		if strings.Trim(line, " │") == "Herald" {
+			t.Fatalf("accounts intro should not wrap Herald onto an orphan line at 80 columns, got:\n%s", rendered)
+		}
+	}
+}
+
 func TestSettingsPanelSignatureFieldKeepsFooterAt80x24(t *testing.T) {
 	s := NewSettings(SettingsModePanel, nil)
 	focusSignatureSettingsGroup(t, s)
