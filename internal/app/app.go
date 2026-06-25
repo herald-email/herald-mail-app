@@ -978,6 +978,7 @@ type Model struct {
 	localImageLinks             bool
 	terminalLinkBrowserFallback bool
 	terminalLinkHover           terminalLinkHoverState
+	terminalLinkOpenGesture     terminalLinkOpenGestureState
 	previewImageMode            previewImageMode
 	imagePreviewLinks           *imagePreviewServer
 

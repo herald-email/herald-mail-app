@@ -30,6 +30,10 @@ func mouseCtrlReleaseNone(x, y int) tea.MouseReleaseMsg {
 	return tea.MouseReleaseMsg{X: x, Y: y, Button: tea.MouseNone, Mod: tea.ModCtrl}
 }
 
+func mouseReleaseNone(x, y int) tea.MouseReleaseMsg {
+	return tea.MouseReleaseMsg{X: x, Y: y, Button: tea.MouseNone}
+}
+
 func mouseWheelDown(x, y int) tea.MouseWheelMsg {
 	return tea.MouseWheelMsg{X: x, Y: y, Button: tea.MouseWheelDown}
 }
@@ -463,6 +467,40 @@ func TestPlainClickTimelinePreviewLinkUsesLocalBrowserFallback(t *testing.T) {
 	}
 	if updated.statusMessage != "Opened link in browser" {
 		t.Fatalf("statusMessage=%q, want opened status", updated.statusMessage)
+	}
+}
+
+func TestPlainClickTimelinePreviewLinkPressReleaseOpensOnce(t *testing.T) {
+	m, target := makeMouseLinkPreviewModel(t, false)
+	x, y := visiblePointForText(t, viewContent(m.View()), "Display in your browser")
+
+	var opened []string
+	originalOpenBrowser := openBrowserFn
+	openBrowserFn = func(rawURL string) error {
+		opened = append(opened, rawURL)
+		return nil
+	}
+	defer func() { openBrowserFn = originalOpenBrowser }()
+
+	model, cmd := m.Update(mousePress(x, y))
+	updated := model.(*Model)
+	if cmd == nil {
+		t.Fatal("expected mouse press on OSC8 link to open browser fallback")
+	}
+	msg := cmd()
+	model, _ = updated.Update(msg)
+	updated = model.(*Model)
+
+	model, releaseCmd := updated.Update(mouseReleaseNone(x, y))
+	updated = model.(*Model)
+	if releaseCmd != nil {
+		t.Fatal("mouse release after an already-handled link press should not open the browser again")
+	}
+	if len(opened) != 1 || opened[0] != target {
+		t.Fatalf("opened=%#v, want exactly one open for %q", opened, target)
+	}
+	if updated.statusMessage != "Opened link in browser" {
+		t.Fatalf("statusMessage=%q, want opened status to remain", updated.statusMessage)
 	}
 }
 

@@ -15,6 +15,7 @@ import (
 const (
 	mouseWheelDelta              = 3
 	calendarEventDoubleClickTime = 500 * time.Millisecond
+	terminalLinkReleaseDedupeAge = 750 * time.Millisecond
 )
 
 type mouseRect struct {
@@ -31,6 +32,12 @@ type terminalLinkHoverState struct {
 	Target      string
 	StartColumn int
 	EndColumn   int
+}
+
+type terminalLinkOpenGestureState struct {
+	Active   bool
+	Target   string
+	OpenedAt time.Time
 }
 
 func (r mouseRect) contains(x, y int) bool {
@@ -298,6 +305,9 @@ func (m *Model) handleTerminalLinkMouse(msg tea.Mouse, release bool) (tea.Cmd, b
 	if msg.Button != tea.MouseLeft && !(release && msg.Button == tea.MouseNone) {
 		return nil, false
 	}
+	if release && m.consumeDuplicateTerminalLinkRelease(msg) {
+		return nil, true
+	}
 	ctrlGesture := msg.Mod.Contains(tea.ModCtrl)
 	if !ctrlGesture && !m.terminalLinkBrowserFallback {
 		return nil, false
@@ -314,8 +324,29 @@ func (m *Model) handleTerminalLinkMouse(msg tea.Mouse, release bool) (tea.Cmd, b
 		m.statusMessage = "Link target is not browser-openable"
 		return nil, true
 	}
+	if !release {
+		m.terminalLinkOpenGesture = terminalLinkOpenGestureState{
+			Active:   true,
+			Target:   target,
+			OpenedAt: time.Now(),
+		}
+	}
 	m.statusMessage = "Opening link in browser..."
 	return openTerminalLinkCmd(target), true
+}
+
+func (m *Model) consumeDuplicateTerminalLinkRelease(msg tea.Mouse) bool {
+	gesture := m.terminalLinkOpenGesture
+	if !gesture.Active {
+		return false
+	}
+	if time.Since(gesture.OpenedAt) > terminalLinkReleaseDedupeAge {
+		m.terminalLinkOpenGesture = terminalLinkOpenGestureState{}
+		return false
+	}
+	target, ok := m.terminalLinkTargetAt(msg.X, msg.Y)
+	m.terminalLinkOpenGesture = terminalLinkOpenGestureState{}
+	return !ok || target == gesture.Target
 }
 
 func (m *Model) terminalLinkTargetAt(x, y int) (string, bool) {
