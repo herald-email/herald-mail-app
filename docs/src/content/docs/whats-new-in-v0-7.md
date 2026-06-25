@@ -1,9 +1,9 @@
 ---
 title: What's New in v0.7
-description: User-facing changes in the v0.7 beta release line through v0.7.3.
+description: User-facing changes in the v0.7 beta release line through v0.7.4.
 ---
 
-The v0.7 beta line turns Herald's source-aware mail and calendar foundation into a more memory-aware writing and review workspace. Through `v0.7.3-beta.1`, the headline work is local Herald Memories, the Gollem-backed chat agent path, Compose Radar, macOS preview printing, denser everyday Timeline polish, and safer multi-account mail behavior.
+The v0.7 beta line turns Herald's source-aware mail and calendar foundation into a more memory-aware writing and review workspace. Through `v0.7.4-beta.1`, the headline work is local Herald Memories, the Gollem-backed chat agent path, Compose Radar, macOS preview printing, denser everyday Timeline polish, and safer multi-account mail behavior.
 
 ## Release Delta
 
@@ -19,6 +19,7 @@ These are the changes most visible to people upgrading from the v0.6 beta line. 
 - [x] Shared chat retrieval planning makes search-like chat answers, daemon tools, and MCP reads use the same structured query path.
 - [x] Cross-account fixes keep Google invitation imports, IMAP new-mail sync, archive state, and bulk cleanup mutations scoped to the right account and message refs.
 - [x] Preview and Compose polish clears stale inline images before drafting and waits for a loaded preview to dwell before marking a message read.
+- [x] Everyday mail actions gained a fast preview unsubscribe shortcut, stable message-ref archive batching, non-ASCII mail header encoding, preserved forwarded attachments, and clearer expanded thread reply rows.
 - [x] Docs and demo-first onboarding now emphasize the v0.7 product state, including Memories, Gollem chat, AI role assignments, and the safer first five minutes loop.
 
 ## Screenshots
@@ -43,7 +44,8 @@ The v0.7 beta line started as a capability release and then tightened cross-acco
 - [x] `v0.7.1-beta.1` adds the shared chat retrieval planner and fixes cross-account Google invitation imports.
 - [x] `v0.7.2-beta.1` aligns mail reply and archive shortcuts, then batches bulk cleanup/deletion by stable message refs for safer multi-account mutations.
 - [x] `v0.7.3-beta.1` scopes new IMAP emails to their account, prunes archived emails from source state, clears stale inline images before Compose, and delays preview read marking until a loaded message has stayed open for 2.5 seconds.
-- [x] `beta-latest` points at `v0.7.3-beta.1`, and Homebrew installs the same release-built macOS binaries.
+- [x] `v0.7.4-beta.1` adds the fast preview unsubscribe shortcut, fixes non-ASCII send headers and preserved forwarded attachments, batches archive moves by stable message ref, and indents expanded thread replies.
+- [x] `beta-latest` points at `v0.7.4-beta.1`, and Homebrew installs the same release-built macOS binaries.
 - [x] The release artifacts include `herald`, `herald-mcp-server`, and `herald-ssh-server` for both Apple Silicon and Intel macOS.
 
 ## How To Try It

@@ -59,7 +59,7 @@ Nightly builds are available as short-lived GitHub Actions artifacts for testers
 
 ## New in v0.7
 
-The `v0.7.3-beta.1` release line adds local Herald Memories, Compose Radar, the Gollem-backed chat agent path, macOS preview printing, Timeline range-selection polish, AI role assignment controls, and safer multi-account mail cleanup and preview read-state behavior. See [What's New in v0.7](/whats-new-in-v0-7/) for the release-delta checklist and screenshots; older release pages remain available under Release Archive so stable links keep working.
+The `v0.7.4-beta.1` release line adds local Herald Memories, Compose Radar, the Gollem-backed chat agent path, macOS preview printing, Timeline range-selection polish, AI role assignment controls, and safer multi-account mail cleanup, preview read-state, unsubscribe, archive, header, and forwarded-attachment behavior. See [What's New in v0.7](/whats-new-in-v0-7/) for the release-delta checklist and screenshots; older release pages remain available under Release Archive so stable links keep working.
 
 ![Chat panel open beside Timeline](/screenshots/chat-panel-open.png)
 

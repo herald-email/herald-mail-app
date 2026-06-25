@@ -7,7 +7,7 @@
 </p>
 
 > [!NOTE]
-> Herald v0.7.3-beta.1 is the current beta: Herald Memories, Compose Radar, Gollem-backed chat, macOS preview printing, Timeline range selection, and AI role assignment controls build on the Gmail API and Calendar source platform from v0.6, with safer multi-account mail cleanup and preview read-state handling.
+> Herald v0.7.4-beta.1 is the current beta: Herald Memories, Compose Radar, Gollem-backed chat, macOS preview printing, Timeline range selection, and AI role assignment controls build on the Gmail API and Calendar source platform from v0.6, with safer multi-account mail cleanup, preview unsubscribe, archive, non-ASCII header, and forwarded-attachment handling.
 
 **Email and calendar in your terminal, without turning setup into a project.** Herald gives you a GUI-like, terminal-native workspace with mouse-friendly controls, full keyboard flow, and context help when you press `?`. Try demo mode before connecting an inbox; keep AI optional and local-first when you want classification, semantic search, quick replies, or chat; and use MCP or SSH when your terminal workflow wants to reach further.
 
