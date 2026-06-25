@@ -10,6 +10,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/herald-email/herald-mail-app/internal/agent"
 	"github.com/herald-email/herald-mail-app/internal/ai"
+	"github.com/herald-email/herald-mail-app/internal/backend"
 	"github.com/herald-email/herald-mail-app/internal/config"
 	"github.com/herald-email/herald-mail-app/internal/models"
 )
@@ -475,6 +476,10 @@ func TestSetConfigEnablesGollemChatAgentWhenConfigured(t *testing.T) {
 	if m.chatAgent == nil {
 		t.Fatal("chatAgent should be configured from ai.agent provider overrides")
 	}
+}
+
+func TestChatAgentConfigTreatsMultiBackendAsMemorySource(t *testing.T) {
+	var _ agent.MemoryToolSource = (*backend.MultiBackend)(nil)
 }
 
 func TestChatAgentProviderConfigInheritsGlobalAIProviders(t *testing.T) {

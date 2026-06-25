@@ -9,6 +9,7 @@ import (
 
 	"github.com/herald-email/herald-mail-app/internal/ai"
 	"github.com/herald-email/herald-mail-app/internal/cache"
+	"github.com/herald-email/herald-mail-app/internal/config"
 	"github.com/herald-email/herald-mail-app/internal/memory"
 	"github.com/herald-email/herald-mail-app/internal/models"
 )
@@ -239,6 +240,77 @@ func TestLocalMemoryRefreshUsesBackgroundAndInteractiveAISchedulerPriorities(t *
 	if got := atomic.LoadInt32(&source.calls); got != 1 {
 		t.Fatalf("memory source calls = %d, want one winning refresh", got)
 	}
+}
+
+func TestLocalMemoryCadenceManualDoesNotRefreshAfterSync(t *testing.T) {
+	backend, source := newTestLocalMemoryCadenceBackend(t, "manual")
+
+	backend.refreshMemoriesAfterSuccessfulSync()
+	time.Sleep(50 * time.Millisecond)
+
+	if got := atomic.LoadInt32(&source.calls); got != 0 {
+		t.Fatalf("memory source calls = %d, want no proactive manual refresh", got)
+	}
+}
+
+func TestLocalMemoryCadenceAfterSyncTriggersBackgroundRefresh(t *testing.T) {
+	backend, source := newTestLocalMemoryCadenceBackend(t, "after_sync")
+
+	backend.refreshMemoriesAfterSuccessfulSync()
+
+	waitForMemorySourceCalls(t, source, 1)
+}
+
+func TestLocalMemoryCadenceBackgroundIdleTriggersBackgroundRefresh(t *testing.T) {
+	backend, source := newTestLocalMemoryCadenceBackend(t, "background_idle")
+
+	backend.refreshMemoriesAfterSuccessfulSync()
+
+	waitForMemorySourceCalls(t, source, 1)
+}
+
+func TestLocalMemoryCadenceComposeOpenForcesReplyRefresh(t *testing.T) {
+	backend, source := newTestLocalMemoryCadenceBackend(t, "compose_open")
+
+	ctx := context.Background()
+	for i := 0; i < 2; i++ {
+		if _, err := backend.BuildReplyMemoryContext(ctx, memory.ReplyPrepQuery{Recipient: "sergey@example.com", Limit: 2}); err != nil {
+			t.Fatalf("BuildReplyMemoryContext #%d: %v", i+1, err)
+		}
+	}
+
+	if got := atomic.LoadInt32(&source.calls); got != 2 {
+		t.Fatalf("memory source calls = %d, want compose_open to force each reply-prep refresh", got)
+	}
+}
+
+func newTestLocalMemoryCadenceBackend(t *testing.T, cadence string) (*LocalBackend, *countingMemoryEmailSource) {
+	t.Helper()
+	store, err := memory.NewFileStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewFileStore: %v", err)
+	}
+	settings := memory.DefaultSettings()
+	settings.Directory = store.Root()
+	settings.Sources.Folders = []string{"INBOX"}
+	settings.UpdateRules.Cadence = cadence
+	source := &countingMemoryEmailSource{}
+	return &LocalBackend{
+		cfg:           &config.Config{Memories: settings},
+		memoryService: memory.NewServiceWithStore(settings, store, source),
+	}, source
+}
+
+func waitForMemorySourceCalls(t *testing.T, source *countingMemoryEmailSource, want int32) {
+	t.Helper()
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		if got := atomic.LoadInt32(&source.calls); got >= want {
+			return
+		}
+		time.Sleep(time.Millisecond)
+	}
+	t.Fatalf("timed out waiting for memory source calls >= %d, got %d", want, atomic.LoadInt32(&source.calls))
 }
 
 func waitForMemorySchedulerStatus(t *testing.T, reporter ai.StatusReporter, match func(ai.SchedulerStatus) bool) {

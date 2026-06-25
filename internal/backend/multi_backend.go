@@ -8,9 +8,11 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/herald-email/herald-mail-app/internal/ai"
 	"github.com/herald-email/herald-mail-app/internal/config"
+	"github.com/herald-email/herald-mail-app/internal/memory"
 	"github.com/herald-email/herald-mail-app/internal/models"
 	appsmtp "github.com/herald-email/herald-mail-app/internal/smtp"
 )
@@ -74,6 +76,15 @@ type scopedEmbeddingBackend interface {
 	StoreEmbeddingChunksByRef(ref models.MessageRef, chunks []models.EmbeddingChunk) error
 }
 
+type memoryBackend interface {
+	SearchMemories(context.Context, memory.Query) ([]memory.Memory, error)
+	BuildReplyMemoryContext(context.Context, memory.ReplyPrepQuery) (memory.ReplyPrep, error)
+}
+
+type memoryDismissalBackend interface {
+	DismissMemoryNudge(context.Context, memory.NudgeDismissalRequest) error
+}
+
 type accountSlot struct {
 	info    AccountInfo
 	backend Backend
@@ -94,6 +105,8 @@ type MultiBackend struct {
 	validIDs  chan models.ValidIDsNotification
 	closed    bool
 	groupBy   bool
+
+	memorySettings memory.Settings
 }
 
 var _ AccountAwareBackend = (*MultiBackend)(nil)
@@ -113,11 +126,12 @@ func NewMultiBackend(accounts []AccountBackend) (*MultiBackend, error) {
 		return nil, fmt.Errorf("multi backend requires at least one account")
 	}
 	m := &MultiBackend{
-		slots:     make(map[models.SourceID]*accountSlot, len(accounts)),
-		progress:  make(chan models.ProgressInfo, 100),
-		syncs:     make(chan models.FolderSyncEvent, 256),
-		newEmails: make(chan models.NewEmailsNotification, 20),
-		validIDs:  make(chan models.ValidIDsNotification, 20),
+		slots:          make(map[models.SourceID]*accountSlot, len(accounts)),
+		progress:       make(chan models.ProgressInfo, 100),
+		syncs:          make(chan models.FolderSyncEvent, 256),
+		newEmails:      make(chan models.NewEmailsNotification, 20),
+		validIDs:       make(chan models.ValidIDsNotification, 20),
+		memorySettings: memory.DefaultSettings(),
 	}
 	for _, account := range accounts {
 		if account.Backend == nil {
@@ -537,6 +551,188 @@ func (m *MultiBackend) aggregateEmails(fn func(*accountSlot) ([]*models.EmailDat
 	}
 	sortEmailsNewestFirst(out)
 	return out, nil
+}
+
+func (m *MultiBackend) SearchMemories(ctx context.Context, query memory.Query) ([]memory.Memory, error) {
+	if !m.allAccountsActive() {
+		slot := m.activeRealSlot()
+		source, ok := memorySourceForSlot(slot)
+		if !ok {
+			return nil, nil
+		}
+		return source.SearchMemories(ctx, query)
+	}
+
+	var out []memory.Memory
+	for _, slot := range m.snapshotSlots() {
+		source, ok := memorySourceForSlot(slot)
+		if !ok {
+			continue
+		}
+		memories, err := source.SearchMemories(ctx, query)
+		if err != nil {
+			return out, err
+		}
+		out = append(out, memories...)
+	}
+	return dedupeSortLimitMemories(out, query.Limit), nil
+}
+
+func (m *MultiBackend) BuildReplyMemoryContext(ctx context.Context, query memory.ReplyPrepQuery) (memory.ReplyPrep, error) {
+	if !m.allAccountsActive() {
+		slot := m.activeRealSlot()
+		source, ok := memorySourceForSlot(slot)
+		if !ok {
+			return emptyReplyPrep(query), nil
+		}
+		return source.BuildReplyMemoryContext(ctx, query)
+	}
+
+	if messageID := strings.TrimSpace(query.MessageID); messageID != "" {
+		if slot := m.slotContainingMessageID(ctx, messageID); slot != nil {
+			if source, ok := memorySourceForSlot(slot); ok {
+				return source.BuildReplyMemoryContext(ctx, query)
+			}
+		}
+	}
+	return m.buildAllAccountReplyMemoryContext(ctx, query)
+}
+
+func (m *MultiBackend) buildAllAccountReplyMemoryContext(ctx context.Context, query memory.ReplyPrepQuery) (memory.ReplyPrep, error) {
+	var out []memory.Memory
+	for _, slot := range m.snapshotSlots() {
+		source, ok := memorySourceForSlot(slot)
+		if !ok {
+			continue
+		}
+		prep, err := source.BuildReplyMemoryContext(ctx, query)
+		if err != nil {
+			return emptyReplyPrep(query), err
+		}
+		out = append(out, prep.Memories...)
+	}
+	out = dedupeSortLimitMemories(out, query.Limit)
+	prep := memory.BuildReplyPrepFromMemories(query, out, m.currentMemorySettings())
+	prep.GeneratedAt = time.Now()
+	return prep, nil
+}
+
+func (m *MultiBackend) DismissMemoryNudge(ctx context.Context, req memory.NudgeDismissalRequest) error {
+	if !m.allAccountsActive() {
+		slot := m.activeRealSlot()
+		dismisser, ok := memoryDismisserForSlot(slot)
+		if !ok {
+			return nil
+		}
+		return dismisser.DismissMemoryNudge(ctx, req)
+	}
+
+	if slot := m.slotForMemoryNudge(req); slot != nil {
+		if dismisser, ok := memoryDismisserForSlot(slot); ok {
+			return dismisser.DismissMemoryNudge(ctx, req)
+		}
+	}
+	for _, slot := range m.snapshotSlots() {
+		if dismisser, ok := memoryDismisserForSlot(slot); ok {
+			return dismisser.DismissMemoryNudge(ctx, req)
+		}
+	}
+	return nil
+}
+
+func memorySourceForSlot(slot *accountSlot) (memoryBackend, bool) {
+	if slot == nil || slot.backend == nil {
+		return nil, false
+	}
+	source, ok := slot.backend.(memoryBackend)
+	return source, ok
+}
+
+func memoryDismisserForSlot(slot *accountSlot) (memoryDismissalBackend, bool) {
+	if slot == nil || slot.backend == nil {
+		return nil, false
+	}
+	dismisser, ok := slot.backend.(memoryDismissalBackend)
+	return dismisser, ok
+}
+
+func dedupeSortLimitMemories(memories []memory.Memory, limit int) []memory.Memory {
+	if len(memories) == 0 {
+		return nil
+	}
+	memory.SortMemoriesNewestFirst(memories)
+	seen := make(map[string]bool, len(memories))
+	out := make([]memory.Memory, 0, len(memories))
+	for _, mem := range memories {
+		key := strings.TrimSpace(mem.ID)
+		if key == "" {
+			key = memory.DeterministicID(mem)
+		}
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		out = append(out, mem)
+		if limit > 0 && len(out) >= limit {
+			break
+		}
+	}
+	return out
+}
+
+func emptyReplyPrep(query memory.ReplyPrepQuery) memory.ReplyPrep {
+	return memory.ReplyPrep{
+		Query:       query,
+		GeneratedAt: time.Now(),
+	}
+}
+
+func (m *MultiBackend) currentMemorySettings() memory.Settings {
+	if m == nil {
+		return memory.DefaultSettings()
+	}
+	m.mu.RLock()
+	settings := m.memorySettings
+	m.mu.RUnlock()
+	settings.ApplyDefaults()
+	return settings
+}
+
+func (m *MultiBackend) slotContainingMessageID(ctx context.Context, messageID string) *accountSlot {
+	messageID = strings.TrimSpace(messageID)
+	if messageID == "" {
+		return nil
+	}
+	for _, slot := range m.snapshotSlots() {
+		if err := ctx.Err(); err != nil {
+			return nil
+		}
+		if email, err := slot.backend.GetEmailByID(messageID); err == nil && email != nil {
+			return slot
+		}
+	}
+	return nil
+}
+
+func (m *MultiBackend) slotForMemoryNudge(req memory.NudgeDismissalRequest) *accountSlot {
+	for _, evidence := range req.Nudge.Evidence {
+		if sourceID := models.NormalizeSourceID(models.SourceID(evidence.SourceID), ""); sourceID != "" && sourceID != AllAccountsSourceID {
+			m.mu.RLock()
+			slot := m.slots[sourceID]
+			m.mu.RUnlock()
+			if slot != nil {
+				return slot
+			}
+		}
+	}
+	for _, evidence := range req.Nudge.Evidence {
+		if messageID := strings.TrimSpace(evidence.MessageID); messageID != "" {
+			if slot := m.slotContainingMessageID(context.Background(), messageID); slot != nil {
+				return slot
+			}
+		}
+	}
+	return nil
 }
 
 func (m *MultiBackend) Load(folder string) {
@@ -1467,7 +1663,14 @@ func NewMultiLocal(cfg *config.Config, configPath string, classifier ai.AIClient
 	if len(accounts) == 0 {
 		return nil, fmt.Errorf("no mail sources configured")
 	}
-	return NewMultiBackend(accounts)
+	backend, err := NewMultiBackend(accounts)
+	if err != nil {
+		return nil, err
+	}
+	settings := cfg.Memories
+	settings.ApplyDefaults()
+	backend.memorySettings = settings
+	return backend, nil
 }
 
 func calendarSourcesForMailSource(source config.SourceConfig, calendarSources []config.SourceConfig, mailAccountIDs map[models.AccountID]bool, includeStandalone bool) []config.SourceConfig {

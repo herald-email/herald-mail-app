@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/herald-email/herald-mail-app/internal/config"
+	"github.com/herald-email/herald-mail-app/internal/memory"
 	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
@@ -43,6 +44,10 @@ type recordingAccountBackend struct {
 	savedCalendarEvents   []models.CalendarEvent
 	rsvpCalendarRefs      []models.EventRef
 	rsvpCalendarStatus    []string
+	memories              []memory.Memory
+	memoryQueries         []memory.Query
+	replyPrepQueries      []memory.ReplyPrepQuery
+	nudgeDismissals       []memory.NudgeDismissalRequest
 	closed                bool
 }
 
@@ -104,6 +109,17 @@ func (b *recordingAccountBackend) GetTimelineEmails(folder string) ([]*models.Em
 	return out, nil
 }
 
+func (b *recordingAccountBackend) GetEmailByID(messageID string) (*models.EmailData, error) {
+	for _, emails := range b.timeline {
+		for _, email := range emails {
+			if email != nil && (email.MessageID == messageID || email.LocalID == messageID) {
+				return email, nil
+			}
+		}
+	}
+	return nil, fmt.Errorf("missing email %s", messageID)
+}
+
 func (b *recordingAccountBackend) SearchEmails(folder, query string, bodySearch bool) ([]*models.EmailData, error) {
 	candidates := b.timeline[folder]
 	out := make([]*models.EmailData, 0, len(candidates))
@@ -113,6 +129,68 @@ func (b *recordingAccountBackend) SearchEmails(folder, query string, bodySearch 
 		}
 	}
 	return out, nil
+}
+
+func (b *recordingAccountBackend) SearchMemories(ctx context.Context, query memory.Query) ([]memory.Memory, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	b.memoryQueries = append(b.memoryQueries, query)
+	out := make([]memory.Memory, 0, len(b.memories))
+	for _, mem := range b.memories {
+		if memory.MemoryMatches(mem, query) {
+			out = append(out, mem)
+		}
+	}
+	memory.SortMemoriesNewestFirst(out)
+	if query.Limit > 0 && len(out) > query.Limit {
+		out = out[:query.Limit]
+	}
+	return append([]memory.Memory(nil), out...), nil
+}
+
+func (b *recordingAccountBackend) BuildReplyMemoryContext(ctx context.Context, query memory.ReplyPrepQuery) (memory.ReplyPrep, error) {
+	if err := ctx.Err(); err != nil {
+		return memory.ReplyPrep{}, err
+	}
+	b.replyPrepQueries = append(b.replyPrepQueries, query)
+	out := make([]memory.Memory, 0, len(b.memories))
+	for _, mem := range b.memories {
+		if recordingMemoryMatchesReply(mem, query) {
+			out = append(out, mem)
+		}
+	}
+	memory.SortMemoriesNewestFirst(out)
+	return memory.BuildReplyPrepFromMemories(query, out, memory.DefaultSettings()), nil
+}
+
+func recordingMemoryMatchesReply(mem memory.Memory, query memory.ReplyPrepQuery) bool {
+	if strings.TrimSpace(query.Recipient) == "" && strings.TrimSpace(query.Subject) == "" {
+		return true
+	}
+	if strings.TrimSpace(query.Recipient) != "" && memory.MemoryMatches(mem, memory.Query{
+		People:               memory.CompactStrings([]string{query.Recipient}),
+		MinConfidence:        query.MinConfidence,
+		IncludeLowConfidence: true,
+	}) {
+		return true
+	}
+	if strings.TrimSpace(query.Subject) != "" && memory.MemoryMatches(mem, memory.Query{
+		Topic:                query.Subject,
+		MinConfidence:        query.MinConfidence,
+		IncludeLowConfidence: true,
+	}) {
+		return true
+	}
+	return false
+}
+
+func (b *recordingAccountBackend) DismissMemoryNudge(ctx context.Context, req memory.NudgeDismissalRequest) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	b.nudgeDismissals = append(b.nudgeDismissals, req)
+	return nil
 }
 
 func (b *recordingAccountBackend) GetUnembeddedRefsWithBody(string) ([]models.MessageRef, error) {
@@ -1017,4 +1095,226 @@ func TestMultiBackendAggregatesScopedEmbeddingRefsAcrossAllAccounts(t *testing.T
 	if len(work.storedEmbeddingRefs) != 0 {
 		t.Fatalf("work stored refs = %#v, want none", work.storedEmbeddingRefs)
 	}
+}
+
+func TestMultiBackendSearchMemoriesRoutesActiveAccount(t *testing.T) {
+	work := newRecordingAccountBackend("work", []string{"INBOX"}, nil, "")
+	personal := newRecordingAccountBackend("personal", []string{"INBOX"}, nil, "")
+	work.memories = []memory.Memory{
+		testBackendMemory("work-memory", "work@example.test", "Work prefers concise follow-ups", time.Date(2026, 6, 10, 9, 0, 0, 0, time.UTC), 0.91),
+	}
+	personal.memories = []memory.Memory{
+		testBackendMemory("personal-memory", "work@example.test", "Personal duplicate should stay hidden", time.Date(2026, 6, 11, 9, 0, 0, 0, time.UTC), 0.92),
+	}
+
+	mb, err := NewMultiBackend([]AccountBackend{
+		{Info: AccountInfo{SourceID: "work-mail", AccountID: "work", DisplayName: "Work Mail"}, Backend: work},
+		{Info: AccountInfo{SourceID: "personal-mail", AccountID: "personal", DisplayName: "Personal"}, Backend: personal},
+	})
+	if err != nil {
+		t.Fatalf("NewMultiBackend: %v", err)
+	}
+
+	got, err := mb.SearchMemories(context.Background(), memory.Query{People: []string{"work@example.test"}, Limit: 10})
+	if err != nil {
+		t.Fatalf("SearchMemories: %v", err)
+	}
+	if len(work.memoryQueries) != 1 {
+		t.Fatalf("work memory queries = %d, want 1", len(work.memoryQueries))
+	}
+	if len(personal.memoryQueries) != 0 {
+		t.Fatalf("personal memory queries = %d, want none", len(personal.memoryQueries))
+	}
+	if len(got) != 1 || got[0].ID != "work-memory" {
+		t.Fatalf("SearchMemories returned %#v, want only work-memory", got)
+	}
+}
+
+func TestMultiBackendAllAccountMemorySearchDedupeSortsAndCaps(t *testing.T) {
+	work := newRecordingAccountBackend("work", []string{"INBOX"}, nil, "")
+	personal := newRecordingAccountBackend("personal", []string{"INBOX"}, nil, "")
+	work.memories = []memory.Memory{
+		testBackendMemory("old", "sergey@example.com", "Older work note", time.Date(2026, 6, 1, 9, 0, 0, 0, time.UTC), 0.9),
+		testBackendMemory("shared", "sergey@example.com", "Shared note", time.Date(2026, 6, 10, 9, 0, 0, 0, time.UTC), 0.9),
+	}
+	personal.memories = []memory.Memory{
+		testBackendMemory("new", "sergey@example.com", "Newest personal note", time.Date(2026, 6, 12, 9, 0, 0, 0, time.UTC), 0.9),
+		testBackendMemory("shared", "sergey@example.com", "Shared duplicate", time.Date(2026, 6, 9, 9, 0, 0, 0, time.UTC), 0.9),
+	}
+
+	mb, err := NewMultiBackend([]AccountBackend{
+		{Info: AccountInfo{SourceID: "work-mail", AccountID: "work", DisplayName: "Work Mail"}, Backend: work},
+		{Info: AccountInfo{SourceID: "personal-mail", AccountID: "personal", DisplayName: "Personal"}, Backend: personal},
+	})
+	if err != nil {
+		t.Fatalf("NewMultiBackend: %v", err)
+	}
+	if err := mb.SwitchAccount(AllAccountsSourceID); err != nil {
+		t.Fatalf("SwitchAccount(all): %v", err)
+	}
+
+	got, err := mb.SearchMemories(context.Background(), memory.Query{People: []string{"sergey@example.com"}, Limit: 2})
+	if err != nil {
+		t.Fatalf("SearchMemories: %v", err)
+	}
+	if len(work.memoryQueries) != 1 || len(personal.memoryQueries) != 1 {
+		t.Fatalf("queries: work=%d personal=%d, want both accounts queried once", len(work.memoryQueries), len(personal.memoryQueries))
+	}
+	if ids := memoryIDs(got); !reflect.DeepEqual(ids, []string{"new", "shared"}) {
+		t.Fatalf("memory ids = %#v, want newest capped unique ids", ids)
+	}
+}
+
+func TestMultiBackendReplyMemoryContextPrefersSourceMessageAccount(t *testing.T) {
+	sourceEmail := scopedTestEmail(&models.EmailData{
+		MessageID: "personal-source-msg",
+		Subject:   "Interview follow-up",
+		Folder:    "INBOX",
+		UID:       42,
+		Date:      time.Date(2026, 6, 11, 9, 0, 0, 0, time.UTC),
+	})
+	work := newRecordingAccountBackend("work", []string{"INBOX"}, nil, "")
+	personal := newRecordingAccountBackend("personal", []string{"INBOX"}, sourceEmail, "body")
+	work.memories = []memory.Memory{
+		testBackendMemory("work-prep", "sergey@example.com", "Work-scoped note", time.Date(2026, 6, 10, 9, 0, 0, 0, time.UTC), 0.9),
+	}
+	personal.memories = []memory.Memory{
+		testBackendMemory("personal-prep", "sergey@example.com", "Personal-scoped note", time.Date(2026, 6, 11, 9, 0, 0, 0, time.UTC), 0.9),
+	}
+
+	mb, err := NewMultiBackend([]AccountBackend{
+		{Info: AccountInfo{SourceID: "work-mail", AccountID: "work", DisplayName: "Work Mail"}, Backend: work},
+		{Info: AccountInfo{SourceID: "personal-mail", AccountID: "personal", DisplayName: "Personal"}, Backend: personal},
+	})
+	if err != nil {
+		t.Fatalf("NewMultiBackend: %v", err)
+	}
+	if err := mb.SwitchAccount(AllAccountsSourceID); err != nil {
+		t.Fatalf("SwitchAccount(all): %v", err)
+	}
+
+	prep, err := mb.BuildReplyMemoryContext(context.Background(), memory.ReplyPrepQuery{
+		Recipient: "sergey@example.com",
+		Subject:   "Interview follow-up",
+		MessageID: "personal-source-msg",
+		Limit:     4,
+	})
+	if err != nil {
+		t.Fatalf("BuildReplyMemoryContext: %v", err)
+	}
+	if len(work.replyPrepQueries) != 0 {
+		t.Fatalf("work reply prep calls = %d, want none", len(work.replyPrepQueries))
+	}
+	if len(personal.replyPrepQueries) != 1 {
+		t.Fatalf("personal reply prep calls = %d, want one", len(personal.replyPrepQueries))
+	}
+	if ids := memoryIDs(prep.Memories); !reflect.DeepEqual(ids, []string{"personal-prep"}) {
+		t.Fatalf("prep memory ids = %#v, want personal-prep", ids)
+	}
+}
+
+func TestMultiBackendReplyMemoryContextAggregatesAcrossAccountsWithoutSourceMessage(t *testing.T) {
+	work := newRecordingAccountBackend("work", []string{"INBOX"}, nil, "")
+	personal := newRecordingAccountBackend("personal", []string{"INBOX"}, nil, "")
+	work.memories = []memory.Memory{
+		testBackendMemory("work-prep", "sergey@example.com", "Work note should be nudged", time.Date(2026, 6, 10, 9, 0, 0, 0, time.UTC), 0.65),
+	}
+	personal.memories = []memory.Memory{
+		testBackendMemory("personal-prep", "sergey@example.com", "Personal note should be newer", time.Date(2026, 6, 12, 9, 0, 0, 0, time.UTC), 0.66),
+	}
+
+	mb, err := NewMultiBackend([]AccountBackend{
+		{Info: AccountInfo{SourceID: "work-mail", AccountID: "work", DisplayName: "Work Mail"}, Backend: work},
+		{Info: AccountInfo{SourceID: "personal-mail", AccountID: "personal", DisplayName: "Personal"}, Backend: personal},
+	})
+	if err != nil {
+		t.Fatalf("NewMultiBackend: %v", err)
+	}
+	if err := mb.SwitchAccount(AllAccountsSourceID); err != nil {
+		t.Fatalf("SwitchAccount(all): %v", err)
+	}
+	settings := memory.DefaultSettings()
+	settings.Thresholds.ComposeRadar = 0.6
+	mb.memorySettings = settings
+
+	prep, err := mb.BuildReplyMemoryContext(context.Background(), memory.ReplyPrepQuery{
+		Recipient: "sergey@example.com",
+		Limit:     2,
+	})
+	if err != nil {
+		t.Fatalf("BuildReplyMemoryContext: %v", err)
+	}
+	if len(work.replyPrepQueries) != 1 || len(personal.replyPrepQueries) != 1 {
+		t.Fatalf("reply prep calls: work=%d personal=%d, want both accounts queried", len(work.replyPrepQueries), len(personal.replyPrepQueries))
+	}
+	if ids := memoryIDs(prep.Memories); !reflect.DeepEqual(ids, []string{"personal-prep", "work-prep"}) {
+		t.Fatalf("prep memory ids = %#v, want globally sorted results", ids)
+	}
+	if len(prep.Nudges) == 0 {
+		t.Fatalf("expected combined reply prep to use MultiBackend memory settings for nudges: %#v", prep)
+	}
+}
+
+func TestMultiBackendDismissMemoryNudgeRoutesByEvidenceSource(t *testing.T) {
+	work := newRecordingAccountBackend("work", []string{"INBOX"}, nil, "")
+	personal := newRecordingAccountBackend("personal", []string{"INBOX"}, nil, "")
+	mb, err := NewMultiBackend([]AccountBackend{
+		{Info: AccountInfo{SourceID: "work-mail", AccountID: "work", DisplayName: "Work Mail"}, Backend: work},
+		{Info: AccountInfo{SourceID: "personal-mail", AccountID: "personal", DisplayName: "Personal"}, Backend: personal},
+	})
+	if err != nil {
+		t.Fatalf("NewMultiBackend: %v", err)
+	}
+	if err := mb.SwitchAccount(AllAccountsSourceID); err != nil {
+		t.Fatalf("SwitchAccount(all): %v", err)
+	}
+
+	req := memory.NudgeDismissalRequest{
+		Nudge: memory.Nudge{
+			ID: "nudge-personal",
+			Evidence: []memory.Evidence{{
+				SourceID:  "personal-mail",
+				AccountID: "personal",
+				MessageID: "personal-source-msg",
+			}},
+		},
+	}
+	if err := mb.DismissMemoryNudge(context.Background(), req); err != nil {
+		t.Fatalf("DismissMemoryNudge: %v", err)
+	}
+	if len(work.nudgeDismissals) != 0 {
+		t.Fatalf("work dismissals = %d, want none", len(work.nudgeDismissals))
+	}
+	if len(personal.nudgeDismissals) != 1 {
+		t.Fatalf("personal dismissals = %d, want one", len(personal.nudgeDismissals))
+	}
+}
+
+func testBackendMemory(id, person, claim string, lastActivity time.Time, confidence float64) memory.Memory {
+	return memory.PrepareMemoryForAppend(memory.Memory{
+		ID:             id,
+		Kind:           "commitment",
+		Claim:          claim,
+		People:         []string{person},
+		Topic:          "Interview follow-up",
+		Status:         memory.StatusActive,
+		Confidence:     confidence,
+		CreatedAt:      lastActivity.Add(-time.Hour),
+		UpdatedAt:      lastActivity,
+		LastActivityAt: lastActivity,
+		Evidence: []memory.Evidence{{
+			SourceType: "email",
+			MessageID:  id + "-msg",
+			Date:       lastActivity,
+			Snippet:    claim,
+		}},
+	}, lastActivity)
+}
+
+func memoryIDs(memories []memory.Memory) []string {
+	ids := make([]string, 0, len(memories))
+	for _, mem := range memories {
+		ids = append(ids, mem.ID)
+	}
+	return ids
 }

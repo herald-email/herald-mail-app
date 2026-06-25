@@ -558,6 +558,7 @@ func (b *LocalBackend) runLoad(req folderLoadRequest) {
 		Phase:      models.SyncPhaseComplete,
 		Message:    fmt.Sprintf("Found %d senders", len(stats)),
 	})
+	b.refreshMemoriesAfterSuccessfulSync()
 	logger.Info("Load complete: %d senders", len(stats))
 	b.tracef("runLoad settled visible bundle: folder=%s generation=%d senders=%d duration=%s", req.Folder, req.Generation, len(stats), time.Since(start).Round(10*time.Millisecond))
 
@@ -1863,7 +1864,7 @@ func (b *LocalBackend) SearchMemories(ctx context.Context, query memory.Query) (
 	if b == nil || b.memoryService == nil {
 		return nil, nil
 	}
-	b.ensureMemoryRefresh(ctx, ai.PriorityBackground)
+	b.ensureMemoryRefresh(ctx, ai.PriorityBackground, false)
 	if err := b.memoryRefreshError(); err != nil {
 		logger.Warn("Herald Memories refresh failed before search: %v", err)
 	}
@@ -1877,7 +1878,7 @@ func (b *LocalBackend) BuildReplyMemoryContext(ctx context.Context, query memory
 			GeneratedAt: time.Now(),
 		}, nil
 	}
-	b.ensureMemoryRefresh(ctx, ai.PriorityInteractive)
+	b.ensureMemoryRefresh(ctx, ai.PriorityInteractive, b.memoryUpdateCadence() == "compose_open")
 	if err := b.memoryRefreshError(); err != nil {
 		logger.Warn("Herald Memories refresh failed before reply context: %v", err)
 	}
@@ -1894,12 +1895,28 @@ func (b *LocalBackend) DismissMemoryNudge(ctx context.Context, req memory.NudgeD
 	return nil
 }
 
-func (b *LocalBackend) ensureMemoryRefresh(ctx context.Context, priority ai.Priority) {
+func (b *LocalBackend) refreshMemoriesAfterSuccessfulSync() {
+	switch b.memoryUpdateCadence() {
+	case "after_sync", "background_idle":
+		go b.ensureMemoryRefresh(context.Background(), ai.PriorityBackground, true)
+	}
+}
+
+func (b *LocalBackend) memoryUpdateCadence() string {
+	settings := memory.DefaultSettings()
+	if b != nil && b.cfg != nil {
+		settings = b.cfg.Memories
+	}
+	settings.ApplyDefaults()
+	return strings.ToLower(strings.TrimSpace(settings.UpdateRules.Cadence))
+}
+
+func (b *LocalBackend) ensureMemoryRefresh(ctx context.Context, priority ai.Priority, force bool) {
 	if b == nil || b.memoryService == nil {
 		return
 	}
 	b.memoryRefreshMu.Lock()
-	if b.memoryRefreshRan {
+	if b.memoryRefreshRan && !force {
 		b.memoryRefreshMu.Unlock()
 		return
 	}
@@ -1911,7 +1928,7 @@ func (b *LocalBackend) ensureMemoryRefresh(ctx context.Context, priority ai.Prio
 	err := ai.Schedule(classifier, priority, ai.TaskKindMemoryExtraction, "memory", func() error {
 		b.memoryRefreshMu.Lock()
 		defer b.memoryRefreshMu.Unlock()
-		if b.memoryRefreshRan {
+		if b.memoryRefreshRan && !force {
 			return b.memoryRefreshErr
 		}
 		result, refreshErr := b.memoryService.Refresh(ctx)
