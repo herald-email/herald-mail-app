@@ -133,7 +133,7 @@ func TestTimelineStarredSingleRowUsesWarningMarkerAndSubjectStyle(t *testing.T) 
 	}
 }
 
-func TestTimelineStarredUnstarredRowKeepsBlankMarkerSlot(t *testing.T) {
+func TestTimelineStarredUnstarredRowOmitsEmptyMarkerSlot(t *testing.T) {
 	theme := ThemeByName("herald-dark")
 	m := &Model{
 		backend:         &stubBackend{},
@@ -157,8 +157,8 @@ func TestTimelineStarredUnstarredRowKeepsBlankMarkerSlot(t *testing.T) {
 	if strings.Contains(sender, "★") {
 		t.Fatalf("unstarred sender cell should not contain a star, got %q", sender)
 	}
-	if !strings.HasPrefix(sender, "  ") {
-		t.Fatalf("unstarred sender cell should preserve unread/star indicator slots, got %q", sender)
+	if !strings.HasPrefix(sender, "Bob") {
+		t.Fatalf("unstarred sender cell should start with sender text, got %q", sender)
 	}
 	if subject := rows[1][2]; strings.Contains(subject, "\x1b[") {
 		t.Fatalf("unstarred subject cell should not receive starred styling, got raw %q plain %q", subject, stripANSI(subject))

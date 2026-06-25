@@ -193,6 +193,30 @@ const (
 	timelineAttachmentMark = "📎 "
 )
 
+func timelineSenderIndicators(theme Theme, email *models.EmailData) string {
+	if email == nil {
+		return ""
+	}
+	indicators := ""
+	if !email.IsRead {
+		indicators += "●"
+	}
+	indicators += timelineStarMarker(theme, email.IsStarred)
+	return indicators
+}
+
+func timelineSenderIndicatorWidth(email *models.EmailData) int {
+	if email == nil {
+		return 0
+	}
+	width := 0
+	if !email.IsRead {
+		width += len([]rune("●"))
+	}
+	width += timelineStarIndicatorWidth(email.IsStarred)
+	return width
+}
+
 func draftLabel(count int) string {
 	if count <= 1 {
 		return "Draft"
@@ -939,7 +963,7 @@ func timelineGroupStarred(g *threadGroup) bool {
 
 func timelineStarMarker(theme Theme, starred bool) string {
 	if !starred {
-		return " "
+		return ""
 	}
 	return theme.Severity.Warning.Style().Bold(true).Render("★")
 }
@@ -948,7 +972,7 @@ func timelineStarIndicatorWidth(starred bool) int {
 	if starred {
 		return len([]rune("★"))
 	}
-	return len([]rune(" "))
+	return 0
 }
 
 func timelineStarredSubject(theme Theme, subject string, starred bool) string {
@@ -1105,17 +1129,13 @@ func (m *Model) updateTimelineTable() {
 				subject = fmt.Sprintf("[%d%%] %s", pct, subject)
 			}
 		}
-		unreadDot := " "
-		if !email.IsRead {
-			unreadDot = "●"
-		}
-		starDot := timelineStarMarker(m.theme, email.IsStarred)
-		indicatorWidth := len([]rune(unreadDot)) + timelineStarIndicatorWidth(email.IsStarred) + len([]rune(senderPrefix))
+		indicators := timelineSenderIndicators(m.theme, email)
+		indicatorWidth := timelineSenderIndicatorWidth(email) + len([]rune(senderPrefix))
 		senderAvail := maxSend - indicatorWidth
 		if senderAvail < 1 {
 			senderAvail = 1
 		}
-		sender := unreadDot + starDot + senderPrefix + styledSenderWithTheme(m.theme, email.Sender, senderAvail)
+		sender := indicators + senderPrefix + styledSenderWithTheme(m.theme, email.Sender, senderAvail)
 		tag := ""
 		tag = m.classificationForEmail(email)
 		row := table.Row{
@@ -1169,17 +1189,13 @@ func (m *Model) updateTimelineTable() {
 			}
 			// Build sender cell with the same indicators as single-email rows
 			// so columns stay aligned across all timeline rows.
-			unreadDot := " "
-			if !newest.IsRead {
-				unreadDot = "●"
-			}
-			starDot := timelineStarMarker(m.theme, newest.IsStarred)
-			indicatorWidth := len([]rune(unreadDot)) + timelineStarIndicatorWidth(newest.IsStarred) + len([]rune(threadCollapsedPrefix))
+			indicators := timelineSenderIndicators(m.theme, newest)
+			indicatorWidth := timelineSenderIndicatorWidth(newest) + len([]rune(threadCollapsedPrefix))
 			senderAvail := maxSend - indicatorWidth
 			if senderAvail < 1 {
 				senderAvail = 1
 			}
-			threadSender := unreadDot + starDot + threadCollapsedPrefix + timelineCollapsedGroupLabel(m.theme, g, m.fromAddress, senderAvail)
+			threadSender := indicators + threadCollapsedPrefix + timelineCollapsedGroupLabel(m.theme, g, m.fromAddress, senderAvail)
 			row := table.Row{
 				m.timelineSelectionMark(g.emails),
 			}

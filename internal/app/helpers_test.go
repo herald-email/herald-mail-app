@@ -395,6 +395,75 @@ func TestUpdateTimelineTable_SingleEmailThreadRowsDoNotShowDisclosureMarker(t *t
 	}
 }
 
+func TestUpdateTimelineTable_SenderCellsOmitEmptyIndicatorPadding(t *testing.T) {
+	now := time.Now()
+
+	single := New(&stubBackend{}, nil, "demo@demo.local", nil, false)
+	single.timeline.senderWidth = 30
+	single.timeline.subjectWidth = 42
+	single.timeline.emails = []*models.EmailData{
+		{
+			MessageID: "plain",
+			Sender:    "Mina Park <mina@cobalt-works.example>",
+			Subject:   "Plain message",
+			Date:      now,
+			IsRead:    true,
+			Folder:    "INBOX",
+		},
+	}
+	single.updateTimelineTable()
+	plainSender := stripANSI(single.timelineTable.Rows()[0][1])
+	if !strings.HasPrefix(plainSender, "Mina Park") {
+		t.Fatalf("read unstarred sender should start at column start, got %q", plainSender)
+	}
+
+	thread := New(&stubBackend{}, nil, "demo@demo.local", nil, false)
+	thread.timeline.senderWidth = 30
+	thread.timeline.subjectWidth = 42
+	thread.timeline.emails = []*models.EmailData{
+		{
+			MessageID: "thread-new",
+			Sender:    "Rowan Finch <rowan@example.com>",
+			Subject:   "Roadmap",
+			Date:      now,
+			IsRead:    true,
+			Folder:    "INBOX",
+		},
+		{
+			MessageID: "thread-old",
+			Sender:    "Mina Park <mina@cobalt-works.example>",
+			Subject:   "Re: Roadmap",
+			Date:      now.Add(-time.Minute),
+			IsRead:    true,
+			Folder:    "INBOX",
+		},
+	}
+	thread.updateTimelineTable()
+	threadSender := stripANSI(thread.timelineTable.Rows()[0][1])
+	if !strings.HasPrefix(threadSender, threadCollapsedPrefix) {
+		t.Fatalf("collapsed thread disclosure marker should start at column start, got %q", threadSender)
+	}
+
+	marked := New(&stubBackend{}, nil, "demo@demo.local", nil, false)
+	marked.timeline.senderWidth = 30
+	marked.timeline.subjectWidth = 42
+	marked.timeline.emails = []*models.EmailData{
+		{
+			MessageID: "marked",
+			Sender:    "Rae Stone <rae@example.com>",
+			Subject:   "Marked message",
+			Date:      now,
+			IsStarred: true,
+			Folder:    "INBOX",
+		},
+	}
+	marked.updateTimelineTable()
+	markedSender := stripANSI(marked.timelineTable.Rows()[0][1])
+	if !strings.HasPrefix(markedSender, "●★") {
+		t.Fatalf("unread/starred indicators should remain at sender start, got %q", markedSender)
+	}
+}
+
 func TestUpdateTimelineTable_AttachmentMarkerLivesInSubject(t *testing.T) {
 	now := time.Date(2026, 5, 5, 12, 0, 0, 0, time.UTC)
 	m := New(&stubBackend{}, nil, "", nil, false)
