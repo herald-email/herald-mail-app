@@ -145,7 +145,7 @@ The primary reading interface. Shows emails sorted newest-first, grouped by thre
 - [x] Background preview prewarming fills the active folder's newest preview-cache misses one message at a time after Timeline data loads
 - [x] Bulk selection with `Space` for Timeline delete/archive, including collapsed-thread selection
 - [x] Mail-style range selection with `Shift+Up` / `Shift+Down` where terminals support it, plus `V` then `j`/`k` fallback range mode
-- [x] Star / pin important threads to top
+- [x] Star / pin important threads to top, with high-contrast Timeline row highlighting
 - [x] Gmail/IMAP drafts are marked directly in Timeline rows and collapsed thread rows, including reply drafts, and `E` opens the draft in Compose for editing
 - [x] Read-only virtual `All Mail only` inspector backed by live IMAP folder membership rather than cache guesses
 - [x] Reading-first Timeline rows hide spreadsheet-only size/attachment columns, show attachments in the subject cell, use local human dates, and keep Sender/Subject dominant at `80x24`, `120x40`, and `220x50`

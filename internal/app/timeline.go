@@ -937,6 +937,27 @@ func timelineGroupStarred(g *threadGroup) bool {
 	return g != nil && len(g.emails) > 0 && g.emails[0] != nil && g.emails[0].IsStarred
 }
 
+func timelineStarMarker(theme Theme, starred bool) string {
+	if !starred {
+		return " "
+	}
+	return theme.Severity.Warning.Style().Bold(true).Render("★")
+}
+
+func timelineStarIndicatorWidth(starred bool) int {
+	if starred {
+		return len([]rune("★"))
+	}
+	return len([]rune(" "))
+}
+
+func timelineStarredSubject(theme Theme, subject string, starred bool) string {
+	if !starred {
+		return subject
+	}
+	return theme.Severity.Warning.Style().Bold(true).Render(subject)
+}
+
 func timelineGroupNewestDate(g *threadGroup) time.Time {
 	if g == nil || len(g.emails) == 0 || g.emails[0] == nil {
 		return time.Time{}
@@ -1088,11 +1109,8 @@ func (m *Model) updateTimelineTable() {
 		if !email.IsRead {
 			unreadDot = "●"
 		}
-		starDot := " "
-		if email.IsStarred {
-			starDot = "★"
-		}
-		indicatorWidth := len([]rune(unreadDot)) + len([]rune(starDot)) + len([]rune(senderPrefix))
+		starDot := timelineStarMarker(m.theme, email.IsStarred)
+		indicatorWidth := len([]rune(unreadDot)) + timelineStarIndicatorWidth(email.IsStarred) + len([]rune(senderPrefix))
 		senderAvail := maxSend - indicatorWidth
 		if senderAvail < 1 {
 			senderAvail = 1
@@ -1106,7 +1124,7 @@ func (m *Model) updateTimelineTable() {
 		if showAccount {
 			row = append(row, m.accountBadgeForEmail(email))
 		}
-		row = append(row, sender, trunc(subject, maxSubj), dateStr, tag)
+		row = append(row, sender, timelineStarredSubject(m.theme, trunc(subject, maxSubj), email.IsStarred), dateStr, tag)
 		return row
 	}
 
@@ -1155,11 +1173,8 @@ func (m *Model) updateTimelineTable() {
 			if !newest.IsRead {
 				unreadDot = "●"
 			}
-			starDot := " "
-			if newest.IsStarred {
-				starDot = "★"
-			}
-			indicatorWidth := len([]rune(unreadDot)) + len([]rune(starDot)) + len([]rune(threadCollapsedPrefix))
+			starDot := timelineStarMarker(m.theme, newest.IsStarred)
+			indicatorWidth := len([]rune(unreadDot)) + timelineStarIndicatorWidth(newest.IsStarred) + len([]rune(threadCollapsedPrefix))
 			senderAvail := maxSend - indicatorWidth
 			if senderAvail < 1 {
 				senderAvail = 1
@@ -1171,7 +1186,7 @@ func (m *Model) updateTimelineTable() {
 			if showAccount {
 				row = append(row, m.accountBadgeForEmails(g.emails))
 			}
-			row = append(row, threadSender, trunc(threadSubj, maxSubj), dateStr, tag)
+			row = append(row, threadSender, timelineStarredSubject(m.theme, trunc(threadSubj, maxSubj), newest.IsStarred), dateStr, tag)
 			rows = append(rows, row)
 			m.timeline.threadRowMap = append(m.timeline.threadRowMap, timelineRowRef{
 				kind: rowKindThread, group: g,

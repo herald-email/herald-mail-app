@@ -2,6 +2,7 @@ package app
 
 import (
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -99,5 +100,97 @@ func TestStarredSort(t *testing.T) {
 	}
 	if m.timeline.threadGroups[1].emails[0].IsStarred {
 		t.Error("expected unstarred thread group to appear second after sort")
+	}
+}
+
+func TestTimelineStarredSingleRowUsesWarningMarkerAndSubjectStyle(t *testing.T) {
+	theme := ThemeByName("herald-dark")
+	m := &Model{
+		backend:         &stubBackend{},
+		theme:           theme,
+		timeline:        TimelineState{expandedThreads: make(map[string]bool)},
+		classifications: make(map[string]string),
+	}
+	now := time.Now()
+	m.timeline.emails = []*models.EmailData{
+		{MessageID: "starred-1", Subject: "Starred older", Sender: "Alice <alice@example.com>", Date: now.Add(-time.Hour), IsRead: true, IsStarred: true},
+		{MessageID: "unstarred-1", Subject: "Unstarred recent", Sender: "Bob <bob@example.com>", Date: now, IsRead: true, IsStarred: false},
+	}
+
+	m.updateTimelineTable()
+	rows := m.timelineTable.Rows()
+	if len(rows) != 2 {
+		t.Fatalf("rows = %d, want 2", len(rows))
+	}
+
+	wantStar := theme.Severity.Warning.Style().Bold(true).Render("★")
+	if sender := rows[0][1]; !strings.Contains(sender, wantStar) {
+		t.Fatalf("starred sender cell should contain warning-styled star %q, got raw %q plain %q", wantStar, sender, stripANSI(sender))
+	}
+	wantSubject := theme.Severity.Warning.Style().Bold(true).Render("Starred older")
+	if subject := rows[0][2]; subject != wantSubject {
+		t.Fatalf("starred subject cell = raw %q plain %q, want raw %q", subject, stripANSI(subject), wantSubject)
+	}
+}
+
+func TestTimelineStarredUnstarredRowKeepsBlankMarkerSlot(t *testing.T) {
+	theme := ThemeByName("herald-dark")
+	m := &Model{
+		backend:         &stubBackend{},
+		theme:           theme,
+		timeline:        TimelineState{expandedThreads: make(map[string]bool)},
+		classifications: make(map[string]string),
+	}
+	now := time.Now()
+	m.timeline.emails = []*models.EmailData{
+		{MessageID: "starred-1", Subject: "Starred older", Sender: "Alice <alice@example.com>", Date: now.Add(-time.Hour), IsRead: true, IsStarred: true},
+		{MessageID: "unstarred-1", Subject: "Unstarred recent", Sender: "Bob <bob@example.com>", Date: now, IsRead: true, IsStarred: false},
+	}
+
+	m.updateTimelineTable()
+	rows := m.timelineTable.Rows()
+	if len(rows) != 2 {
+		t.Fatalf("rows = %d, want 2", len(rows))
+	}
+
+	sender := stripANSI(rows[1][1])
+	if strings.Contains(sender, "★") {
+		t.Fatalf("unstarred sender cell should not contain a star, got %q", sender)
+	}
+	if !strings.HasPrefix(sender, "  ") {
+		t.Fatalf("unstarred sender cell should preserve unread/star indicator slots, got %q", sender)
+	}
+	if subject := rows[1][2]; strings.Contains(subject, "\x1b[") {
+		t.Fatalf("unstarred subject cell should not receive starred styling, got raw %q plain %q", subject, stripANSI(subject))
+	}
+}
+
+func TestTimelineStarredCollapsedThreadUsesWarningMarkerAndSubjectStyle(t *testing.T) {
+	theme := ThemeByName("herald-dark")
+	m := &Model{
+		backend:         &stubBackend{},
+		theme:           theme,
+		timeline:        TimelineState{expandedThreads: make(map[string]bool)},
+		classifications: make(map[string]string),
+	}
+	now := time.Now()
+	m.timeline.emails = []*models.EmailData{
+		{MessageID: "thread-1", Subject: "Project Sync", Sender: "Alice <alice@example.com>", Date: now, IsRead: true, IsStarred: true},
+		{MessageID: "thread-2", Subject: "Re: Project Sync", Sender: "Bob <bob@example.com>", Date: now.Add(-time.Hour), IsRead: true, IsStarred: false},
+	}
+
+	m.updateTimelineTable()
+	rows := m.timelineTable.Rows()
+	if len(rows) != 1 {
+		t.Fatalf("rows = %d, want 1 collapsed thread row", len(rows))
+	}
+
+	wantStar := theme.Severity.Warning.Style().Bold(true).Render("★")
+	if sender := rows[0][1]; !strings.Contains(sender, wantStar) {
+		t.Fatalf("collapsed starred thread sender cell should contain warning-styled star %q, got raw %q plain %q", wantStar, sender, stripANSI(sender))
+	}
+	wantSubject := theme.Severity.Warning.Style().Bold(true).Render("[2] Project Sync")
+	if subject := rows[0][2]; subject != wantSubject {
+		t.Fatalf("collapsed starred thread subject cell = raw %q plain %q, want raw %q", subject, stripANSI(subject), wantSubject)
 	}
 }

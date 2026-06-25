@@ -422,7 +422,7 @@ Check these states during every applicable lane:
 - `O` cycles `When ↓ -> When ↑ -> Sender ↑ -> Sender ↓ -> Count ↓ -> Count ↑ -> When ↓` without switching grouping modes.
 - The active sorted column header shows `↑` or `↓`; `Subject` is the visible click target and indicator for count sorting because group counts appear as `[N]` in that cell.
 - Clicking an unsorted supported header selects its default direction: `Sender ↑`, `Subject ↓`, or `When ↓`; clicking the active sorted header flips direction.
-- Starred or pinned groups remain above unstarred groups, with sorting applied inside each bucket.
+- Starred or pinned groups remain above unstarred groups, with sorting applied inside each bucket, and starred rows keep a high-contrast star marker plus subject emphasis at normal Timeline sizes.
 - Sorting preserves message selections, expanded groups, and any open preview whenever the selected email remains visible.
 - Hints and shortcut help advertise `O: sort` where Timeline browse shortcuts are valid.
 - Literal `O` remains text in Compose, Timeline search, prompt, and editor fields.
