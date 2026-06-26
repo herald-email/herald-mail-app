@@ -843,20 +843,40 @@ func (s *CalDAVSource) calendarHomeURL(ctx context.Context) (string, error) {
 }
 
 func (s *CalDAVSource) discoverCalendarHome(ctx context.Context) (string, error) {
-	ms, err := s.propfind(ctx, s.baseURL, "0", caldavDiscoveryPropfind)
-	if err != nil {
-		if isCalDAVDiscoveryOptionalError(err) {
-			return "", nil
+	homeURL, err := s.discoverCalendarHomeFrom(ctx, s.baseURL)
+	if err == nil && strings.TrimSpace(homeURL) != "" {
+		return homeURL, nil
+	}
+	if err != nil && !isCalDAVDiscoveryOptionalError(err) {
+		return "", err
+	}
+	if wellKnownURL, ok := caldavWellKnownURL(s.baseURL); ok {
+		wellKnownHome, wellKnownErr := s.discoverCalendarHomeFrom(ctx, wellKnownURL)
+		if wellKnownErr == nil {
+			return wellKnownHome, nil
 		}
+		if !isCalDAVDiscoveryOptionalError(wellKnownErr) {
+			return "", wellKnownErr
+		}
+	}
+	if err != nil {
+		return "", nil
+	}
+	return homeURL, nil
+}
+
+func (s *CalDAVSource) discoverCalendarHomeFrom(ctx context.Context, discoveryURL string) (string, error) {
+	ms, err := s.propfind(ctx, discoveryURL, "0", caldavDiscoveryPropfind)
+	if err != nil {
 		return "", err
 	}
 	for _, response := range ms.Responses {
 		prop := response.FirstProp()
 		if href := strings.TrimSpace(prop.CalendarHomeSet.Href); href != "" {
-			return resolveCalDAVHref(s.baseURL, href), nil
+			return resolveCalDAVHref(discoveryURL, href), nil
 		}
 		if href := strings.TrimSpace(prop.CurrentUserPrincipal.Href); href != "" {
-			principalURL := resolveCalDAVHref(s.baseURL, href)
+			principalURL := resolveCalDAVHref(discoveryURL, href)
 			principal, err := s.propfind(ctx, principalURL, "0", caldavDiscoveryPropfind)
 			if err != nil {
 				return "", err
@@ -869,6 +889,21 @@ func (s *CalDAVSource) discoverCalendarHome(ctx context.Context) (string, error)
 		}
 	}
 	return "", nil
+}
+
+func caldavWellKnownURL(baseURL string) (string, bool) {
+	parsed, err := url.Parse(strings.TrimSpace(baseURL))
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return "", false
+	}
+	if strings.Trim(parsed.EscapedPath(), "/") != "" {
+		return "", false
+	}
+	parsed.Path = "/.well-known/caldav"
+	parsed.RawPath = ""
+	parsed.RawQuery = ""
+	parsed.Fragment = ""
+	return parsed.String(), true
 }
 
 func (s *CalDAVSource) propfind(ctx context.Context, targetURL, depth, body string) (davMultiStatus, error) {

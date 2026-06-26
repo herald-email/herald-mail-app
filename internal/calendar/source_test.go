@@ -1241,6 +1241,74 @@ func TestCalDAVSourceDiscoversCalendarHomeSetAndCollectionSyncToken(t *testing.T
 	}
 }
 
+func TestCalDAVSourceDiscoversCalendarHomeFromWellKnownAfterRootNotFound(t *testing.T) {
+	var seen []string
+	var wellKnownAuth string
+	var redirectedAuth string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen = append(seen, r.Method+" "+r.URL.Path)
+		if r.Method != "PROPFIND" {
+			http.Error(w, "unsupported method", http.StatusMethodNotAllowed)
+			return
+		}
+		switch r.URL.Path {
+		case "/":
+			http.NotFound(w, r)
+		case "/.well-known/caldav":
+			wellKnownAuth = r.Header.Get("Authorization")
+			w.Header().Set("Location", "/dav/")
+			w.WriteHeader(http.StatusMovedPermanently)
+		case "/dav/":
+			redirectedAuth = r.Header.Get("Authorization")
+			w.Header().Set("Content-Type", "application/xml; charset=utf-8")
+			w.WriteHeader(http.StatusMultiStatus)
+			_, _ = w.Write([]byte(`<?xml version="1.0"?><d:multistatus xmlns:d="DAV:"><d:response><d:href>/dav/</d:href><d:propstat><d:prop><d:current-user-principal><d:href>/dav/principals/user/rae@example.com/</d:href></d:current-user-principal></d:prop></d:propstat></d:response></d:multistatus>`))
+		case "/dav/principals/user/rae@example.com/":
+			w.Header().Set("Content-Type", "application/xml; charset=utf-8")
+			w.WriteHeader(http.StatusMultiStatus)
+			_, _ = w.Write([]byte(`<?xml version="1.0"?><d:multistatus xmlns:d="DAV:" xmlns:cal="urn:ietf:params:xml:ns:caldav"><d:response><d:href>/dav/principals/user/rae@example.com/</d:href><d:propstat><d:prop><cal:calendar-home-set><d:href>/dav/calendars/user/rae@example.com/</d:href></cal:calendar-home-set></d:prop></d:propstat></d:response></d:multistatus>`))
+		case "/dav/calendars/user/rae@example.com/":
+			w.Header().Set("Content-Type", "application/xml; charset=utf-8")
+			w.WriteHeader(http.StatusMultiStatus)
+			_, _ = w.Write([]byte(`<?xml version="1.0"?><d:multistatus xmlns:d="DAV:" xmlns:cal="urn:ietf:params:xml:ns:caldav"><d:response><d:href>/dav/calendars/user/rae@example.com/Default/</d:href><d:propstat><d:prop><d:displayname>Personal</d:displayname><d:resourcetype><d:collection/><cal:calendar/></d:resourcetype></d:prop></d:propstat></d:response></d:multistatus>`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	src, err := NewCalDAVSource(config.SourceConfig{
+		ID:        "fastmail-calendar",
+		Kind:      string(models.SourceKindCalendar),
+		Provider:  "caldav",
+		AccountID: "fastmail",
+		CalDAV: config.CalDAVConfig{
+			URL:      server.URL + "/",
+			Username: "rae@example.com",
+			Password: "app-password",
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewCalDAVSource: %v", err)
+	}
+	collections, err := src.ListCalendars(context.Background())
+	if err != nil {
+		t.Fatalf("ListCalendars: %v", err)
+	}
+	if len(collections) != 1 || collections[0].Ref.CollectionID != "Default" || collections[0].Ref.DisplayName != "Personal" {
+		t.Fatalf("collections = %#v, want discovered Fastmail personal calendar", collections)
+	}
+	if wellKnownAuth == "" || redirectedAuth == "" {
+		t.Fatalf("well-known auth=%q redirected auth=%q, want Basic Auth preserved on same-host discovery", wellKnownAuth, redirectedAuth)
+	}
+	joined := strings.Join(seen, ",")
+	for _, want := range []string{"PROPFIND /", "PROPFIND /.well-known/caldav", "PROPFIND /dav/", "PROPFIND /dav/principals/user/rae@example.com/", "PROPFIND /dav/calendars/user/rae@example.com/"} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("seen requests = %v, missing %q", seen, want)
+		}
+	}
+}
+
 func TestCalDAVSourceSkipsCollectionsThatDoNotSupportEvents(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "PROPFIND" {
