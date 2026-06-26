@@ -85,6 +85,10 @@ type memoryDismissalBackend interface {
 	DismissMemoryNudge(context.Context, memory.NudgeDismissalRequest) error
 }
 
+type memoryExploreBackend interface {
+	ExploreMemories(context.Context, memory.ExploreQuery) (memory.ExploreResult, error)
+}
+
 type accountSlot struct {
 	info    AccountInfo
 	backend Backend
@@ -578,6 +582,39 @@ func (m *MultiBackend) SearchMemories(ctx context.Context, query memory.Query) (
 	return dedupeSortLimitMemories(out, query.Limit), nil
 }
 
+func (m *MultiBackend) ExploreMemories(ctx context.Context, query memory.ExploreQuery) (memory.ExploreResult, error) {
+	query.Settings = m.currentMemorySettings()
+	if !m.allAccountsActive() {
+		slot := m.activeRealSlot()
+		if explorer, ok := memoryExplorerForSlot(slot); ok {
+			return explorer.ExploreMemories(ctx, query)
+		}
+		source, ok := memorySourceForSlot(slot)
+		if !ok {
+			return memory.BuildExploreResult(nil, query), nil
+		}
+		memories, err := source.SearchMemories(ctx, exploreSearchQuery(query))
+		if err != nil {
+			return memory.BuildExploreResult(nil, query), err
+		}
+		return memory.BuildExploreResult(memories, query), nil
+	}
+
+	var out []memory.Memory
+	for _, slot := range m.snapshotSlots() {
+		source, ok := memorySourceForSlot(slot)
+		if !ok {
+			continue
+		}
+		memories, err := source.SearchMemories(ctx, exploreSearchQuery(query))
+		if err != nil {
+			return memory.BuildExploreResult(out, query), err
+		}
+		out = append(out, memories...)
+	}
+	return memory.BuildExploreResult(dedupeSortLimitMemories(out, 0), query), nil
+}
+
 func (m *MultiBackend) BuildReplyMemoryContext(ctx context.Context, query memory.ReplyPrepQuery) (memory.ReplyPrep, error) {
 	if !m.allAccountsActive() {
 		slot := m.activeRealSlot()
@@ -654,6 +691,26 @@ func memoryDismisserForSlot(slot *accountSlot) (memoryDismissalBackend, bool) {
 	}
 	dismisser, ok := slot.backend.(memoryDismissalBackend)
 	return dismisser, ok
+}
+
+func memoryExplorerForSlot(slot *accountSlot) (memoryExploreBackend, bool) {
+	if slot == nil || slot.backend == nil {
+		return nil, false
+	}
+	explorer, ok := slot.backend.(memoryExploreBackend)
+	return explorer, ok
+}
+
+func exploreSearchQuery(query memory.ExploreQuery) memory.Query {
+	limit := 1000
+	if query.Limit > limit {
+		limit = query.Limit
+	}
+	return memory.Query{
+		Text:                 query.Text,
+		Limit:                limit,
+		IncludeLowConfidence: true,
+	}
 }
 
 func dedupeSortLimitMemories(memories []memory.Memory, limit int) []memory.Memory {

@@ -1871,6 +1871,17 @@ func (b *LocalBackend) SearchMemories(ctx context.Context, query memory.Query) (
 	return b.memoryService.Search(ctx, query)
 }
 
+func (b *LocalBackend) ExploreMemories(ctx context.Context, query memory.ExploreQuery) (memory.ExploreResult, error) {
+	if b == nil || b.memoryService == nil {
+		return memory.BuildExploreResult(nil, query), nil
+	}
+	b.ensureMemoryRefresh(ctx, ai.PriorityBackground, false)
+	if err := b.memoryRefreshError(); err != nil {
+		logger.Warn("Herald Memories refresh failed before explore: %v", err)
+	}
+	return b.memoryService.Explore(ctx, query)
+}
+
 func (b *LocalBackend) BuildReplyMemoryContext(ctx context.Context, query memory.ReplyPrepQuery) (memory.ReplyPrep, error) {
 	if b == nil || b.memoryService == nil {
 		return memory.ReplyPrep{

@@ -119,6 +119,8 @@ func (m *Model) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd, bool) {
 		return m.handleContactsMouse(mouse, plan, top)
 	case tabCalendar:
 		return m.handleCalendarMouse(mouse, plan, top)
+	case tabMemories:
+		return m.handleMemoriesMouse(mouse, plan, top)
 	}
 	return m, nil, false
 }
@@ -162,6 +164,10 @@ func (m *Model) handleMouseTabClick(msg tea.Mouse) (tea.Cmd, bool) {
 			case tabCalendar:
 				if m.activeTab != tabCalendar {
 					return m.switchToCalendar(), true
+				}
+			case tabMemories:
+				if m.activeTab != tabMemories {
+					return m.switchToMemories(), true
 				}
 			}
 			return nil, true

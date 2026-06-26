@@ -67,3 +67,11 @@ func (m *Model) switchToCalendar() tea.Cmd {
 	cmds := m.composeExitCmds()
 	return m.finishComposeExit(tabCalendar, panelTimeline, true, cmds...)
 }
+
+func (m *Model) switchToMemories() tea.Cmd {
+	if m.shouldPromptForComposeExitDraft() {
+		return m.openComposeExitPrompt(tabMemories, panelTimeline, true)
+	}
+	cmds := m.composeExitCmds()
+	return m.finishComposeExit(tabMemories, panelTimeline, true, cmds...)
+}

@@ -1031,6 +1031,17 @@ func (d *DemoBackend) SearchMemories(ctx context.Context, query memory.Query) ([
 	return out, nil
 }
 
+func (d *DemoBackend) ExploreMemories(ctx context.Context, query memory.ExploreQuery) (memory.ExploreResult, error) {
+	if err := ctx.Err(); err != nil {
+		return memory.ExploreResult{}, err
+	}
+	if query.Now.IsZero() {
+		query.Now = time.Now()
+	}
+	query.Settings = memory.DefaultSettings()
+	return memory.BuildExploreResult(seedDemoMemories(), query), nil
+}
+
 func (d *DemoBackend) BuildReplyMemoryContext(ctx context.Context, query memory.ReplyPrepQuery) (memory.ReplyPrep, error) {
 	if err := ctx.Err(); err != nil {
 		return memory.ReplyPrep{}, err
@@ -1131,24 +1142,114 @@ func seedDemoMemories() []memory.Memory {
 		memory.PrepareMemoryForAppend(memory.Memory{
 			ID:             "demo-memory-cobalt-open-loop",
 			Kind:           memory.KindOpenQuestion,
-			Claim:          "Mina asked whether the Cobalt Works interview schedule still works.",
-			Summary:        "Mina asked whether the Cobalt Works interview schedule still works.",
-			Topic:          "Example: Thread with Cobalt Works",
-			People:         []string{"Mina Park <mina@cobalt-works.example>", "mina@cobalt-works.example", "Mina Park"},
+			Claim:          "Alex is interviewing for a Senior Engineer role. Strong backend experience in Go and Postgres. Interview loop scheduled for next week.",
+			Summary:        "Cobalt Works is waiting on interview availability for Alex Morgan.",
+			Topic:          "Senior engineer interview",
+			People:         []string{"Alex Morgan (candidate)", "Mina Park <mina@cobalt-works.example>", "mina@cobalt-works.example"},
 			Company:        "Cobalt Works",
 			Domain:         "cobalt-works.example",
 			Status:         memory.StatusWaiting,
 			Confidence:     0.93,
-			LastActivityAt: now.Add(-30 * time.Minute),
+			LastActivityAt: now.Add(30 * time.Minute),
 			ObsidianTarget: "Job search/active/Cobalt Works/Memory.md",
 			Tags:           []string{"#herald/memory"},
 			Evidence: []memory.Evidence{{
 				SourceType: memory.SourceEmail,
 				MessageID:  "demo-example-thread-with-cobalt-works@demo.local",
 				Folder:     "INBOX",
-				Date:       now.Add(-30 * time.Minute),
-				Snippet:    "Does the interview schedule still work for you?",
+				Date:       now.Add(30 * time.Minute),
+				Snippet:    "Does the interview schedule still work for Alex next week?",
+			}, {
+				SourceType: memory.SourceSentEmail,
+				MessageID:  "demo-cobalt-interview-availability-sent",
+				Folder:     "Sent",
+				Date:       now.Add(23 * time.Minute),
+				Snippet:    "I can confirm the backend interview window for next week.",
+			}, {
+				SourceType: memory.SourceAttachment,
+				ID:         "Alex_Morgan_Resume.pdf",
+				Folder:     "INBOX",
+				Date:       now.Add(20 * time.Minute),
+				Snippet:    "Candidate resume attached with Go, Postgres, Kafka, and AWS experience.",
+			}, {
+				SourceType: memory.SourceObsidian,
+				Path:       "Job search/active/Cobalt Works/Memory.md",
+				Date:       now.Add(15 * time.Minute),
+				Snippet:    "Track Cobalt Works interview state and next-loop prep.",
 			}},
+		}, now),
+		memory.PrepareMemoryForAppend(memory.Memory{
+			ID:             "demo-memory-cobalt-low-confidence-review",
+			Kind:           memory.KindRelationshipContext,
+			Claim:          "Cobalt Works may be pausing the platform role until budget review clears.",
+			Summary:        "Possible hiring pause needs review before it influences replies.",
+			Topic:          "Cobalt Works hiring signal",
+			People:         []string{"Mina Park", "mina@cobalt-works.example"},
+			Company:        "Cobalt Works",
+			Domain:         "cobalt-works.example",
+			Status:         memory.StatusActive,
+			Confidence:     0.41,
+			LastActivityAt: now.Add(-5 * time.Hour),
+			ObsidianTarget: "Job search/active/Cobalt Works/Memory.md",
+			Tags:           []string{"#herald/memory", "#review"},
+			Evidence: []memory.Evidence{{
+				SourceType: memory.SourceResearch,
+				URL:        "https://research.local/cobalt-works-hiring",
+				Date:       now.Add(-5 * time.Hour),
+				Snippet:    "Unconfirmed budget review note mentioned a platform-role pause.",
+			}},
+			Details: memory.MemoryDetails{ReviewReason: "low-confidence external signal"},
+		}, now),
+		memory.PrepareMemoryForAppend(memory.Memory{
+			ID:             "demo-memory-cobalt-stale-followup",
+			Kind:           memory.KindCommitment,
+			Claim:          "You planned to send Cobalt Works a system design follow-up.",
+			Summary:        "The follow-up is older than the configured freshness window.",
+			Topic:          "Cobalt Works follow-up",
+			People:         []string{"Mina Park", "mina@cobalt-works.example"},
+			Company:        "Cobalt Works",
+			Domain:         "cobalt-works.example",
+			Status:         memory.StatusStale,
+			Freshness:      memory.FreshnessStale,
+			Confidence:     0.86,
+			LastActivityAt: now.Add(-42 * 24 * time.Hour),
+			ObsidianTarget: "Job search/active/Cobalt Works/Memory.md",
+			Tags:           []string{"#herald/memory", "#stale"},
+			Evidence: []memory.Evidence{{
+				SourceType: memory.SourceSentEmail,
+				MessageID:  "demo-cobalt-system-design-followup",
+				Folder:     "Sent",
+				Date:       now.Add(-42 * 24 * time.Hour),
+				Snippet:    "I will send a concise system design follow-up next week.",
+			}},
+		}, now),
+		memory.PrepareMemoryForAppend(memory.Memory{
+			ID:             "demo-memory-cobalt-conflict",
+			Kind:           memory.KindTrackStatus,
+			Claim:          "Cobalt Works interview loop is both marked waiting and canceled by conflicting sources.",
+			Summary:        "Mail and note evidence disagree about whether the loop is still active.",
+			Topic:          "Cobalt Works interview state",
+			People:         []string{"Mina Park", "mina@cobalt-works.example"},
+			Company:        "Cobalt Works",
+			Domain:         "cobalt-works.example",
+			Status:         memory.StatusConflict,
+			Confidence:     0.91,
+			LastActivityAt: now.Add(-18 * time.Hour),
+			ObsidianTarget: "Job search/active/Cobalt Works/Memory.md",
+			Tags:           []string{"#herald/memory", "#conflict"},
+			Evidence: []memory.Evidence{{
+				SourceType: memory.SourceEmail,
+				MessageID:  "demo-cobalt-active-loop",
+				Folder:     "INBOX",
+				Date:       now.Add(-18 * time.Hour),
+				Snippet:    "Looking forward to the next loop conversation.",
+			}, {
+				SourceType: memory.SourceObsidian,
+				Path:       "Job search/active/Cobalt Works/Memory.md",
+				Date:       now.Add(-16 * time.Hour),
+				Snippet:    "Marked canceled after budget review.",
+			}},
+			Details: memory.MemoryDetails{ReviewReason: "email and Obsidian state disagree"},
 		}, now),
 	}
 }

@@ -72,6 +72,9 @@ func (m *Model) problemReportShortcutTextEntryActive() bool {
 	if m.activeTab == tabContacts && m.contactSearchMode != "" {
 		return true
 	}
+	if m.activeTab == tabMemories && m.memories.searchMode {
+		return true
+	}
 	if m.activeTab == tabCalendar {
 		if m.calendarEdit.Active {
 			return true

@@ -46,6 +46,7 @@ const (
 	tabCompose  = 1
 	tabContacts = 2
 	tabCalendar = 3
+	tabMemories = 4
 )
 
 // LoadingMsg represents a loading state update
@@ -203,6 +204,13 @@ type ComposeMemoryRadarMsg struct {
 	Token int
 	Prep  memory.ReplyPrep
 	Err   error
+}
+
+// MemoriesExploreLoadedMsg carries the read-only exploration workspace result.
+type MemoriesExploreLoadedMsg struct {
+	Token  int
+	Result memory.ExploreResult
+	Err    error
 }
 
 // ComposeMemoryRadarDebounceMsg fires after Compose Radar's context refresh debounce.
@@ -928,6 +936,9 @@ type Model struct {
 	contactPreviewBody    *models.EmailBody
 	contactPreviewLoading bool
 	contactPreviewScroll  int
+
+	// Memories tab
+	memories memoryExploreState
 
 	// Config
 	cfg          *config.Config
@@ -3452,6 +3463,21 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.contactsIdx = 0
 		return m, nil
 
+	case MemoriesExploreLoadedMsg:
+		if msg.Token != m.memories.token {
+			return m, nil
+		}
+		m.memories.loading = false
+		if msg.Err != nil {
+			m.memories.err = msg.Err.Error()
+			m.memories.result = memory.BuildExploreResult(nil, m.memoriesQuery())
+			return m, nil
+		}
+		m.memories.err = ""
+		m.memories.result = msg.Result
+		m.normalizeMemoriesSelection()
+		return m, nil
+
 	case ContactDetailLoadedMsg:
 		m.contactDetailEmails = msg.Emails
 		m.contactDetailIdx = 0
@@ -3668,6 +3694,10 @@ func (m *Model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	// have had a chance to route through the active keyboard catalog.
 	if m.activeTab == tabContacts {
 		return m.handleContactsKey(msg)
+	}
+
+	if m.activeTab == tabMemories {
+		return m.handleMemoriesKey(msg)
 	}
 
 	if model, cmd, handled := m.handleTabKey(msg); handled {
@@ -3942,6 +3972,8 @@ func (m *Model) renderMainView() string {
 		mainContent = m.renderContactsTab(m.windowWidth, m.windowHeight)
 	} else if m.activeTab == tabCalendar {
 		mainContent = m.renderCalendarView()
+	} else if m.activeTab == tabMemories {
+		mainContent = m.renderMemoriesTab(m.windowWidth, m.windowHeight)
 	} else {
 		mainContent = m.renderTimelineView()
 	}

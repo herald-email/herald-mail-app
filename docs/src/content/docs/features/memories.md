@@ -11,10 +11,13 @@ Memories are stored as immutable local records under `~/.herald/memories` by def
 
 Demo mode includes synthetic memory examples for Sergey, Mina, and Cobalt Works, so screenshots and docs can show the feature without private mailbox data.
 
+![Memories workspace with filters, memory table, dossier, source links, and panel-switching hints](/screenshots/herald-memories-workspace.png)
+
 ## Screen Anatomy
 
 | Area | What it shows |
 | --- | --- |
+| `4 Memories` workspace | Searchable read-only memory workbench with lifecycle filters, track rows, detail dossier, source evidence, and Obsidian links. |
 | Compose Radar | Up to three source-backed reply nudges when a reply draft has strong relevant memory. |
 | Contact dossier | Relationship summary, recent interactions, active tracks, open loops, vault links, and compact evidence labels. |
 | Company dossier | Company or domain-backed tracks, job-search vault path, open loop, and evidence. |
@@ -31,6 +34,11 @@ Demo mode includes synthetic memory examples for Sergey, Mina, and Cobalt Works,
 
 | Control | Context | Result |
 | --- | --- | --- |
+| `4` / `Alt+4` / `F5` | Main TUI | Open the Memories workspace. |
+| `/` | Memories workspace | Search memory claims, summaries, topics, people, companies, and source snippets. |
+| `←` / `→` or `Tab` / `Shift+Tab` | Memories workspace | Move focus between filters, memory list, detail, and source panes. |
+| `Enter` | Memories source pane | Inspect the selected source pointer in place when available. |
+| `o` | Memories detail or source pane | Show the selected Obsidian/vault target when one exists. |
 | `Settings > Memories` | Main settings overlay | Configure enablement, local directory, sources, allowed memory tasks, extraction trigger, vault targets, confidence thresholds, prompt-template inventory, and Obsidian output profile. |
 | Compose Radar actions | Reply Compose when nudges exist | Open source, insert a bounded phrase, dismiss, mark resolved, save for review, or record research intent. |
 | Contact detail | Contacts tab | Shows person and company dossiers when matching memories exist. |
@@ -48,6 +56,15 @@ Demo mode includes synthetic memory examples for Sergey, Mina, and Cobalt Works,
 5. Finish and send normally.
 
 Compose Radar does not silently mutate drafts. It stays hidden or quiet when there is no high-confidence source-backed memory.
+
+### Explore Memories
+
+1. Press `4` to open the Memories workspace.
+2. Use the filter rail for `All`, `Open loops`, `Waiting`, `Review`, `Stale`, `Conflicts`, source types, and date ranges.
+3. Press `/` to search memories, then `Enter` to keep the result set.
+4. Move through the list and source panes to inspect claims, track status, evidence, and Obsidian targets.
+
+The Memories workspace is read-only in this release. It does not forget, pin, correct, resolve, write Obsidian notes, run external research, mutate mail, or mutate calendar events.
 
 ### Review A Contact Or Company
 

@@ -31,6 +31,7 @@ const (
 	CommandTabTimeline = "tab.timeline"
 	CommandTabContacts = "tab.contacts"
 	CommandTabCalendar = "tab.calendar"
+	CommandTabMemories = "tab.memories"
 
 	CommandPaneLeft  = "pane.left"
 	CommandPaneRight = "pane.right"
@@ -103,6 +104,7 @@ var commandCatalog = map[string]struct{}{
 	CommandTabTimeline: {},
 	CommandTabContacts: {},
 	CommandTabCalendar: {},
+	CommandTabMemories: {},
 
 	CommandPaneLeft:  {},
 	CommandPaneRight: {},
@@ -338,13 +340,16 @@ func builtInKeyboardProfile(profile string) (keyboardBindingMap, keyboardCommand
 	add(keyboardScopeGlobal, keyboardModeNormal, "1", CommandTabTimeline)
 	add(keyboardScopeGlobal, keyboardModeNormal, "2", CommandTabContacts)
 	add(keyboardScopeGlobal, keyboardModeNormal, "3", CommandTabCalendar)
+	add(keyboardScopeGlobal, keyboardModeNormal, "4", CommandTabMemories)
 	add(keyboardScopeGlobal, keyboardModeNormal, "alt+1", CommandTabTimeline)
 	add(keyboardScopeGlobal, keyboardModeNormal, "alt+2", CommandTabContacts)
 	add(keyboardScopeGlobal, keyboardModeNormal, "alt+3", CommandTabCalendar)
+	add(keyboardScopeGlobal, keyboardModeNormal, "alt+4", CommandTabMemories)
 	add(keyboardScopeGlobal, keyboardModeNormal, "f1", CommandTabTimeline)
 	add(keyboardScopeGlobal, keyboardModeNormal, "f2", CommandTabContacts)
 	add(keyboardScopeGlobal, keyboardModeNormal, "f3", CommandTabContacts)
 	add(keyboardScopeGlobal, keyboardModeNormal, "f4", CommandTabCalendar)
+	add(keyboardScopeGlobal, keyboardModeNormal, "f5", CommandTabMemories)
 	add(keyboardScopeGlobal, keyboardModeNormal, "f6", CommandPaneNext)
 	add(keyboardScopeGlobal, keyboardModeNormal, "shift+f6", CommandPanePrev)
 	add(keyboardScopeGlobal, keyboardModeNormal, "tab", CommandPaneNext)
@@ -382,7 +387,7 @@ func builtInKeyboardProfile(profile string) (keyboardBindingMap, keyboardCommand
 	add("timeline", keyboardModeNormal, "/", CommandHelpSearch)
 	add("timeline", keyboardModeNormal, "ctrl+k", CommandHelpSearch)
 
-	for _, scope := range []string{"cleanup", "contacts", "calendar"} {
+	for _, scope := range []string{"cleanup", "contacts", "calendar", "memories"} {
 		add(scope, keyboardModeNormal, "h", CommandPaneLeft)
 		add(scope, keyboardModeNormal, "j", CommandPaneDown)
 		add(scope, keyboardModeNormal, "k", CommandPaneUp)
@@ -419,7 +424,7 @@ func builtInKeyboardProfile(profile string) (keyboardBindingMap, keyboardCommand
 		prefer("timeline", keyboardModeNormal, "down", CommandPaneDown)
 		prefer("timeline", keyboardModeNormal, "left", CommandPaneLeft)
 		prefer("timeline", keyboardModeNormal, "right", CommandPaneRight)
-		for _, scope := range []string{"cleanup", "contacts", "calendar"} {
+		for _, scope := range []string{"cleanup", "contacts", "calendar", "memories"} {
 			prefer(scope, keyboardModeNormal, "up", CommandPaneUp)
 			prefer(scope, keyboardModeNormal, "down", CommandPaneDown)
 			prefer(scope, keyboardModeNormal, "left", CommandPaneLeft)
@@ -439,7 +444,7 @@ func builtInKeyboardProfile(profile string) (keyboardBindingMap, keyboardCommand
 		prefer("timeline", keyboardModeNormal, "shift+delete", CommandMailDeleteImmediate)
 		prefer("compose", keyboardModeNormal, "ctrl+enter", CommandComposeSend)
 	case keyboardProfileEmacs:
-		for _, scope := range []string{"timeline", "cleanup", "contacts", "calendar"} {
+		for _, scope := range []string{"timeline", "cleanup", "contacts", "calendar", "memories"} {
 			prefer(scope, keyboardModeNormal, "ctrl+f", CommandPaneRight)
 			prefer(scope, keyboardModeNormal, "ctrl+b", CommandPaneLeft)
 			prefer(scope, keyboardModeNormal, "ctrl+n", CommandPaneDown)
@@ -537,6 +542,8 @@ func canonicalKeyForCommand(scope, command string) string {
 		return "2"
 	case CommandTabCalendar:
 		return "3"
+	case CommandTabMemories:
+		return "4"
 	case CommandSidebarToggle:
 		return "B"
 	case CommandTimelineGroupCycle:

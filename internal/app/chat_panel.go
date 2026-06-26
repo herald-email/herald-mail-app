@@ -116,6 +116,8 @@ func chatAgentTabName(tab int) string {
 		return "contacts"
 	case tabCalendar:
 		return "calendar"
+	case tabMemories:
+		return "memories"
 	default:
 		return ""
 	}

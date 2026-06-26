@@ -122,7 +122,7 @@ func (m *Model) primaryTabShortcutHint() string {
 	keys := m.primaryTabKeys(keyDisplayHint)
 	tabs := m.visibleTopLevelTabNavigation()
 	if len(keys) == len(tabs) {
-		if compressed, ok := compressSequentialDigitKeys(keys); ok {
+		if compressed, ok := compressTabDigitKeys(keys); ok {
 			return compressed + ": tabs"
 		}
 	}
@@ -136,7 +136,7 @@ func (m *Model) primaryTabHelpKey() string {
 	keys := m.primaryTabKeys(keyDisplayHelp)
 	tabs := m.visibleTopLevelTabNavigation()
 	if len(keys) == len(tabs) {
-		if compressed, ok := compressSequentialDigitKeys(keys); ok {
+		if compressed, ok := compressTabDigitKeys(keys); ok {
 			return compressed
 		}
 	}
@@ -147,10 +147,7 @@ func (m *Model) primaryTabHelpKey() string {
 }
 
 func (m *Model) primaryTabHelpDescription() string {
-	if m != nil && m.calendarAvailable {
-		return "switch tabs; Alt+1/2/3 and F1-F4 remain aliases"
-	}
-	return "switch tabs; Alt+1/2 and F1-F3 remain aliases"
+	return "switch tabs; Alt+1/2/3/4 and F1-F5 remain aliases"
 }
 
 func (m *Model) primaryTabKeys(style keyDisplayStyle) []string {
@@ -183,6 +180,27 @@ func compressSequentialDigitKeys(keys []string) (string, bool) {
 		}
 	}
 	return fmt.Sprintf("%s-%s", keys[0], keys[len(keys)-1]), true
+}
+
+func compressTabDigitKeys(keys []string) (string, bool) {
+	if compressed, ok := compressSequentialDigitKeys(keys); ok {
+		return compressed, true
+	}
+	if len(keys) < 3 {
+		return "", false
+	}
+	prefixEnd := 0
+	for i := len(keys) - 1; i >= 2; i-- {
+		if compressed, ok := compressSequentialDigitKeys(keys[:i]); ok {
+			prefixEnd = i
+			keys = append([]string{compressed}, keys[i:]...)
+			break
+		}
+	}
+	if prefixEnd == 0 {
+		return "", false
+	}
+	return strings.Join(keys, ","), true
 }
 
 func displayShortcutKey(key string, style keyDisplayStyle) string {

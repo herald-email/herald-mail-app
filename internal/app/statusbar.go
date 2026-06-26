@@ -470,6 +470,9 @@ func (m *Model) statusMessageForActiveTab() string {
 	if m.activeTab == tabContacts && strings.TrimSpace(m.contactStatusMessage) != "" {
 		return m.contactStatusMessage
 	}
+	if m.activeTab == tabMemories && strings.TrimSpace(m.memories.status) != "" {
+		return m.memories.status
+	}
 	return m.statusMessage
 }
 
@@ -626,6 +629,12 @@ func (m *Model) rawKeyHintsForWidth(w int, chrome ChromeState) string {
 			}
 		} else {
 			hints = joinHintSegments(m.primaryTabShortcutHint(), "tab: detail panel", m.movementHint("contacts", "nav"), "enter: detail", m.commandHint("contacts", CommandHelpSearch, "search"), "?: semantic", "e: enrich", "esc: clear", m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"))
+		}
+	} else if m.activeTab == tabMemories {
+		if m.memories.searchMode {
+			hints = joinHintSegments("/ "+strings.TrimSpace(m.memories.search), "enter: run", "esc: clear search", m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"), "read-only")
+		} else {
+			hints = joinHintSegments(m.primaryTabShortcutHint(), "←/→ or tab/shift+tab: panels", m.movementHint("memories", "move"), "enter: source", "/: search", "o: vault", "x: dismiss local", "r: refresh", m.commandHint(keyboardScopeGlobal, CommandAppQuit, "quit"), "read-only")
 		}
 	} else if m.activeTab == tabCalendar {
 		crossSearchHint := ""

@@ -121,6 +121,9 @@ func (m *Model) shiftModifierHintSegments(chrome ChromeState) []string {
 	if m.activeTab == tabContacts {
 		return []string{m.primaryTabShortcutHint(), "shift+tab: prev panel", "?: semantic", "esc: clear"}
 	}
+	if m.activeTab == tabMemories {
+		return []string{m.primaryTabShortcutHint(), "shift+tab: prev pane", "esc: clear/close"}
+	}
 	if m.activeTab == tabTimeline {
 		hasUnsubPreview := chrome.FocusedPanel == panelPreview &&
 			m.timeline.selectedEmail != nil &&
@@ -192,6 +195,9 @@ func (m *Model) ctrlModifierHintSegments(chrome ChromeState) []string {
 	if m.activeTab == tabContacts {
 		return []string{"ctrl+c: quit", "ctrl+r: refresh"}
 	}
+	if m.activeTab == tabMemories {
+		return []string{"ctrl+c: quit", "ctrl+r: refresh"}
+	}
 	if m.activeTab == tabCalendar {
 		if m.calendarEdit.Active {
 			return []string{"ctrl+c: quit", "ctrl+s: save", "ctrl+u: clear"}
@@ -215,7 +221,7 @@ func (m *Model) altModifierHintSegments(chrome ChromeState, defaultHints string)
 		return []string{"alt+enter: newline in text fields", defaultHints}
 	}
 	if m.usesDefaultKeyboardProfile() {
-		segments := []string{"Alt+1/2/3: tabs"}
+		segments := []string{"Alt+1/2/3/4: tabs"}
 		if m.hasMultipleAccounts() {
 			segments = append(segments, "Alt+A: accounts")
 		}

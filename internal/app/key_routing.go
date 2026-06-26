@@ -281,6 +281,14 @@ func (m *Model) handleGlobalCommandKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd,
 			return m, m.switchToCalendar(), true
 		}
 		return m, nil, m.calendarAvailable
+	case "f5":
+		if m.canInteractWithVisibleData() && m.activeTab != tabMemories {
+			return m, m.switchToMemories(), true
+		}
+		if m.canInteractWithVisibleData() {
+			return m, m.loadMemoriesExplore(), true
+		}
+		return m, nil, true
 	}
 	return m, nil, false
 }
@@ -314,7 +322,7 @@ func (m *Model) handleBrowseGlobalProfileCommand(msg tea.KeyPressMsg) (tea.Model
 		m.helpSearchActive = false
 		m.helpSearch = ""
 		return m, nil, true
-	case CommandTabTimeline, CommandTabContacts, CommandTabCalendar:
+	case CommandTabTimeline, CommandTabContacts, CommandTabCalendar, CommandTabMemories:
 		return m.performTabCommand(command)
 	case CommandSidebarToggle:
 		return m, m.toggleSidebar(), true
@@ -343,6 +351,9 @@ func (m *Model) shouldRouteBrowseProfileCommands() bool {
 	if m.contactSearchMode != "" {
 		return false
 	}
+	if m.activeTab == tabMemories && m.memories.searchMode {
+		return false
+	}
 	if m.activeTab == tabCalendar {
 		if m.calendarEdit.Active || m.calendarDelete.Active {
 			return false
@@ -362,6 +373,8 @@ func (m *Model) activeKeyboardScope() string {
 		return "contacts"
 	case tabCalendar:
 		return "calendar"
+	case tabMemories:
+		return "memories"
 	default:
 		return keyboardScopeGlobal
 	}
@@ -505,6 +518,14 @@ func (m *Model) performTabCommand(command string) (tea.Model, tea.Cmd, bool) {
 			return m, m.loadCalendarAgenda(), true
 		}
 		return m, nil, false
+	case CommandTabMemories:
+		if m.canInteractWithVisibleData() && m.activeTab != tabMemories {
+			return m, m.switchToMemories(), true
+		}
+		if m.canInteractWithVisibleData() {
+			return m, m.loadMemoriesExplore(), true
+		}
+		return m, nil, true
 	}
 	return m, nil, false
 }

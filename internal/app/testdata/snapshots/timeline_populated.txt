@@ -1,4 +1,4 @@
-[7m [m[1;7mHerald[m[7m [m [7m  [m[1;7m1  Timeline[m[7m  [m  2  Contacts
+[7m [m[1;7mHerald[m[7m [m [7m  [m[1;7m1  Timeline[m[7m  [m  2  Contacts    4  Memories
 [90m┌──────────────────────────┐[m [36m┌─────────────────────────────────────────────────────[m Grouped by: Thread (G to change) [36m─┐[m
 [90m│[m[4;4m›[m[4m [m[4m [m[4;4mI[m[4;4mN[m[4;4mB[m[4;4mO[m[4;4mX[m[4m [m[4m [m[4m [m[4m [m[4m [m[4m [m[4m [m[4m [m[4m [m[4m [m[4m [m[4m [m[4m [m[4m [m[4m [m[4m [m[4m [m[4m [m[90m│[m [36m│[m [1m✓[m  [1mSender[m              [1mSubject[m                                  [1mWhen ↓[m        [1mTag[m      [36m│[m
 [90m│[m   All Mail only          [90m│[m [36m│[m [1m[m   [1m●alice@example.com[m  [1mMeeting tomorrow[m                         [1mApr 1[m         [1m[m         [36m│[m

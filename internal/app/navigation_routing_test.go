@@ -926,10 +926,10 @@ func TestRenderKeyHints_AdvertisesFunctionKeysAsPrimaryTabSwitcher(t *testing.T)
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			hints := stripANSI(tc.model().renderKeyHints())
-			if tc.wantTabs && !strings.Contains(hints, "1-2: tabs") {
+			if tc.wantTabs && !strings.Contains(hints, "1-2,4: tabs") {
 				t.Fatalf("expected primary numbered tab hint, got %q", hints)
 			}
-			if !tc.wantTabs && strings.Contains(hints, "1-2: tabs") {
+			if !tc.wantTabs && strings.Contains(hints, "1-2,4: tabs") {
 				t.Fatalf("expected calm Timeline list hint to omit tab switcher, got %q", hints)
 			}
 			for _, stale := range []string{"1-3: tabs", "F1-F4: tabs", "1/2/3/4: tabs", "alt+1/2/3/4: tabs", "Alt+1/2/3/4: tabs"} {

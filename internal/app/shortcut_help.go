@@ -144,7 +144,8 @@ func (m *Model) questionMarkBelongsToTextInput() bool {
 	if (m.activeTab == tabTimeline &&
 		m.timeline.searchMode &&
 		m.timeline.searchFocus == timelineSearchFocusInput) ||
-		(m.activeTab == tabContacts && m.contactSearchMode != "") {
+		(m.activeTab == tabContacts && m.contactSearchMode != "") ||
+		(m.activeTab == tabMemories && m.memories.searchMode) {
 		return true
 	}
 	if m.activeTab == tabCalendar {
@@ -660,6 +661,8 @@ func (m *Model) shortcutHelpSections() []shortcutHelpSection {
 		sections = append(sections, m.composeShortcutHelpSection())
 	case m.activeTab == tabContacts:
 		sections = append(sections, m.contactsShortcutHelpSection())
+	case m.activeTab == tabMemories:
+		sections = append(sections, m.memoriesShortcutHelpSection())
 	default:
 		sections = append(sections, m.timelineShortcutHelpSection())
 	}
@@ -667,6 +670,19 @@ func (m *Model) shortcutHelpSections() []shortcutHelpSection {
 		sections = append(sections, m.defaultLegacyShortcutHelpSection())
 	}
 	return sections
+}
+
+func (m *Model) memoriesShortcutHelpSection() shortcutHelpSection {
+	return shortcutHelpSection{"Memories", []shortcutHelpEntry{
+		{"h/j/k/l or arrows", "move within the focused memory pane"},
+		{"Tab / Shift+Tab", "cycle filter, list, dossier, and source panes"},
+		{"/", "focus memory search"},
+		{"Enter", "inspect selected source evidence"},
+		{"o", "report the selected Obsidian vault target when available"},
+		{"r", "refresh memory exploration"},
+		{"x", "dismiss the selected row locally for this session"},
+		{"Esc", "clear search or close source inspection"},
+	}}
 }
 
 func (m *Model) composeShortcutHelpSection() shortcutHelpSection {

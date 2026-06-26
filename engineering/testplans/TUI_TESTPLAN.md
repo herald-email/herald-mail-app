@@ -1270,6 +1270,29 @@ Check these states during every applicable lane:
 - Recent email navigation and inline preview still work after the dossier appears.
 - Contacts without matching memories keep the existing detail layout without a noisy empty dossier block.
 
+### TC-18G2 — Herald Memories exploration workspace
+
+**Lane:** A, B, G
+**Sizes:** `220x50`, `80x24`, `50x15`
+
+**Steps:**
+1. Start demo mode or virtual-lab data that includes source-backed memories, tracks, review-needed records, stale records, and conflicts.
+2. Press `4` or `F5` to open the Memories workspace.
+3. Use `Tab` and `Shift+Tab` to cycle filter rail, memory list, detail pane, and source pane focus.
+4. Press `/`, type a query such as `Cobalt`, press Enter, and inspect the filtered list.
+5. Move through lifecycle filters for all memories, open loops, waiting, review, stale, and conflicts.
+6. Select a memory with evidence, move to the source pane, and press Enter to inspect the source pointer.
+7. Capture the workspace at `220x50` and `80x24`.
+8. At `50x15`, confirm the minimum-size guard appears instead of clipped workspace chrome.
+
+**Expect:**
+- The title bar includes `4 Memories`, and `4`, `Alt+4`, and `F5` open the workspace without breaking existing Timeline, Contacts, Calendar, or Compose navigation.
+- The workspace resembles the approved reference: filter rail, search/list pane, detail dossier, source/action lane, status bar, and shortcut hints.
+- Search and filters are read-only and deterministic; result rows disclose status, source, confidence, and date without wrapping past the terminal edge.
+- The detail pane includes claim, summary, kind, status, confidence, freshness, people, company/domain, topic, Obsidian target, prompt version, review reason, and evidence labels when available.
+- Source inspection shows compact email, sent-email, Obsidian, calendar, attachment, or research pointers without copying full private bodies.
+- No action in the workspace writes memory records, writes Obsidian notes, sends mail, mutates calendar events, runs external research, or changes existing Compose Radar/dossier behavior.
+
 ### TC-18H — Herald Memories track lifecycle assembly
 
 **Lane:** G

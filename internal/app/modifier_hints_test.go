@@ -73,7 +73,7 @@ func TestModifierHintAltLayerKeepsDefaultHintsWithNotice(t *testing.T) {
 	m = model.(*Model)
 
 	hints := stripANSI(m.renderKeyHints())
-	requireHintSegments(t, hints, "Alt+1/2/3: tabs", "?: help", "Ctrl+N: new")
+	requireHintSegments(t, hints, "Alt+1/2/3/4: tabs", "?: help", "Ctrl+N: new")
 }
 
 func TestModifierHintAltLayerDoesNotAdvertiseAltLForLogs(t *testing.T) {
@@ -98,7 +98,7 @@ func TestModifierHintLayerPrecedenceIsDeterministic(t *testing.T) {
 
 	hints := stripANSI(m.renderKeyHints())
 	requireHintSegments(t, hints, "Ctrl+N: new", "Ctrl+R: reply")
-	if strings.Contains(hints, "Alt+1/2/3: tabs") || strings.Contains(hints, "Shift+Del: delete now") {
+	if strings.Contains(hints, "Alt+1/2/3/4: tabs") || strings.Contains(hints, "Shift+Del: delete now") {
 		t.Fatalf("ctrl should win over alt and shift layers, got:\n%s", hints)
 	}
 
@@ -106,7 +106,7 @@ func TestModifierHintLayerPrecedenceIsDeterministic(t *testing.T) {
 	m = model.(*Model)
 
 	hints = stripANSI(m.renderKeyHints())
-	requireHintSegments(t, hints, "Alt+1/2/3: tabs")
+	requireHintSegments(t, hints, "Alt+1/2/3/4: tabs")
 	if strings.Contains(hints, "Shift+Del: delete now") {
 		t.Fatalf("alt should win over shift layer, got:\n%s", hints)
 	}

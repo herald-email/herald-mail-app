@@ -429,7 +429,7 @@ bindings:
 
 	hints := stripANSI(m.renderKeyHints())
 	requireHintSegments(t, hints,
-		"7-8: tabs",
+		"7-8,4: tabs",
 		"n: compose",
 		"p: all",
 		"s: sender",
@@ -593,7 +593,7 @@ bindings:
 
 	updated := pressQuestion(m)
 	help := stripANSI(updated.View().Content)
-	for _, want := range []string{"7-8", "switch tabs", "n", "open a blank Compose", "p", "reply all"} {
+	for _, want := range []string{"7-8,4", "switch tabs", "n", "open a blank Compose", "p", "reply all"} {
 		if !strings.Contains(help, want) {
 			t.Fatalf("expected shortcut help to include %q, got:\n%s", want, help)
 		}
@@ -639,7 +639,7 @@ bindings:
 		m.activeTab = tabCompose
 
 		hints := stripANSI(m.renderKeyHints())
-		requireHintSegments(t, hints, "7-8: tabs", "ctrl+s: send", "ctrl+p: preview")
+		requireHintSegments(t, hints, "7-8,4: tabs", "ctrl+s: send", "ctrl+p: preview")
 		if strings.Contains(hints, "1-2: tabs") || strings.Contains(hints, "1-3: tabs") || strings.Contains(hints, "?: help") {
 			t.Fatalf("expected Compose hints to use custom tab keys and avoid browse help, got:\n%s", hints)
 		}
@@ -653,7 +653,7 @@ bindings:
 		m.updateTimelineTable()
 
 		hints := stripANSI(m.renderKeyHints())
-		requireHintSegments(t, hints, "7-8: tabs", "z: delete", "v: delete now", "x: archive", "b: sidebar")
+		requireHintSegments(t, hints, "7-8,4: tabs", "z: delete", "v: delete now", "x: archive", "b: sidebar")
 		for _, stale := range []string{"1-2: tabs", "1-3: tabs", "a: archive", "B: sidebar", "g: chat"} {
 			if strings.Contains(hints, stale) {
 				t.Fatalf("expected Timeline custom hints to omit stale %q, got:\n%s", stale, hints)
@@ -669,7 +669,7 @@ bindings:
 		m.contactsFiltered = m.contactsList
 
 		hints := stripANSI(m.renderKeyHints())
-		requireHintSegments(t, hints, "7-8: tabs", "↑/p ↓/n: nav", ";: search")
+		requireHintSegments(t, hints, "7-8,4: tabs", "↑/p ↓/n: nav", ";: search")
 		for _, stale := range []string{"1-2: tabs", "1-3: tabs", "↑/k ↓/j: nav", "/: search"} {
 			if strings.Contains(hints, stale) {
 				t.Fatalf("expected Contacts custom hints to omit stale %q, got:\n%s", stale, hints)

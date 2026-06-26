@@ -207,6 +207,15 @@ func (m *Model) finishComposeExit(targetTab, targetPanel int, loadTarget bool, c
 		if loadTarget {
 			cmds = append(cmds, m.loadCalendarAgenda())
 		}
+	case tabMemories:
+		m.clearContactsStatus()
+		m.finishTimelineRangeSelection()
+		m.clearPreviewSelection()
+		m.setFocusedPanel(panelTimeline)
+		m.ensureMemoriesDefaults()
+		if loadTarget {
+			cmds = append(cmds, m.loadMemoriesExplore())
+		}
 	default:
 		m.activeTab = tabTimeline
 		m.setFocusedPanel(panelTimeline)

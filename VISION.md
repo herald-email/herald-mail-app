@@ -281,6 +281,7 @@ Herald Memories turns important email history into local, source-backed tracks t
 - [x] Add Contact dossiers that combine local email memories, active tracks, Obsidian links, and source evidence
 - [x] Add Company dossiers that combine local email memories, active tracks, Obsidian links, and optional web research placeholders
 - [x] Add Thread dossiers in email preview that combine local email memories, active tracks, open loops, canonical note links, and source evidence
+- [x] Add a dedicated `4 Memories` workspace for read-only memory search, lifecycle filters, track review, evidence inspection, and Obsidian/source links
 - [x] Expose memory configuration as a simple setup surface for enablement, local storage, source folders, Obsidian output, and allowed memory tasks, with destinations, thresholds, extraction triggers, and prompt-template details kept in advanced groups
 - [x] Add opt-in Obsidian sync that writes and updates Markdown notes under configured `People/`, `Job search/`, and configured memory folders while preserving user edits
 - [x] Add explicit Research Mode for person/company enrichment that never sends private email content to external research queries by default
