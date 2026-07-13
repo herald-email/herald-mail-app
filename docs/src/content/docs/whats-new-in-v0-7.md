@@ -1,9 +1,9 @@
 ---
 title: What's New in v0.7
-description: User-facing changes in the v0.7 beta release line through v0.7.4.
+description: User-facing changes in the v0.7 beta release line through v0.7.5.
 ---
 
-The v0.7 beta line turns Herald's source-aware mail and calendar foundation into a more memory-aware writing and review workspace. Through `v0.7.4-beta.1`, the headline work is local Herald Memories with a read-only exploration workspace, the Gollem-backed chat agent path, Compose Radar, macOS preview printing, denser everyday Timeline polish, safer provider setup, and safer multi-account mail behavior.
+The v0.7 beta line turns Herald's source-aware mail and calendar foundation into a more memory-aware writing and review workspace. Through `v0.7.5-beta.1`, the headline work is local Herald Memories with a read-only exploration workspace, the Gollem-backed chat agent path, Compose Radar, macOS preview printing, denser everyday Timeline polish, safer provider setup, safer multi-account mail behavior, and reliable expanded-thread previews and folder counts after bulk actions.
 
 ## Release Delta
 
@@ -21,6 +21,7 @@ These are the changes most visible to people upgrading from the v0.6 beta line. 
 - [x] Cross-account and provider fixes keep Google invitation imports, IMAP new-mail sync, Fastmail CalDAV discovery, Fastmail preset refreshes, memory lookups, archive state, and bulk cleanup mutations scoped to the right account and message refs.
 - [x] Preview and Compose polish clears stale inline images before drafting and waits for a loaded preview to dwell before marking a message read.
 - [x] Everyday mail actions gained a fast preview unsubscribe shortcut, stable message-ref archive batching, non-ASCII mail header encoding, preserved forwarded attachments, clearer expanded thread reply rows, and a calmer `Alt+R` refresh shortcut.
+- [x] Expanded thread rows open the intended reply preview with Enter, and folder counts refresh after bulk archive or delete actions complete.
 - [x] Docs and demo-first onboarding now emphasize the v0.7 product state, including Memories, Gollem chat, AI role assignments, and the safer first five minutes loop.
 
 ## Screenshots
@@ -48,7 +49,8 @@ The v0.7 beta line started as a capability release and then tightened cross-acco
 - [x] `v0.7.2-beta.1` aligns mail reply and archive shortcuts, then batches bulk cleanup/deletion by stable message refs for safer multi-account mutations.
 - [x] `v0.7.3-beta.1` scopes new IMAP emails to their account, prunes archived emails from source state, clears stale inline images before Compose, and delays preview read marking until a loaded message has stayed open for 2.5 seconds.
 - [x] `v0.7.4-beta.1` adds the read-only Memories workspace, fast preview unsubscribe shortcut, Timeline star highlighting, provider-metadata thread grouping, duplicate-preview-link protection, Fastmail CalDAV and preset fixes, Settings account-action polish, safer multi-account Memories handling, non-ASCII send headers, preserved forwarded attachments, stable message-ref archive batching, and indented expanded thread replies.
-- [x] `beta-latest` points at `v0.7.4-beta.1`, and Homebrew installs the same release-built macOS binaries.
+- [x] `v0.7.5-beta.1` fixes Enter preview targeting for expanded thread replies and refreshes folder counts after bulk mail actions.
+- [x] `beta-latest` points at `v0.7.5-beta.1`, and Homebrew installs the same release-built macOS binaries.
 - [x] The release artifacts include `herald`, `herald-mcp-server`, and `herald-ssh-server` for both Apple Silicon and Intel macOS.
 
 ## How To Try It
