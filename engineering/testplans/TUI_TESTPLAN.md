@@ -442,16 +442,18 @@ Check these states during every applicable lane:
 5. Focus the preview panel and press left arrow.
 6. Move Timeline focus to an expanded thread parent row and press left arrow or `[`.
 7. Move Timeline focus to a collapsed thread row or single-email row and press left arrow or `[`.
-8. With no preview open, press left arrow or `[` from Timeline focus.
-9. Focus the folder sidebar and press right arrow or `]`.
-10. Open a preview with multiple attachments, focus the preview panel, and press `[` / `]`.
-11. Press `U` from a previewed message, then repeat in a virtual read-only Timeline view such as `All Mail only`.
-12. Open an unread message preview, move to another message before 2 seconds elapse, and refresh or inspect row state; then open an unread message and leave the loaded preview open for 2-3 seconds.
+8. Expand a thread, move Timeline focus to the first visible message row inside it, and press `Enter`.
+9. With no preview open, press left arrow or `[` from Timeline focus.
+10. Focus the folder sidebar and press right arrow or `]`.
+11. Open a preview with multiple attachments, focus the preview panel, and press `[` / `]`.
+12. Press `U` from a previewed message, then repeat in a virtual read-only Timeline view such as `All Mail only`.
+13. Open an unread message preview, move to another message before 2 seconds elapse, and refresh or inspect row state; then open an unread message and leave the loaded preview open for 2-3 seconds.
 
 **Expect:**
 - Right arrow and `]` open the split preview without moving focus out of the Timeline list when no preview is open.
 - With a preview already open, right arrow and `]` from Timeline focus move focus into the preview without changing the previewed message.
 - Collapsed thread rows preview the newest thread message and do not unfold.
+- `Enter` on the first concrete message row inside an expanded thread opens that message preview instead of folding the thread.
 - Left arrow from preview focus moves focus back to the Timeline list without closing the preview.
 - Left arrow and `[` from Timeline focus fold an expanded thread parent row before moving focus farther left.
 - Left arrow and `[` from Timeline focus close an open preview and focus folders when the current row is a single email or collapsed thread.

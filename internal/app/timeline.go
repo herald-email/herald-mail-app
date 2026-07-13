@@ -2623,13 +2623,6 @@ func (m *Model) openCurrentTimelineEmail() tea.Cmd {
 		m.timelineTable.SetCursor(savedCursor)
 		return nil
 	}
-	if ref.emailIdx == 0 && len(ref.group.emails) > 1 && m.timeline.expandedThreads[ref.group.normalizedSubject] {
-		savedCursor := m.timelineTable.Cursor()
-		m.timeline.expandedThreads[ref.group.normalizedSubject] = false
-		m.updateTimelineTable()
-		m.timelineTable.SetCursor(savedCursor)
-		return nil
-	}
 	email := ref.group.emails[ref.emailIdx]
 	return m.openTimelineEmail(email)
 }

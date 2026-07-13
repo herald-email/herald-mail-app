@@ -187,6 +187,37 @@ func TestHorizontalTimelineLeftFromTimelineFoldsExpandedThreadBeforeFolders(t *t
 	}
 }
 
+func TestHorizontalTimelineEnterOnExpandedThreadFirstMessageOpensPreview(t *testing.T) {
+	m := makeHorizontalTimelineModel(t, &readTrackingBackend{})
+	m.timeline.emails = []*models.EmailData{
+		{MessageID: "newest", UID: 201, Sender: "alice@example.com", Subject: "Re: Roadmap", Folder: "INBOX"},
+		{MessageID: "older", UID: 200, Sender: "bob@example.com", Subject: "Roadmap", Folder: "INBOX"},
+	}
+	threadKey := normalizeSubject("Roadmap")
+	m.timeline.expandedThreads[threadKey] = true
+	m.updateTimelineTable()
+	m.timelineTable.SetCursor(0)
+	m.setFocusedPanel(panelTimeline)
+
+	model, cmd, handled := m.handleTimelineKey(tea.KeyPressMsg{Code: tea.KeyEnter})
+	if !handled {
+		t.Fatal("expected Enter to be handled")
+	}
+	if cmd == nil {
+		t.Fatal("expected Enter on expanded thread first message to start preview body load")
+	}
+	updated := model.(*Model)
+	if !updated.timeline.expandedThreads[threadKey] {
+		t.Fatal("expected Enter to leave the expanded thread open")
+	}
+	if updated.timeline.selectedEmail == nil || updated.timeline.selectedEmail.MessageID != "newest" {
+		t.Fatalf("expected newest message preview, got %#v", updated.timeline.selectedEmail)
+	}
+	if updated.focusedPanel != panelTimeline {
+		t.Fatalf("expected focus to remain on Timeline, got %d", updated.focusedPanel)
+	}
+}
+
 func TestHorizontalTimelineLeftFromTimelineClosesPreviewAndFocusesFolders(t *testing.T) {
 	m := makeHorizontalTimelineModel(t, &readTrackingBackend{})
 	m.timeline.selectedEmail = m.timeline.emails[0]
