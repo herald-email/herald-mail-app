@@ -63,8 +63,9 @@ type FoldersLoadedMsg struct {
 
 // FolderStatusMsg carries MESSAGES/UNSEEN counts for all folders
 type FolderStatusMsg struct {
-	SourceID models.SourceID
-	Status   map[string]models.FolderStatus
+	SourceID         models.SourceID
+	Status           map[string]models.FolderStatus
+	AccountSnapshots []backend.AccountFolderSnapshot
 }
 
 // CalendarAgendaLoadedMsg carries cache-backed events for the Calendar tab.
@@ -2504,6 +2505,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			logger.Debug("FolderStatusMsg: ignoring stale source=%s active=%s", msg.SourceID, m.activeSourceID)
 			return m, nil
 		}
+		if len(msg.AccountSnapshots) > 0 {
+			m.accountFolderSnapshots = msg.AccountSnapshots
+		}
 		// Merge rather than replace so partial results don't wipe existing counts
 		for folder, st := range msg.Status {
 			logger.Debug("FolderStatusMsg: folder=%s total=%d unseen=%d", folder, st.Total, st.Unseen)
@@ -3350,16 +3354,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			// Reload data after all deletions complete to sync with server
 			// Also refresh timeline and sidebar folder counts
-			folders := m.folders
-			sourceID := m.activeSourceID
-			refreshCounts := func() tea.Msg {
-				status, err := m.backend.GetFolderStatus(folders)
-				if err != nil {
-					logger.Warn("Failed to refresh folder status: %v", err)
-					return FolderStatusMsg{SourceID: sourceID, Status: map[string]models.FolderStatus{}}
-				}
-				return FolderStatusMsg{SourceID: sourceID, Status: status}
-			}
+			refreshCounts := m.loadFolderStatusCmd(m.visibleSidebarStatusFolders(), 0)
 			return m, tea.Batch(m.loadTimelineEmails(), refreshCounts, m.notifyDeletionCompletionCmd(msg, completedTotal))
 		}
 

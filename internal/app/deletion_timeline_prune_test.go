@@ -1,9 +1,12 @@
 package app
 
 import (
+	"reflect"
 	"testing"
 	"time"
 
+	tea "charm.land/bubbletea/v2"
+	"github.com/herald-email/herald-mail-app/internal/backend"
 	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
@@ -162,5 +165,103 @@ func TestDeletionResultBatchAdvancesMessageCountProgress(t *testing.T) {
 		if updated.timeline.selectedMessageIDs[id] {
 			t.Fatalf("expected %s selection to be cleared", id)
 		}
+	}
+}
+
+type folderStatusRecordingBackend struct {
+	layoutBackend
+	requestedFolders [][]string
+	status           map[string]models.FolderStatus
+	snapshots        []backend.AccountFolderSnapshot
+}
+
+func (b *folderStatusRecordingBackend) GetFolderStatus(folders []string) (map[string]models.FolderStatus, error) {
+	b.requestedFolders = append(b.requestedFolders, append([]string(nil), folders...))
+	result := make(map[string]models.FolderStatus, len(folders))
+	for _, folder := range folders {
+		if st, ok := b.status[folder]; ok {
+			result[folder] = st
+		}
+	}
+	return result, nil
+}
+
+func (b *folderStatusRecordingBackend) ListAccountFolderSnapshots() ([]backend.AccountFolderSnapshot, error) {
+	return b.snapshots, nil
+}
+
+func TestDeletionResultCompletionRefreshesAllVisibleSidebarFolderCounts(t *testing.T) {
+	b := &folderStatusRecordingBackend{
+		status: map[string]models.FolderStatus{
+			"INBOX":   {Unseen: 10, Total: 20},
+			"Archive": {Unseen: 1, Total: 7},
+		},
+	}
+	b.snapshots = []backend.AccountFolderSnapshot{
+		{
+			Account: backend.AccountInfo{
+				SourceID:  models.DefaultMailSourceID,
+				AccountID: models.DefaultAccountID,
+			},
+			Folders: []string{"INBOX", "Archive"},
+			Status:  b.status,
+		},
+	}
+	m := New(b, nil, "", nil, false)
+	model, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m = model.(*Model)
+	m.loading = false
+	m.activeTab = tabTimeline
+	m.currentFolder = "INBOX"
+	m.folders = []string{"INBOX"}
+	m.folderTree = buildFolderTree([]string{"INBOX", "Archive"})
+	m.folderStatus = map[string]models.FolderStatus{
+		"INBOX":   {Unseen: 12, Total: 38},
+		"Archive": {Unseen: 2, Total: 9},
+	}
+	m.accountFolderSnapshots = []backend.AccountFolderSnapshot{
+		{
+			Account: backend.AccountInfo{
+				SourceID:  models.DefaultMailSourceID,
+				AccountID: models.DefaultAccountID,
+			},
+			Folders: []string{"INBOX", "Archive"},
+			Status: map[string]models.FolderStatus{
+				"INBOX":   {Unseen: 12, Total: 38},
+				"Archive": {Unseen: 2, Total: 9},
+			},
+		},
+	}
+	m.deleting = true
+	m.deletionsPending = 2
+	m.deletionsTotal = 2
+
+	updatedModel, cmd := m.Update(models.DeletionResult{
+		Folder:             "INBOX",
+		DeletedCount:       2,
+		IsArchive:          true,
+		AffectedMessageIDs: []string{"archived-1", "archived-2"},
+	})
+	updated := updatedModel.(*Model)
+
+	for _, msg := range collectCommandMessagesForTest(cmd) {
+		if folderMsg, ok := msg.(FolderStatusMsg); ok {
+			updatedModel, _ = updated.Update(folderMsg)
+			updated = updatedModel.(*Model)
+		}
+	}
+
+	wantFolders := []string{"INBOX", "Archive"}
+	if len(b.requestedFolders) != 1 {
+		t.Fatalf("GetFolderStatus calls = %#v, want one call for %#v", b.requestedFolders, wantFolders)
+	}
+	if !reflect.DeepEqual(b.requestedFolders[0], wantFolders) {
+		t.Fatalf("GetFolderStatus folders = %#v, want %#v", b.requestedFolders[0], wantFolders)
+	}
+	if got := updated.folderStatus["Archive"]; got != b.status["Archive"] {
+		t.Fatalf("Archive folder status = %#v, want %#v", got, b.status["Archive"])
+	}
+	if got := updated.accountFolderSnapshots[0].Status["Archive"]; got != b.status["Archive"] {
+		t.Fatalf("Archive account snapshot status = %#v, want %#v", got, b.status["Archive"])
 	}
 }

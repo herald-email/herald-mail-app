@@ -286,18 +286,61 @@ func foldersFromAccountSnapshots(snapshots []backend.AccountFolderSnapshot) []st
 	return folders
 }
 
+func (m *Model) visibleSidebarStatusFolders() []string {
+	seen := make(map[string]bool)
+	var folders []string
+	add := func(folder string) {
+		folder = strings.TrimSpace(folder)
+		if folder == "" || folder == virtualFolderAllMailOnly || seen[folder] {
+			return
+		}
+		seen[folder] = true
+		folders = append(folders, folder)
+	}
+	for _, item := range m.visibleSidebarItems() {
+		switch item.kind {
+		case sidebarItemFolder:
+			if item.node != nil {
+				add(item.node.fullPath)
+			}
+		case sidebarItemAccountFolder, sidebarItemAggregate:
+			add(item.fullPath)
+		}
+	}
+	for _, folder := range m.folders {
+		add(folder)
+	}
+	for _, folder := range foldersFromAccountSnapshots(m.accountFolderSnapshots) {
+		add(folder)
+	}
+	add(m.currentFolder)
+	if len(folders) == 0 {
+		add("INBOX")
+	}
+	return folders
+}
+
 func (m *Model) loadFolderStatusCmd(folders []string, delay time.Duration) tea.Cmd {
 	logger.Debug("loadFolderStatusCmd: scheduled delay=%s folders=%d", delay, len(folders))
 	sourceID := m.activeSourceID
 	load := func() tea.Msg {
 		logger.Debug("loadFolderStatusCmd: requesting status for %d folders", len(folders))
 		status, err := m.backend.GetFolderStatus(folders)
+		var snapshots []backend.AccountFolderSnapshot
+		if snapshotter, ok := m.backend.(backend.AccountFolderSnapshotBackend); ok {
+			loaded, snapshotErr := snapshotter.ListAccountFolderSnapshots()
+			if snapshotErr != nil {
+				logger.Warn("Failed to refresh account folder snapshots: %v", snapshotErr)
+			} else {
+				snapshots = loaded
+			}
+		}
 		if err != nil {
 			logger.Warn("Failed to get folder status: %v", err)
-			return FolderStatusMsg{SourceID: sourceID, Status: map[string]models.FolderStatus{}}
+			return FolderStatusMsg{SourceID: sourceID, Status: map[string]models.FolderStatus{}, AccountSnapshots: snapshots}
 		}
 		logger.Debug("loadFolderStatusCmd: loaded status for %d folders", len(status))
-		return FolderStatusMsg{SourceID: sourceID, Status: status}
+		return FolderStatusMsg{SourceID: sourceID, Status: status, AccountSnapshots: snapshots}
 	}
 	if delay <= 0 {
 		return load
