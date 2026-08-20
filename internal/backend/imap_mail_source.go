@@ -40,6 +40,11 @@ func (s *IMAPMailSource) ensureClient() (*imap.Client, error) {
 	if s == nil || s.client == nil {
 		return nil, fmt.Errorf("IMAP client unavailable")
 	}
+	// Daemon mode: reads/mutations arrive outside sync cycles, when the client
+	// may not be connected. Connect() is a no-op when already connected.
+	if err := s.client.Connect(); err != nil {
+		return nil, fmt.Errorf("IMAP connect: %w", err)
+	}
 	return s.client, nil
 }
 

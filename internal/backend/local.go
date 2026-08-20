@@ -1031,6 +1031,10 @@ func (b *LocalBackend) FetchEmailBody(folder string, uid uint32) (*models.EmailB
 		if err == nil && email != nil {
 			ref = email.MessageRef()
 			result, err := b.GetMessage(context.Background(), ref)
+			if err != nil && isMessageGoneError(err) {
+				_ = b.DeleteCachedEmail(ref)
+				return nil, fmt.Errorf("message no longer exists on the server (moved or deleted); removed from local list")
+			}
 			return result.Body, err
 		}
 		if err != nil && err != sql.ErrNoRows {
@@ -1038,7 +1042,21 @@ func (b *LocalBackend) FetchEmailBody(folder string, uid uint32) (*models.EmailB
 		}
 	}
 	result, err := b.GetMessageNoCache(context.Background(), ref)
+	if err != nil && isMessageGoneError(err) {
+		_ = b.DeleteCachedEmail(ref)
+		return nil, fmt.Errorf("message no longer exists on the server (moved or deleted); removed from local list")
+	}
 	return result.Body, err
+}
+
+// isMessageGoneError reports whether an IMAP fetch failure means the message
+// no longer exists on the server (expunged/moved), so stale cache rows can be
+// dropped instead of surfacing a raw error forever.
+func isMessageGoneError(err error) bool {
+	if err == nil {
+		return false
+	}
+	return strings.Contains(strings.ToLower(err.Error()), "not found")
 }
 
 func (b *LocalBackend) GetCachedPreviewBody(messageID string) (*models.EmailBody, error) {

@@ -361,6 +361,11 @@ func isConnectionError(err error) bool {
 		return false
 	}
 	s := err.Error()
+	// "Not logged in" (Dovecot BAD/NO) means the session lost auth state;
+	// treat as a connection problem so callers reconnect and retry.
+	if strings.Contains(strings.ToLower(s), "not logged in") {
+		return true
+	}
 	return strings.Contains(s, "broken pipe") ||
 		strings.Contains(s, "connection reset") ||
 		strings.Contains(s, "connection closed") ||
