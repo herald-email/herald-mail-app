@@ -63,11 +63,10 @@ func (s *IMAPMailSource) Connect(ctx context.Context) error {
 }
 
 func (s *IMAPMailSource) Close() error {
-	client, err := s.ensureClient()
-	if err != nil {
+	if s == nil || s.client == nil {
 		return nil
 	}
-	return client.Close()
+	return s.client.Close()
 }
 
 func (s *IMAPMailSource) ListFolders(ctx context.Context) ([]string, error) {
