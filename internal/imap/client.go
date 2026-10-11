@@ -25,6 +25,9 @@ import (
 // ErrIDLENotSupported is returned by StartIDLE when the server lacks IDLE capability.
 var ErrIDLENotSupported = errors.New("imap: server does not support IDLE")
 
+// ErrMessageNotFound means a successful UID fetch returned no message.
+var ErrMessageNotFound = errors.New("imap: message not found")
+
 const fetchGmailLabels imap.FetchItem = "X-GM-LABELS"
 
 func isDraftFolderName(folder string) bool {
@@ -267,10 +270,24 @@ func (c *Client) fetchItemsWithGmailLabels(items []imap.FetchItem) []imap.FetchI
 
 // Connect establishes connection to IMAP server. It is a no-op if already connected.
 func (c *Client) Connect() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.connectLocked()
+}
+
+// connectLocked establishes an authenticated connection with c.mu held.
+func (c *Client) connectLocked() error {
 	if c.client != nil {
 		logger.Debug("Connect: reusing existing IMAP connection")
 		return nil // reuse existing connection
 	}
+	connected := false
+	defer func() {
+		if !connected && c.client != nil {
+			_ = c.client.Terminate()
+			c.client = nil
+		}
+	}()
 
 	addr := fmt.Sprintf("%s:%d", c.cfg.Server.Host, c.cfg.Server.Port)
 	logger.Debug("Connect: dialing IMAP addr=%s localServer=%v vendor=%s", addr, c.isLocalServer(), c.cfg.Vendor)
@@ -328,6 +345,7 @@ func (c *Client) Connect() error {
 	}
 
 	logger.Info("Successfully connected to IMAP server at %s", addr)
+	connected = true
 	return nil
 }
 
@@ -351,7 +369,7 @@ func (c *Client) Reconnect() error {
 		_ = c.client.Logout() // best-effort close
 		c.client = nil
 	}
-	return c.Connect()
+	return c.connectLocked()
 }
 
 // isConnectionError returns true if the error indicates the IMAP TCP connection
@@ -361,6 +379,11 @@ func isConnectionError(err error) bool {
 		return false
 	}
 	s := err.Error()
+	// "Not logged in" (Dovecot BAD/NO) means the session lost auth state;
+	// treat as a connection problem so callers reconnect and retry.
+	if strings.Contains(strings.ToLower(s), "not logged in") {
+		return true
+	}
 	return strings.Contains(s, "broken pipe") ||
 		strings.Contains(s, "connection reset") ||
 		strings.Contains(s, "connection closed") ||

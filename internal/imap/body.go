@@ -98,7 +98,7 @@ func (c *Client) fetchEmailPreviewBodyLocked(uid uint32, folder string) (*models
 		return nil, fmt.Errorf("uid fetch preview structure: %w", err)
 	}
 	if msg == nil {
-		return nil, fmt.Errorf("message uid %d not found in %s", uid, folder)
+		return nil, fmt.Errorf("%w: uid %d in %s", ErrMessageNotFound, uid, folder)
 	}
 	if msg.BodyStructure == nil {
 		logger.Warn("FetchEmailPreviewBody: no BODYSTRUCTURE for uid %d in %s, falling back to full body", uid, folder)
@@ -253,7 +253,7 @@ func (c *Client) fetchEmailBodyLocked(uid uint32, folder string) (*models.EmailB
 		return nil, fmt.Errorf("uid fetch: %w", err)
 	}
 	if msg == nil {
-		return nil, fmt.Errorf("message uid %d not found in %s", uid, folder)
+		return nil, fmt.Errorf("%w: uid %d in %s", ErrMessageNotFound, uid, folder)
 	}
 
 	bodyReader := msg.GetBody(section)
