@@ -11,6 +11,7 @@ Gmail OAuth is the recommended Gmail setup path. Herald opens a browser authoriz
 
    ```sh
    brew tap herald-email/herald
+   brew trust herald-email/herald
    brew install herald
    ```
 

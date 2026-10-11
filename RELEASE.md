@@ -1,15 +1,15 @@
 # Herald Release Runbook
 
-This runbook covers the first beta release path. The first beta tag is `v0.1.0-beta.1`, and tag pushes matching `v*` publish GitHub releases with downloadable macOS artifacts.
+This runbook covers the first beta release path. The first beta tag is `v0.1.0-beta.1`, and tag pushes matching `v*` publish GitHub releases with downloadable macOS and Linux artifacts.
 
 ## Release Scope
 
 - GitHub-hosted releases only for the first beta.
-- macOS artifacts only: `darwin/arm64` and `darwin/amd64`.
+- Native artifacts: `darwin/arm64`, `darwin/amd64`, `linux/arm64`, and `linux/amd64`. Linux runners use Ubuntu 24.04 (glibc 2.39 baseline).
 - Each artifact includes `herald`, `herald-mcp-server`, and `herald-ssh-server`.
 - Stable releases are immutable `v*` tags without a hyphen, such as `v0.1.0`, and own GitHub's `/releases/latest` URL.
 - Beta releases are immutable `v*-beta.*` prereleases and also update the mutable `beta-latest` convenience channel.
-- The Homebrew tap `herald-email/homebrew-herald` is the recommended macOS install path: `brew tap herald-email/herald && brew install herald`.
+- The Homebrew tap `herald-email/homebrew-herald` is the recommended macOS install path: `brew tap herald-email/herald && brew trust herald-email/herald && brew install herald`.
 - DMG packaging, code signing, and notarization are deferred to a later packaging milestone.
 - Built-in Google OAuth credentials are convenience defaults for desktop OAuth. They are not confidential once distributed in a binary.
 
@@ -116,7 +116,7 @@ git tag -a v0.1.0-beta.1 -m "Herald v0.1.0-beta.1"
 git push origin v0.1.0-beta.1
 ```
 
-The `Release` workflow runs tests, builds both macOS architectures, smokes all three binaries, uploads checksums, publishes a GitHub prerelease, and updates `herald-email/homebrew-herald`.
+The `Release` workflow runs tests, builds both architectures for macOS and Linux, smokes all three binaries, uploads checksums, publishes a GitHub prerelease, and updates `herald-email/homebrew-herald`.
 
 It also updates `beta-latest` when the tag matches `v*-beta.*`. Maintainers should not manually create, push, or edit the `beta-latest` tag or release; the workflow owns that mutable channel.
 
@@ -156,7 +156,7 @@ The binaries inside those tarballs still report the immutable tag, such as `v0.1
 
 ## Asset Verification
 
-After the prerelease is published, download both macOS tarballs and `checksums.txt`, then verify:
+After the prerelease is published, download all four macOS/Linux tarballs and `checksums.txt`, then verify:
 
 ```bash
 shasum -a 256 -c checksums.txt
@@ -220,7 +220,7 @@ If `beta-latest` points at a bad beta, publish a fixed immutable beta tag. The w
 - Keep the `herald-email/homebrew-herald` formula tracking immutable release tarballs.
 - Decide whether to add a cask once a signed and notarized DMG exists.
 - Add Apple Developer ID signing and notarization before DMG/cask distribution.
-- Consider GoReleaser when the release matrix expands beyond the current macOS beta artifacts.
+- Consider GoReleaser if release packaging outgrows the native macOS/Linux matrix.
 
 References:
 

@@ -37,6 +37,11 @@ intel_asset="herald-${tag}-darwin-amd64.tar.gz"
 arm_sha="$(checksum_for "$arm_asset")"
 intel_sha="$(checksum_for "$intel_asset")"
 
+linux_arm_asset="herald-${tag}-linux-arm64.tar.gz"
+linux_intel_asset="herald-${tag}-linux-amd64.tar.gz"
+linux_arm_sha="$(checksum_for "$linux_arm_asset")"
+linux_intel_sha="$(checksum_for "$linux_intel_asset")"
+
 mkdir -p "$(dirname "$output_file")"
 
 cat >"$output_file" <<EOF
@@ -58,6 +63,18 @@ class Herald < Formula
     on_intel do
       url "${repo_url}/releases/download/${tag}/${intel_asset}"
       sha256 "${intel_sha}"
+    end
+  end
+
+  on_linux do
+    on_arm do
+      url "${repo_url}/releases/download/${tag}/${linux_arm_asset}"
+      sha256 "${linux_arm_sha}"
+    end
+
+    on_intel do
+      url "${repo_url}/releases/download/${tag}/${linux_intel_asset}"
+      sha256 "${linux_intel_sha}"
     end
   end
 

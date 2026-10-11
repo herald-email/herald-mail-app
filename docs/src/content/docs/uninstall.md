@@ -16,6 +16,7 @@ For a full tap reset before reinstalling:
 ```sh
 brew untap herald-email/herald
 brew tap herald-email/herald
+brew trust herald-email/herald
 brew install herald
 ```
 

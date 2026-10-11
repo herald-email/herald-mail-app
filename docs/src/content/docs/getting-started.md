@@ -21,6 +21,7 @@ continue with [Global UI](/using-herald/global-ui/) and the tab pages.
 
 ```sh
 brew tap herald-email/herald
+brew trust herald-email/herald
 brew install herald
 herald --demo
 
@@ -47,12 +48,19 @@ For a full tap reset:
 brew uninstall herald
 brew untap herald-email/herald
 brew tap herald-email/herald
+brew trust herald-email/herald
 brew install herald
 ```
 
 ## Nightly builds
 
 Nightly builds are short-lived GitHub Actions artifacts for testing the latest successful `main` build before the next beta tag. They are not signed releases or Homebrew packages; see [Nightly Builds](/nightly-builds/) for download steps and channel rules.
+
+## Linux installation
+
+The published `v0.7.5-beta.1` Homebrew formula contains macOS archives only; on Linux it fails with “formula requires at least a URL.” Until a release containing Linux archives reaches the tap, install from source using the Go commands below (Go 1.25+ and a C compiler are required).
+
+The release workflow now targets Linux x86_64 and arm64 with native Ubuntu 24.04 builds and embedded OAuth defaults. These binaries require glibc 2.39 or newer; older glibc distributions and musl-based systems should build from source. After Linux artifacts are published, use the same tap, trust, and install commands shown above.
 
 ## Install from source with Go
 

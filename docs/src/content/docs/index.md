@@ -19,6 +19,7 @@ AI is optional. Mail sync, reading, compose, search, cleanup, Calendar, and sett
 
 ```sh
 brew tap herald-email/herald
+brew trust herald-email/herald
 brew install herald
 herald --demo
 ```

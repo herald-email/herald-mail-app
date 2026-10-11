@@ -1,6 +1,7 @@
 package repoassert
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -15,6 +16,8 @@ func TestRenderHomebrewFormulaUsesImmutableReleaseAssets(t *testing.T) {
 	checksums := strings.Join([]string{
 		"380187a42200d184dfd803c2fc69491d61a5eea989a175d14f5dd1ac761722ad  herald-v0.1.0-beta.1-darwin-amd64.tar.gz",
 		"273e48e3b871d7c800801f2fe9ed4610ea9a5ff6c77c5850fb78b300e0fab7e9  herald-v0.1.0-beta.1-darwin-arm64.tar.gz",
+		"1111111111111111111111111111111111111111111111111111111111111111  herald-v0.1.0-beta.1-linux-arm64.tar.gz",
+		"2222222222222222222222222222222222222222222222222222222222222222  herald-v0.1.0-beta.1-linux-amd64.tar.gz",
 	}, "\n") + "\n"
 	if err := os.WriteFile(checksumsPath, []byte(checksums), 0o600); err != nil {
 		t.Fatalf("write checksums: %v", err)
@@ -37,6 +40,11 @@ func TestRenderHomebrewFormulaUsesImmutableReleaseAssets(t *testing.T) {
 		`desc "Terminal email client and inbox cleanup tool"`,
 		`homepage "https://github.com/herald-email/herald-mail-app"`,
 		`license "FSL-1.1-ALv2"`,
+		`on_linux do`,
+		`sha256 "1111111111111111111111111111111111111111111111111111111111111111"`,
+		`sha256 "2222222222222222222222222222222222222222222222222222222222222222"`,
+		`url "https://github.com/herald-email/herald-mail-app/releases/download/v0.1.0-beta.1/herald-v0.1.0-beta.1-linux-arm64.tar.gz"`,
+		`url "https://github.com/herald-email/herald-mail-app/releases/download/v0.1.0-beta.1/herald-v0.1.0-beta.1-linux-amd64.tar.gz"`,
 		`on_arm do`,
 		`url "https://github.com/herald-email/herald-mail-app/releases/download/v0.1.0-beta.1/herald-v0.1.0-beta.1-darwin-arm64.tar.gz"`,
 		`sha256 "273e48e3b871d7c800801f2fe9ed4610ea9a5ff6c77c5850fb78b300e0fab7e9"`,
@@ -80,5 +88,36 @@ func TestRenderHomebrewFormulaFailsWhenChecksumIsMissing(t *testing.T) {
 	}
 	if !strings.Contains(string(out), "missing checksum for herald-v0.1.0-beta.1-darwin-amd64.tar.gz") {
 		t.Fatalf("expected missing amd64 checksum error, got:\n%s", out)
+	}
+}
+
+func TestRenderHomebrewFormulaRejectsIncompletePlatformMatrix(t *testing.T) {
+	platforms := []string{"darwin-arm64", "darwin-amd64", "linux-arm64", "linux-amd64"}
+	for _, missing := range platforms {
+		t.Run(missing, func(t *testing.T) {
+			dir := t.TempDir()
+			checksumsPath, outputPath := filepath.Join(dir, "checksums.txt"), filepath.Join(dir, "herald.rb")
+			var checksums strings.Builder
+			for _, platform := range platforms {
+				if platform != missing {
+					fmt.Fprintf(&checksums, "%s  herald-v0.1.0-beta.1-%s.tar.gz\n", strings.Repeat("a", 64), platform)
+				}
+			}
+			if err := os.WriteFile(checksumsPath, []byte(checksums.String()), 0600); err != nil {
+				t.Fatal(err)
+			}
+			const original = "existing formula\n"
+			if err := os.WriteFile(outputPath, []byte(original), 0600); err != nil {
+				t.Fatal(err)
+			}
+			out, err := repoCommand(t, "bash", ".github/scripts/render-homebrew-formula.sh", "v0.1.0-beta.1", checksumsPath, outputPath).CombinedOutput()
+			if err == nil || !strings.Contains(string(out), "missing checksum for herald-v0.1.0-beta.1-"+missing+".tar.gz") {
+				t.Fatalf("expected missing %s checksum failure, got %v: %s", missing, err, out)
+			}
+			data, err := os.ReadFile(outputPath)
+			if err != nil || string(data) != original {
+				t.Fatalf("failed render replaced existing formula: %q, %v", data, err)
+			}
+		})
 	}
 }

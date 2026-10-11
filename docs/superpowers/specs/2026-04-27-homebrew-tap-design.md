@@ -40,3 +40,13 @@ This section records the installed-user operations that should appear in the pub
 - [x] Document `brew tap herald-email/herald && brew install herald` as the default macOS install.
 - [x] Document `brew update` and `brew upgrade herald` for routine upgrades.
 - [x] Document uninstall, untap, retap, and reinstall as the full reset path.
+
+## Linux packaging correction (#70)
+
+Linux Homebrew currently has no active URL because the formula selects only macOS archives. Extend the same immutable binary distribution contract to Linux without losing embedded OAuth defaults or changing the macOS artifacts.
+
+- [x] Configure builds and smoke checks for Linux amd64 and arm64 binaries on native Ubuntu 24.04 runners with CGO enabled.
+- [x] Configure publication of Linux archives and checksums alongside macOS assets, including the beta-latest aliases.
+- [x] Generate Linux architecture-specific formula URLs and fail before replacing a formula if any platform checksum is missing.
+- [x] Verify all four platform selections using Homebrew, and document tap trust plus Linux runtime requirements.
+- [ ] Publish a release and validate installation on Linux before announcing availability in the public tap.

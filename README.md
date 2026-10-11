@@ -16,6 +16,7 @@ or API key required.
 
 ```bash
 brew tap herald-email/herald
+brew trust herald-email/herald
 brew install herald
 herald --demo
 ```
@@ -148,6 +149,7 @@ To test terminal image rendering, run demo mode in a Kitty-protocol terminal suc
 
 ```bash
 brew tap herald-email/herald
+brew trust herald-email/herald
 brew install herald
 
 # First launch the safe demo
@@ -177,6 +179,7 @@ For a full Homebrew reset:
 brew uninstall herald
 brew untap herald-email/herald
 brew tap herald-email/herald
+brew trust herald-email/herald
 brew install herald
 ```
 
