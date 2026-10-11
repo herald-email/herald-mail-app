@@ -4498,6 +4498,11 @@ func (s *Settings) oauthRequiredMsg(candidate *config.Config) (OAuthRequiredMsg,
 	includeConfigured := (s.provider == "gmail-oauth" || (s.mode == SettingsModeWizard && s.firstRunAccountOnly && s.provider == "gmail-oauth" && !s.firstRunOtherProvider)) ||
 		(s.accountEditMode == settingsAccountEditExisting && (validateAccount || validateCalendar))
 	sourceIDs := s.googleOAuthSourceIDsForCurrentAccount(candidate, includeConfigured)
+	// Calendar-only forms can retain a Gmail mail-provider default. Only
+	// authorize when the account being saved actually contains Google sources.
+	if len(sourceIDs) == 0 {
+		return OAuthRequiredMsg{}, false
+	}
 	needsCalendarOAuth := !includeConfigured && len(sourceIDs) > 0
 	if !includeConfigured && !needsCalendarOAuth {
 		return OAuthRequiredMsg{}, false
