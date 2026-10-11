@@ -310,12 +310,15 @@ func (m *Model) renderStatusBar() string {
 		parts = append(parts, formatFolderCountsStatus(st.Unseen, st.Total, m.loading && !m.syncCountsSettled, compactChrome))
 	}
 
-	// Deletion progress
+	// Deletion/archive progress
 	if m.deleting {
 		completed := m.deletionsTotal - m.deletionsPending
 		status := "Deleting"
+		if m.deletionIsArchive {
+			status = "Archiving"
+		}
 		if m.connectionLost {
-			status = "Deleting (reconnecting…)"
+			status += " (reconnecting…)"
 		}
 		if m.deletionProgress.Sender != "" {
 			parts = append(parts, fmt.Sprintf("%s %s  %d/%d", status, m.deletionProgress.Sender, completed, m.deletionsTotal))

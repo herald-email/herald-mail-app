@@ -703,6 +703,7 @@ type Model struct {
 	loading                   bool
 	startupSnapshotReady      bool
 	deleting                  bool
+	deletionIsArchive         bool // Operation for the current queued batch, before any results arrive
 	deletionProgress          models.DeletionResult
 	deletionsPending          int  // Number of deletions waiting to complete
 	deletionsTotal            int  // Total deletions in current batch
@@ -3347,6 +3348,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			logger.Info("All %d deletions complete, reloading data...", m.deletionsTotal)
 			completedTotal := m.deletionsTotal
 			m.deleting = false
+			m.deletionIsArchive = false
 			m.deletionsPending = 0
 			m.deletionsTotal = 0
 			m.connectionLost = false

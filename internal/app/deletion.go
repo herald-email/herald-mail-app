@@ -231,6 +231,7 @@ func (m *Model) queueRequests(isArchive bool) tea.Cmd {
 		}
 		ch := m.deletionRequestCh
 		requests := deletionRequestsFromTargets(targets, isArchive)
+		m.deletionIsArchive = isArchive
 		go func() {
 			for _, req := range requests {
 				ch <- req
