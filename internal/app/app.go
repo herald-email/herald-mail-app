@@ -793,6 +793,8 @@ type Model struct {
 	mailer                        *appsmtp.Client
 	fromAddress                   string
 	composeSourceID               models.SourceID
+	composeIdentityAddress        string
+	composeIdentityFilter         string
 	composeTo                     textinput.Model
 	composeCC                     textinput.Model
 	composeBCC                    textinput.Model
@@ -2110,6 +2112,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.aiModelWarning = nil
 		}
 		return m, nil
+
+	case SettingsIdentitiesSavedMsg:
+		return m, m.saveSettingsIdentities(msg)
 
 	case SettingsSavedMsg:
 		if msg.ValidateAccount {

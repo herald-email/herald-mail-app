@@ -24,7 +24,7 @@ func (m *Model) composeAccountOptions() []backend.AccountInfo {
 }
 
 func (m *Model) composeAccountPickerVisible() bool {
-	return len(m.composeAccountOptions()) > 1
+	return len(m.composeIdentityOptions()) > 1
 }
 
 func (m *Model) defaultComposeSourceID() models.SourceID {
@@ -50,6 +50,7 @@ func (m *Model) defaultComposeSourceID() models.SourceID {
 }
 
 func (m *Model) setComposeSource(sourceID models.SourceID) {
+	defer m.resetComposeIdentity()
 	options := m.composeAccountOptions()
 	if len(options) == 0 {
 		m.composeSourceID = ""
@@ -76,7 +77,7 @@ func (m *Model) setComposeSourceForEmail(email *models.EmailData) {
 
 func (m *Model) composeSelectedSourceID() models.SourceID {
 	if m.composeSourceID == "" {
-		m.setComposeSource(m.defaultComposeSourceID())
+		m.composeSourceID = m.defaultComposeSourceID()
 	}
 	return m.composeSourceID
 }
@@ -91,7 +92,7 @@ func (m *Model) composeSelectedAccount() backend.AccountInfo {
 	return backend.AccountInfo{}
 }
 
-func (m *Model) composeFromAddress() string {
+func (m *Model) composePrimaryAddress() string {
 	account := m.composeSelectedAccount()
 	if strings.TrimSpace(account.Address) != "" {
 		return strings.TrimSpace(account.Address)
@@ -100,18 +101,19 @@ func (m *Model) composeFromAddress() string {
 }
 
 func (m *Model) composeFromPickerValue(width int) string {
-	account := m.composeSelectedAccount()
-	if account.SourceID == "" {
-		return strings.TrimSpace(m.fromAddress)
+	label := m.composeFromAddress()
+	if account := m.composeSelectedAccount(); account.DisplayName != "" {
+		label = account.DisplayName + " · " + label
 	}
-	label := strings.TrimSpace(account.DisplayName)
-	if label == "" {
-		label = string(account.SourceID)
-	}
-	if address := strings.TrimSpace(account.Address); address != "" {
-		label = fmt.Sprintf("%s <%s>", label, address)
-	}
-	if len(m.composeAccountOptions()) > 1 {
+	if m.composeIdentitySearchEnabled() {
+		if m.composeIdentityFilter != "" {
+			label = fmt.Sprintf("[%s] %s", m.composeIdentityFilter, label)
+			if len(m.filteredComposeIdentities()) == 0 {
+				label = "No matches · " + label
+			}
+		}
+		label += "  (↑/↓ · type to filter)"
+	} else if len(m.composeAccountOptions()) > 1 {
 		label += "  (↑/↓)"
 	}
 	if width > 0 {
@@ -121,14 +123,13 @@ func (m *Model) composeFromPickerValue(width int) string {
 }
 
 func (m *Model) moveComposeSource(delta int) {
-	options := m.composeAccountOptions()
+	options := m.filteredComposeIdentities()
 	if len(options) == 0 {
-		m.composeSourceID = ""
 		return
 	}
 	current := 0
-	for i, account := range options {
-		if account.SourceID == m.composeSelectedSourceID() {
+	for i, option := range options {
+		if option.source == m.composeSelectedSourceID() && strings.EqualFold(option.address, mailboxAddress(m.composeFromAddress())) {
 			current = i
 			break
 		}
@@ -137,20 +138,42 @@ func (m *Model) moveComposeSource(delta int) {
 	if next < 0 {
 		next += len(options)
 	}
-	m.composeSourceID = options[next].SourceID
+	m.selectComposeIdentity(options[next])
 }
 
 func (m *Model) handleComposeFromKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool) {
 	if m.composeField != composeFieldFrom {
 		return m, nil, false
 	}
+	if m.composeIdentitySearchEnabled() {
+		switch msg.String() {
+		case "up", "left":
+			m.moveComposeSource(-1)
+		case "down", "right":
+			m.moveComposeSource(1)
+		case "enter":
+			m.composeIdentityFilter = ""
+		case "backspace":
+			query := []rune(m.composeIdentityFilter)
+			if len(query) > 0 {
+				m.composeIdentityFilter = string(query[:len(query)-1])
+			}
+			m.matchComposeIdentityFilter()
+		default:
+			if msg.Text != "" {
+				if len([]rune(m.composeIdentityFilter)) < 100 {
+					m.composeIdentityFilter += msg.Text
+				}
+				m.matchComposeIdentityFilter()
+			}
+		}
+		return m, nil, true
+	}
 	switch shortcutKey(msg) {
 	case "up", "left", "k", "h":
 		m.moveComposeSource(-1)
-		return m, nil, true
 	case "down", "right", "j", "l", "enter", "space":
 		m.moveComposeSource(1)
-		return m, nil, true
 	}
 	return m, nil, true
 }

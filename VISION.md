@@ -14,6 +14,8 @@ High-level milestones. Detailed feature status is in each section below.
 - [x] Status bar (folder, counts, selection state, mode, key hints)
 - [x] Timeline / thread view + tab navigation
 - [x] Compose, reply, forward
+- [x] Manage sending identities in Settings → Accounts, including add/edit/remove, default selection, and explicit persistence (#74)
+- [x] Account-scoped sending identities with a default, searchable Compose From selection, reply matching, and draft identity preservation (#74)
 - [x] Account-scoped default Compose signature configured in YAML and editable from Settings
 - [x] Email deletion (single, by sender, by domain — moves to Trash)
 - [x] Archive (`a` / `e` keys — immediately moves to an explicit archive folder; provider-aware fallback only)

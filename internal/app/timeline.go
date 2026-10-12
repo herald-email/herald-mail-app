@@ -2290,6 +2290,9 @@ func (m *Model) openTimelineReplyCompose(email *models.EmailData, body *models.E
 	m.composeSubject.SetValue(buildReplySubject(email.Subject))
 	m.composeBody.SetValue("")
 	m.setComposeSourceForEmail(email)
+	if body != nil {
+		m.restoreComposeIdentity(strings.Trim(strings.Join([]string{body.To, body.CC}, ","), ","))
+	}
 	m.applyConfiguredSignatureToComposeBody()
 	m.composeStatus = composeStatus
 	m.statusMessage = ""
@@ -2327,6 +2330,7 @@ func (m *Model) openTimelineDraftCompose(email *models.EmailData, body *models.E
 	m.composeBody.SetValue(body.TextPlain)
 	m.composeAttachments = nil
 	m.setComposeSourceForEmail(email)
+	m.restoreComposeIdentity(body.From)
 	m.resetComposeAIBar()
 	m.composeStatus = composeStatus
 	if m.composeStatus == "" {
@@ -2524,6 +2528,9 @@ func (m *Model) replyAllRecipientFields(email *models.EmailData, body *models.Em
 
 func (m *Model) ownAddressSet() map[string]bool {
 	values := []string{m.fromAddress}
+	for _, identity := range m.composeIdentityOptions() {
+		values = append(values, identity.address)
+	}
 	if m.cfg != nil {
 		values = append(values, m.cfg.Credentials.Username, m.cfg.Gmail.Email)
 	}

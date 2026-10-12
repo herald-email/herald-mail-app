@@ -92,7 +92,7 @@ type sshHarness struct {
 	output  *lockedBuffer
 }
 
-func startVirtualLabSSH(t testing.TB, scenario testmail.ScenarioName, width, height int) *sshHarness {
+func startVirtualLabSSH(t testing.TB, scenario testmail.ScenarioName, width, height int, configure ...func(*config.Config)) *sshHarness {
 	t.Helper()
 	t.Setenv("HERALD_LOG_DIR", t.TempDir())
 
@@ -109,6 +109,9 @@ func startVirtualLabSSH(t testing.TB, scenario testmail.ScenarioName, width, hei
 	cfg.Sync.IDLEEnabled = false
 	cfg.Semantic.Enabled = false
 	cfg.AI.Provider = "disabled"
+	for _, apply := range configure {
+		apply(cfg)
+	}
 
 	configPath := filepath.Join(dir, "config.yaml")
 	if err := cfg.Save(configPath); err != nil {
@@ -546,4 +549,79 @@ func TestHostKeyParentUsesConfiguredPath(t *testing.T) {
 	if info, err := os.Stat(filepath.Dir(hostKeyPath)); err != nil || !info.IsDir() {
 		t.Fatalf("host key parent was not created: info=%v err=%v", info, err)
 	}
+}
+
+func TestVirtualLabSSHComposeIdentity(t *testing.T) {
+	h := startVirtualLabSSH(t, testmail.ScenarioCalendlyInvite, 120, 40, func(cfg *config.Config) {
+		cfg.Compose.Identities = []config.IdentityConfig{{Name: "Shopping", Address: "shopping@herald.test"}, {Name: "Public", Address: "public@herald.test"}}
+		cfg.Compose.DefaultIdentity = "shopping@herald.test"
+	})
+	h.waitForVisible(t, "Invitation")
+	h.sendKey(t, "c")
+	h.waitForVisible(t, "shopping@herald.test")
+	h.sendKey(t, "\x1b[Z")
+	for _, r := range "public" {
+		h.sendKey(t, string(r))
+	}
+	h.waitForVisible(t, "public@herald.test")
+	h.forceRedraw(t, 80, 24)
+	requireVisibleContains(t, h.currentVisibleFrame(), "From:", "public@herald.test")
+	requireVisibleFitsWidth(t, h.currentVisibleFrame(), 80)
+	t.Log(h.currentVisibleFrame())
+}
+
+func TestVirtualLabSSHSettingsIdentities(t *testing.T) {
+	h := startVirtualLabSSH(t, testmail.ScenarioCalendlyInvite, 80, 24)
+	h.waitForVisible(t, "Invitation")
+	h.sendKey(t, "S")
+	h.waitForVisible(t, "Theme Selection")
+	h.sendKey(t, "enter")
+	h.waitForVisible(t, "Add account")
+	h.sendKey(t, "\x1b[H")
+	h.sendKey(t, "enter")
+	h.waitForVisible(t, "Display Name")
+	h.sendKey(t, "\t")
+	h.forceRedraw(t, 80, 24)
+	h.sendKey(t, "\t")
+	h.forceRedraw(t, 80, 24)
+	h.waitForVisible(t, "Edit sending identities")
+	h.sendKey(t, "enter")
+	h.waitForVisible(t, "Add identity")
+	h.sendKey(t, "\x1b[F")
+	h.sendKey(t, "\x1b[A")
+	h.sendKey(t, "enter")
+	h.waitForVisible(t, "Name (optional)")
+	h.sendKey(t, "SSH Alias")
+	h.sendKey(t, "\t")
+	h.forceRedraw(t, 80, 24)
+	h.sendKey(t, "ssh-alias@herald.test")
+	h.sendKey(t, "\t")
+	h.forceRedraw(t, 80, 24)
+	h.sendKey(t, "y")
+	h.forceRedraw(t, 80, 24)
+	h.sendKey(t, "enter")
+	h.waitForVisible(t, "Changes staged")
+	h.forceRedraw(t, 80, 24)
+	requireVisibleContains(t, h.currentVisibleFrame(), "SSH Alias <ssh-alias@herald.test> · default")
+	h.sendKey(t, "\x1b[F")
+	h.sendKey(t, "enter")
+	h.waitForVisible(t, "Sending identities saved")
+	h.sendKey(t, "escape")
+	h.forceRedraw(t, 80, 24)
+	h.waitForVisible(t, "Display Name")
+	h.sendKey(t, "escape")
+	h.forceRedraw(t, 80, 24)
+	h.waitForVisible(t, "Add account")
+	h.sendKey(t, "escape")
+	h.forceRedraw(t, 80, 24)
+	h.waitForVisible(t, "Theme Selection")
+	h.sendKey(t, "escape")
+	h.forceRedraw(t, 80, 24)
+	h.waitForVisible(t, "INBOX")
+	h.sendKey(t, "c")
+	h.waitForVisible(t, "ssh-alias@herald.test")
+	h.forceRedraw(t, 80, 24)
+	frame := h.currentVisibleFrame()
+	requireVisibleContains(t, frame, "From:", "SSH Alias", "ssh-alias@herald.test")
+	requireVisibleFitsWidth(t, frame, 80)
 }

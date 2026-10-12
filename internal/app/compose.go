@@ -252,16 +252,26 @@ func (m *Model) composeAIReviewExtraRows() int {
 	return 12
 }
 
+// Compact headers preserve the review and footer when optional sender or
+// recipient rows would otherwise exceed a standard 24-row terminal.
+func (m *Model) compactComposeReviewHeaders() bool {
+	return m.windowHeight <= 24 && m.composeAIReviewActive() && (m.composeAccountPickerVisible() || m.composeCCVisible() || m.composeBCCVisible())
+}
+
 func (m *Model) composeFixedRows() int {
-	fieldRows := 2 * 3 // To and Subject are always visible.
+	fieldHeight := 3
+	if m.compactComposeReviewHeaders() {
+		fieldHeight = 1
+	}
+	fieldRows := 2 * fieldHeight // To and Subject are always visible.
 	if m.composeAccountPickerVisible() {
-		fieldRows += 3
+		fieldRows += fieldHeight
 	}
 	if m.composeCCVisible() {
-		fieldRows += 3
+		fieldRows += fieldHeight
 	}
 	if m.composeBCCVisible() {
-		fieldRows += 3
+		fieldRows += fieldHeight
 	}
 	if m.composeOptionalRecipientHintVisible() {
 		fieldRows++
@@ -497,6 +507,9 @@ func (m *Model) handleComposeKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, m.performComposeMemoryRadarAction(composeMemoryActionResearchPerson)
 	case "alt+c":
 		return m, m.performComposeMemoryRadarAction(composeMemoryActionResearchCompany)
+	case "shift+tab":
+		m.cycleComposeFieldBy(-1)
+		return m, nil
 	case "tab":
 		// If a subject hint is pending, Tab accepts it
 		if m.composeAISubjectHint != "" {
@@ -510,6 +523,10 @@ func (m *Model) handleComposeKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case "esc":
 		if model, cmd, handled := m.handleVimFieldKey(msg); handled {
 			return model, cmd
+		}
+		if m.composeField == composeFieldFrom && m.composeIdentityFilter != "" {
+			m.composeIdentityFilter = ""
+			return m, nil
 		}
 		return m.handleEscKey()
 	}
@@ -1235,7 +1252,9 @@ func (m *Model) visibleComposeFields() []int {
 
 // cycleComposeField advances focus to the next visible compose input field.
 // Empty CC/BCC fields are skipped until expanded or populated.
-func (m *Model) cycleComposeField() {
+func (m *Model) cycleComposeField() { m.cycleComposeFieldBy(1) }
+
+func (m *Model) cycleComposeFieldBy(delta int) {
 	fields := m.visibleComposeFields()
 	if len(fields) == 0 {
 		return
@@ -1249,7 +1268,7 @@ func (m *Model) cycleComposeField() {
 	}
 	next := fields[0]
 	if current >= 0 {
-		next = fields[(current+1)%len(fields)]
+		next = fields[(current+delta+len(fields))%len(fields)]
 	}
 	m.focusComposeField(next)
 }
@@ -1473,7 +1492,14 @@ func (m *Model) renderComposeView() string {
 		Border(lipgloss.NormalBorder()).
 		BorderForeground(m.theme.Focus.PanelBorder.ForegroundColor())
 
+	if m.compactComposeReviewHeaders() {
+		activeFieldStyle = activeFieldStyle.Bold(true)
+	}
 	renderField := func(style lipgloss.Style, view string) string {
+		if m.compactComposeReviewHeaders() {
+			style = style.Border(lipgloss.Border{})
+			view = truncateVisual(view, plan.Compose.FieldInnerWidth)
+		}
 		return style.Width(plan.Compose.FieldInnerWidth).Render(view)
 	}
 
@@ -2061,6 +2087,7 @@ func (m *Model) saveDraftCmd() tea.Cmd {
 	accountSaver, accountSaverOK := b.(backend.AccountComposeBackend)
 	sourceID := m.composeSelectedSourceID()
 	from := m.composeFromAddress()
+	preserveIdentity := len(m.composeIdentityConfig(sourceID).Identities) > 0
 	to := m.composeTo.Value()
 	cc := m.composeCC.Value()
 	bcc := m.composeBCC.Value()
@@ -2101,7 +2128,17 @@ func (m *Model) saveDraftCmd() tea.Cmd {
 		var uid uint32
 		var folder string
 		var err error
-		if accountSaverOK {
+		if preserveIdentity {
+			var raw []byte
+			raw, err = appsmtp.BuildDraftMessage(from, to, cc, bcc, subject, body)
+			if err == nil {
+				if accountSaverOK {
+					uid, folder, err = accountSaver.SaveRawDraftForAccount(sourceID, raw)
+				} else {
+					uid, folder, err = b.SaveRawDraft(raw)
+				}
+			}
+		} else if accountSaverOK {
 			uid, folder, err = accountSaver.SaveDraftForAccount(sourceID, to, cc, bcc, subject, body)
 		} else {
 			uid, folder, err = b.SaveDraft(to, cc, bcc, subject, body)
@@ -2925,6 +2962,9 @@ func (m *Model) composeAIReviewSuggestionHeight() int {
 	}
 	switch {
 	case m.windowHeight <= 24:
+		if m.compactComposeReviewHeaders() {
+			return height
+		}
 		return 1
 	case m.windowHeight <= 40 && height > 8:
 		return 8

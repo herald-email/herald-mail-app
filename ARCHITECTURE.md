@@ -591,3 +591,17 @@ Timeline snapshots selected message references before opening its destination pi
 - [x] Resolve `mail.move` through the keyboard profile and consume picker text before browse routing.
 - [x] Offer folders from the selected source, reject mixed-source selections and drafts, and run moves serially with explicit completion results.
 - [x] Refresh Timeline and folder counts after completion, retain failed selections, and make demo moves observable in both source and destination folders.
+
+## Compose sending identities
+
+Sending identities are account-scoped Compose configuration, independent of authentication and mailbox selection. The TUI resolves a selected identity into the existing From header plus SourceID, so providers continue using their established account connection.
+
+- [x] Each mail source may configure additional name/address identities and an optional default address; legacy single-account config uses the same Compose fields.
+- [x] Compose searches identity options locally, keeps account signatures unchanged, and preserves the selected From through raw MIME draft storage.
+- [x] Reply recipient matching is restricted to configured identities of the originating account; unknown draft identities fall back to the configured default.
+
+## Identity settings persistence
+
+The Settings identity manager edits a detached Compose configuration for one mail source. A dedicated save message writes the candidate config atomically before updating the active model, preserving the backend connection and retaining staged edits on write failure.
+
+- [x] Identity saves preserve all unrelated account and global fields; legacy single-account configuration remains top-level.

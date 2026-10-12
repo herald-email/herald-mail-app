@@ -698,6 +698,9 @@ func (m *Model) composeShortcutHelpSection() shortcutHelpSection {
 		{"Ctrl+J", "suggest a subject from the draft"},
 		{"Esc", "dismiss Compose status, subject suggestion, or AI bar"},
 	}
+	if m.composeIdentitySearchEnabled() {
+		entries = append(entries, shortcutHelpEntry{"From: type / ↑↓", "filter and choose a sending identity; Enter or Esc clears filter"})
+	}
 	if m.composeAIPanel {
 		entries = append(entries,
 			shortcutHelpEntry{"Ctrl+T", "open the Translate dropdown"},

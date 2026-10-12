@@ -2810,3 +2810,26 @@ Verify Timeline can move highlighted or selected messages into an existing folde
 - [x] Mixed-account selections and drafts explain why they cannot be moved together; read-only inspection cannot mutate.
 - [x] All keyboard profiles resolve mail.move; custom remaps appear in help and hints; Compose, search, and prompt editors preserve literal M.
 - [x] Verify picker at 220×50 and 80×24, the minimum-size guard at 50×15, resize recovery, SSH, and MCP smoke.
+
+## TC-IDENTITY-74: Account sending identities
+
+Configured aliases let users choose a sender without changing the mailbox connection. Verify defaults, explicit selection, and draft recovery while keeping existing Compose content intact.
+
+- [x] Configure two identities and a default in a single account; new Compose shows the default From identity.
+- [x] Focus From with Shift+Tab from To; type part of a name/address to search and use arrows to select. Recipients, subject, body, and attachments stay intact.
+- [x] Reply and forward retain the source account; reply uses a configured identity matching the original recipient when available.
+- [x] Save and reopen a draft; its configured From identity survives, including an explicit choice of the primary account address.
+- [x] Multi-account selection sends via the selected identity's source, with no cross-account alias leakage.
+- [x] Existing configurations keep their prior sender and From-field behavior; invalid/duplicate aliases and unknown defaults produce config errors.
+- [x] Check Compose at 220×50, 80×24 and 50×15, then recover; exercise an identity in demo and SSH without sending real mail.
+- [x] At 80×24, open AI review with a configured From identity, then enable CC and BCC; headers, suggestion, changes, and Accept/Discard footer remain visible. Ctrl-modified hints say accept during review.
+
+## TC-IDENTITY-SETTINGS-74: Manage sending identities
+
+Account settings expose sending identities so aliases can be managed without editing YAML. Changes remain staged until explicitly saved, and preserve authentication, calendar sources, signatures, and other accounts.
+
+- [x] Open Settings → Accounts → a mail account; Edit sending identities follows Include Google Calendar, without a top-level edit/identities selector. Calendar-only accounts do not offer mail identities.
+- [x] Add and edit a name/address, reject malformed or duplicate addresses, choose the default, and remove an alias with confirmation. The primary sender cannot be removed.
+- [x] Save and reopen; identities persist and are immediately available in Compose. Editing/removing a default updates it predictably.
+- [x] Escape cancels an editor or discards the manager's unsaved changes without altering configuration; write errors retain edits for retry.
+- [x] Verify literal input, long lists, 220×50, 80×24, 50×15 guard/recovery, and SSH/MCP smoke.

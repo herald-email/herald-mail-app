@@ -74,6 +74,9 @@ const (
 	settingsPanelSectionMenu           settingsPanelSection = ""
 	settingsPanelSectionAccounts       settingsPanelSection = "accounts"
 	settingsPanelSectionAccount        settingsPanelSection = "account"
+	settingsPanelSectionIdentities     settingsPanelSection = "identities"
+	settingsPanelSectionIdentityEdit   settingsPanelSection = "identity-edit"
+	settingsPanelSectionIdentityRemove settingsPanelSection = "identity-remove"
 	settingsPanelSectionAddAccount     settingsPanelSection = "add-account"
 	settingsPanelSectionAI             settingsPanelSection = "ai"
 	settingsPanelSectionSync           settingsPanelSection = "sync-cleanup"
@@ -176,6 +179,7 @@ type Settings struct {
 	panelMenuChoice               string
 	panelStatus                   string
 	accountsMenuChoice            string
+	identity                      settingsIdentityState
 	selectedAccountID             string
 	addAccountChoice              string
 	accountEditMode               string
@@ -1225,6 +1229,10 @@ func (s *Settings) calendarCredentialsChanged() bool {
 
 // buildForm constructs the huh.Form with groups for account, AI provider, and sync preferences.
 func (s *Settings) buildForm() {
+	if s.isIdentitySection() {
+		s.buildIdentityForm()
+		return
+	}
 	if s.mode == SettingsModePanel && s.panelSection == settingsPanelSectionMenu {
 		s.buildPanelMenuForm()
 		return
@@ -2089,6 +2097,10 @@ func (s *Settings) buildForm() {
 			func() bool {
 				return !s.existingAccountCanToggleCalendarPairing()
 			},
+		),
+		hideSettingsFieldWhen(
+			huh.NewSelect[string]().Key("account.identities").Options(huh.NewOption("[ Edit sending identities ]", "identities")),
+			func() bool { return !s.accountDetailShowsMail() },
 		),
 		hideSettingsFieldWhen(
 			huh.NewInput().
@@ -3388,6 +3400,13 @@ func (s *Settings) navigateWizardBack(msg tea.Msg) tea.Cmd {
 }
 
 func (s *Settings) keyHints() string {
+	if s.panelSection == settingsPanelSectionIdentities {
+		return "↑/↓: choose  │  enter: open  │  esc: discard and back"
+	}
+	if s.panelSection == settingsPanelSectionIdentityEdit || s.panelSection == settingsPanelSectionIdentityRemove {
+		return "tab: fields  │  enter: select  │  esc: cancel and back"
+	}
+
 	escHelp := s.focusedFieldEscHelp()
 	if s.panelSection == settingsPanelSectionMenu {
 		switch escHelp {
@@ -3575,6 +3594,12 @@ func (s *Settings) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return s, nil
 
 	case tea.KeyPressMsg:
+		// This fixed modal action belongs to the Settings form, not browse routing.
+		if s.mode == SettingsModePanel && s.panelSection == settingsPanelSectionAccount && msg.Code == tea.KeyEnter && s.form.GetFocusedField() != nil && s.form.GetFocusedField().GetKey() == "account.identities" {
+			if s.openIdentityManager() {
+				return s, s.form.Init()
+			}
+		}
 		if s.mode == SettingsModePanel && s.panelSection == settingsPanelSectionAccounts && s.form.State != huh.StateCompleted {
 			switch shortcutKey(msg) {
 			case "e":
@@ -3612,6 +3637,9 @@ func (s *Settings) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		// In panel mode, esc cancels if the active field has no local esc action.
 		if s.mode == SettingsModePanel && msg.Code == tea.KeyEscape {
+			if s.isIdentitySection() && !s.focusedFieldHandlesKey(msg) {
+				return s, s.leaveIdentitySection()
+			}
 			if s.form.State != huh.StateCompleted && !s.focusedFieldHandlesKey(msg) {
 				if s.panelSection == settingsPanelSectionAccount || s.panelSection == settingsPanelSectionAddAccount {
 					return s, s.returnToAccountsList()
@@ -3669,6 +3697,10 @@ func (s *Settings) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// Check if the form just completed.
 	if s.form.State == huh.StateCompleted && !s.done {
+		if s.isIdentitySection() {
+			return s, tea.Batch(cmd, s.completeIdentityForm())
+		}
+
 		if s.mode == SettingsModePanel && s.panelSection == settingsPanelSectionMenu {
 			s.panelSection = settingsPanelSection(s.panelMenuChoice)
 			s.panelStatus = ""

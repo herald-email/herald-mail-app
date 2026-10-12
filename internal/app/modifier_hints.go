@@ -158,6 +158,9 @@ func (m *Model) shiftModifierHintSegments(chrome ChromeState) []string {
 
 func (m *Model) ctrlModifierHintSegments(chrome ChromeState) []string {
 	if m.activeTab == tabCompose {
+		if m.composeAIReviewActive() {
+			return []string{"ctrl+enter: accept", "esc: discard", "tab: original/suggestion", "ctrl+z: undo", "ctrl+alt+c/b: CC/BCC", "ctrl+c: quit"}
+		}
 		segments := []string{"Ctrl+Enter: send", "ctrl+s: send fallback", "ctrl+p: preview", "ctrl+x: editor", "ctrl+a: attach", "ctrl+alt+c/b: CC/BCC", "ctrl+k: AI prompt", "ctrl+j: subject", "ctrl+c: quit"}
 		if m.composeAIPanel && m.classifier == nil {
 			segments = append([]string{"AI disabled"}, segments...)

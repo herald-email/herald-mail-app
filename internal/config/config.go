@@ -73,7 +73,9 @@ type SignatureConfig struct {
 }
 
 type ComposeConfig struct {
-	Signature SignatureConfig `yaml:"signature,omitempty"`
+	Signature       SignatureConfig  `yaml:"signature,omitempty"`
+	Identities      []IdentityConfig `yaml:"identities,omitempty"`
+	DefaultIdentity string           `yaml:"default_identity,omitempty"`
 }
 
 type CalendarConfig struct {
@@ -901,6 +903,13 @@ func Load(configPath string) (*Config, error) {
 
 // validate checks that all required configuration fields are present
 func (c *Config) validate() error {
+	for _, source := range c.NormalizedSources() {
+		if source.Kind == string(models.SourceKindMail) {
+			if err := source.Compose.ValidateIdentities(sourceAddress(source)); err != nil {
+				return fmt.Errorf("mail source %q: %w", source.ID, err)
+			}
+		}
+	}
 	if len(c.Sources) > 0 {
 		return c.validateExplicitSources()
 	}

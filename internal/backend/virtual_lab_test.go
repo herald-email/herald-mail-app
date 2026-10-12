@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/herald-email/herald-mail-app/internal/models"
+	appsmtp "github.com/herald-email/herald-mail-app/internal/smtp"
 	"github.com/herald-email/herald-mail-app/internal/testmail"
 )
 
@@ -420,4 +421,35 @@ func TestLocalBackendMoveEmailInVirtualMailLab(t *testing.T) {
 	if status["INBOX"].Total != 0 || status["Archive"].Total != 1 {
 		t.Fatalf("wrong IMAP move counts: %+v", status)
 	}
+}
+
+func TestLocalBackendComposeIdentityInVirtualMailLab(t *testing.T) {
+	lab := testmail.Start(t)
+	alice := lab.Account(testmail.DefaultAliceAddress)
+	bob := lab.Account(testmail.DefaultBobAddress)
+	b, err := NewLocal(alice.Config(filepath.Join(t.TempDir(), "identity.db")), "", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer b.Close()
+	if err = b.mailSource.Connect(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	from := "Shopping <shopping@herald.test>"
+	if err = b.SendCompose(ComposeSendRequest{From: from, To: bob.Address, Subject: "Alias sender", MarkdownBody: "hello"}); err != nil {
+		t.Fatal(err)
+	}
+	lab.WaitForSubject(bob.Address, "INBOX", "Alias sender")
+	sent := lab.CapturedSMTP()
+	if len(sent) != 1 || sent[0].From != "shopping@herald.test" || !bytes.Contains(sent[0].Data, []byte("shopping@herald.test>")) {
+		t.Fatalf("unexpected identity SMTP: %+v", sent)
+	}
+	raw, err := appsmtp.BuildDraftMessage(from, bob.Address, "", "", "Alias draft", "body")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err = b.SaveRawDraft(raw); err != nil {
+		t.Fatal(err)
+	}
+	lab.WaitForSubject(alice.Address, "Drafts", "Alias draft")
 }

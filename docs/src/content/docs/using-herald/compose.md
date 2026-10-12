@@ -171,3 +171,31 @@ If a send error occurs after attaching files, verify the file still exists and t
 - [Herald Memories](/features/memories/)
 - [Settings](/features/settings/)
 - [Config Reference](/reference/config/)
+
+## Sending identities
+
+An identity is an alternate From name and address for the same mailbox account. Configure aliases that your provider already permits you to send from; Herald keeps the account's authentication, folders, and signature.
+
+Open **Settings → Accounts**, select your mail account, and press **Enter**. Tab to **Edit sending identities**, just below **Include Google Calendar**, and press **Enter**. For accounts without that calendar option, the button follows the email address. Choose **Add identity**, enter the name and address, optionally make it the default, then select **Apply to list**. Select **Save changes** in the list to persist your changes; Compose uses them immediately.
+
+Select an existing alias to edit it or choose **Remove identity** and confirm. Removing the default restores the primary sender as the default. Select the primary sender and choose **Use primary as default** to switch back; the primary address cannot be removed here. Escape cancels an editor; Escape from the list discards changes made since the last save. Identity changes do not change account credentials or reconnect the mailbox.
+
+For configuration-file users, the equivalent YAML is:
+
+```yaml
+compose:
+  identities:
+    - name: Shopping
+      address: shopping@example.com
+    - name: Public
+      address: public@example.com
+  default_identity: shopping@example.com
+```
+
+For multiple accounts, put this `compose` block inside the corresponding mail entry in `sources`. For a legacy single-account configuration, use the top-level block. `default_identity` is optional: without it, the account's primary address remains the default. The primary address always remains selectable. Addresses must be unique within the account, and the default must name either the primary address or a configured alias.
+
+Compose shows **From** when there is more than one sender available. Use **Shift+Tab** from To (or Tab through the fields) to focus it. Type part of a name or address to filter; **Up/Down** cycles matching senders. **Enter** or **Esc** clears the filter. A search with no matches keeps the current sender and displays “No matches.” Confirm the visible From address before sending. Without aliases, the existing account picker shortcuts continue to work.
+
+New messages and forwards use the account default. Replies prefer a configured identity found in the original To or CC header within the same account. Saved drafts restore a configured From address; if that address is no longer configured, they use the current account default. Changing From preserves the draft's recipients, subject, body, attachments, and existing signature.
+
+To try this without contacting a provider, add the top-level block to a valid test configuration and launch `herald --demo -config /path/to/test.yaml`. Demo mode uses synthetic mail; it does not authenticate to the configured server.
