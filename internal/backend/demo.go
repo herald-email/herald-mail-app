@@ -2,6 +2,7 @@ package backend
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"strings"
 	"sync"
@@ -33,6 +34,8 @@ type DemoBackend struct {
 	calendarCollections []models.CalendarCollection
 	calendarEvents      []models.CalendarEvent
 	deletedIDs          map[string]bool
+	movedIDs            map[string]bool
+	moveFolders         map[string]bool
 	progressCh          chan models.ProgressInfo
 	syncEventsCh        chan models.FolderSyncEvent
 	newEmailsCh         chan models.NewEmailsNotification
@@ -281,7 +284,7 @@ func (d *DemoBackend) GetSenderStatistics(folder string) (map[string]*models.Sen
 		if d.deletedIDs[e.MessageID] {
 			continue
 		}
-		if folder != "" && folder != "INBOX" && e.Folder != folder {
+		if !d.demoEmailInFolder(e, folder) {
 			continue
 		}
 		key := e.Sender
@@ -321,7 +324,7 @@ func (d *DemoBackend) GetEmailsBySender(folder string) (map[string][]*models.Ema
 		if d.deletedIDs[e.MessageID] {
 			continue
 		}
-		if folder != "" && folder != "INBOX" && e.Folder != folder {
+		if !d.demoEmailInFolder(e, folder) {
 			continue
 		}
 		key := e.Sender
@@ -343,7 +346,7 @@ func (d *DemoBackend) GetTimelineEmails(folder string) ([]*models.EmailData, err
 		if d.deletedIDs[e.MessageID] {
 			continue
 		}
-		if folder != "" && folder != "INBOX" && e.Folder != folder {
+		if !d.demoEmailInFolder(e, folder) {
 			continue
 		}
 		out = append(out, e)
@@ -489,19 +492,56 @@ func (d *DemoBackend) ArchiveSenderEmails(sender, folder string) error {
 	return d.DeleteSenderEmails(sender, folder)
 }
 
-// MoveEmail marks the email deleted (demo: no real folder move).
+// MoveEmail preserves synthetic mail in its destination so demo moves can be
+// exercised without an IMAP server. Replace the row to keep UI snapshots stable.
 func (d *DemoBackend) MoveEmail(messageID, fromFolder, toFolder string) error {
-	return d.DeleteEmail(messageID, fromFolder)
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if strings.TrimSpace(toFolder) == "" {
+		return fmt.Errorf("destination folder is empty")
+	}
+	for i, email := range d.emails {
+		if email.MessageID != messageID || d.deletedIDs[messageID] || !d.demoEmailInFolder(email, fromFolder) {
+			continue
+		}
+		if d.movedIDs == nil {
+			d.movedIDs = make(map[string]bool)
+		}
+		if d.moveFolders == nil {
+			d.moveFolders = make(map[string]bool)
+		}
+		d.moveFolders[email.Folder] = true
+		d.moveFolders[toFolder] = true
+		copy := *email
+		copy.Folder = toFolder
+		d.emails[i] = &copy
+		d.movedIDs[messageID] = true
+		return nil
+	}
+	return fmt.Errorf("message not found in source folder")
+}
+
+// The seeded demo historically treats INBOX as an aggregate. Preserve that
+// tutorial behavior for untouched rows, but respect explicit user moves.
+func (d *DemoBackend) demoEmailInFolder(email *models.EmailData, folder string) bool {
+	return folder == "" || email.Folder == folder || (folder == "INBOX" && !d.movedIDs[email.MessageID])
 }
 
 // ListFolders returns a fixed folder list derived from demo emails.
 func (d *DemoBackend) ListFolders() ([]string, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
 	seen := make(map[string]bool)
 	var folders []string
 	for _, e := range d.emails {
 		if !seen[e.Folder] {
 			seen[e.Folder] = true
 			folders = append(folders, e.Folder)
+		}
+	}
+	for folder := range d.moveFolders {
+		if !seen[folder] {
+			folders = append(folders, folder)
 		}
 	}
 	sort.Strings(folders)
@@ -575,7 +615,7 @@ func (d *DemoBackend) GetUnclassifiedIDs(folder string) ([]string, error) {
 		if d.deletedIDs[e.MessageID] {
 			continue
 		}
-		if folder != "" && folder != "INBOX" && e.Folder != folder {
+		if !d.demoEmailInFolder(e, folder) {
 			continue
 		}
 		if _, classified := d.classifications[e.MessageID]; !classified {
@@ -608,7 +648,7 @@ func (d *DemoBackend) SearchEmails(folder, query string, bodySearch bool) ([]*mo
 		if d.deletedIDs[e.MessageID] {
 			continue
 		}
-		if folder != "" && folder != "INBOX" && e.Folder != folder {
+		if !d.demoEmailInFolder(e, folder) {
 			continue
 		}
 		bodyText := ""
@@ -776,7 +816,7 @@ func (d *DemoBackend) SearchSemanticChunked(folder string, queryVec []float32, l
 		if d.deletedIDs[e.MessageID] {
 			continue
 		}
-		if folder != "" && folder != "INBOX" && e.Folder != folder {
+		if !d.demoEmailInFolder(e, folder) {
 			continue
 		}
 		candidates = append(candidates, e)

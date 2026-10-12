@@ -2799,3 +2799,14 @@ Run the lanes in this order for bug-fix or refactor work:
 7. Lane F onboarding when the change touches setup or config discovery
 
 For UI-only changes, Lane A plus the relevant focused cases may be enough during iteration, but the post-completion report still needs at least one pass each of TUI, SSH, and MCP.
+
+## TC-MOVE-68 — Move selected mail
+
+Verify Timeline can move highlighted or selected messages into an existing folder without crossing account boundaries or losing failed selections. Use demo or the virtual mail lab rather than private mail.
+
+- [x] Select messages with Space, press M, filter destinations, then Enter; the messages disappear from the source and appear in the destination.
+- [x] Escape cancels without mutations; typing folder names does not trigger browse shortcuts.
+- [x] Partial failure removes only successful selections and reports the failure; a retry targets remaining messages.
+- [x] Mixed-account selections and drafts explain why they cannot be moved together; read-only inspection cannot mutate.
+- [x] All keyboard profiles resolve mail.move; custom remaps appear in help and hints; Compose, search, and prompt editors preserve literal M.
+- [x] Verify picker at 220×50 and 80×24, the minimum-size guard at 50×15, resize recovery, SSH, and MCP smoke.

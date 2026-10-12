@@ -38,6 +38,7 @@ Press `1` to open Timeline. Use it when you want to scan mail, switch folders, s
 | `j` / `down` | Timeline list | Timeline list is focused. | Moves down and updates preview if one is open. |
 | `k` / `up` | Timeline list | Timeline list is focused. | Moves up and updates preview if one is open. |
 | `space` | Timeline list | Timeline list is focused and the view is not read-only. | Toggles selection for the current message or collapsed thread. |
+| `M` | Timeline or preview | Received messages from one account; view is not read-only. | Opens a searchable folder picker for highlighted or selected mail; Enter moves, Escape cancels. |
 | `shift+down` / `shift+up` | Timeline list | Timeline list is focused, the view is not read-only, and the terminal reports shifted arrows. | Extends or shrinks message selection across visible rows. Plain movement ends the range and keeps the selected messages. |
 | `V`, then `j` / `k` | Timeline list | Timeline list is focused and the view is not read-only. | Enters fallback range selection mode and extends the selected range without requiring shifted arrows. Press `V` or `esc` to finish. |
 | `G` | Timeline list | Timeline list is focused. | Cycles thread, sender, and domain grouping. Sender/domain groups are the cleanup browse workflow. |
@@ -192,3 +193,12 @@ If quick replies only show canned choices, the AI backend is unavailable or stil
 - [Text Selection](/features/text-selection/)
 - [Destructive Actions](/features/destructive-actions/)
 - [Compose](/using-herald/compose/)
+
+## Move messages to a folder
+
+Select messages with Space, then press `M` to choose an existing folder. Type part of the folder name, use Up/Down to choose, and press Enter to move; Escape cancels without changing messages. With no selection, the action uses the highlighted row (all messages in a collapsed thread) or the focused preview message.
+
+- [x] Move several selected messages together within one account. Select only received messages; drafts and mixed-account selections show an explanation without moving anything.
+- [x] Keep failed messages selected if only part of a move succeeds, so you can retry them.
+- [x] Use the same flow in `--demo` to see messages move into the destination without touching a real mailbox.
+- [x] Remap the action through the `mail.move` command in a custom keyboard profile; help and selection hints follow the binding.

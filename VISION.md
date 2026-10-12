@@ -17,6 +17,7 @@ High-level milestones. Detailed feature status is in each section below.
 - [x] Account-scoped default Compose signature configured in YAML and editable from Settings
 - [x] Email deletion (single, by sender, by domain — moves to Trash)
 - [x] Archive (`a` / `e` keys — immediately moves to an explicit archive folder; provider-aware fallback only)
+- [x] Move highlighted or selected Timeline messages (`M`) to a searchable existing folder in the same account, preserving failed selections for retry.
 - [x] Deletion confirmation prompt
 - [x] Attachment support (download + attach when composing, with terminal-style path completion)
 - [x] Markdown compose → HTML send (multipart HTML + plain)

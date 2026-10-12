@@ -875,6 +875,9 @@ type Model struct {
 	showAccountSwitcher    bool
 	accountSwitcherCursor  int
 
+	// Folder move picker
+	mailMove *mailMovePicker
+
 	// Deletion confirmation
 	pendingDeleteConfirm bool
 	pendingDeleteDesc    string
@@ -2413,6 +2416,17 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	switch msg := msg.(type) {
+	case tea.PasteMsg:
+		if m.mailMove != nil && !m.mailMove.moving {
+			var cmd tea.Cmd
+			m.mailMove.input, cmd = m.mailMove.input.Update(msg)
+			m.mailMove.cursor = 0
+			return m, cmd
+		}
+
+	case mailMoveResultMsg:
+		return m, m.finishMailMove(msg)
+
 	case tea.KeyboardEnhancementsMsg:
 		m.keyEventTypes = msg.SupportsEventTypes()
 		return m, nil
@@ -2437,6 +2451,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return model, tea.Batch(modifierCmd, cmd)
 
 	case tea.MouseMsg:
+		if m.mailMove != nil {
+			return m, nil
+		}
 		if model, cmd, handled := m.handleMouseMsg(msg); handled {
 			return model, cmd
 		}
@@ -3602,6 +3619,9 @@ func (m *Model) View() tea.View {
 	if m.showCleanupMgr && m.cleanupManager != nil {
 		return m.buildView(m.renderCompactOverlayView(m.cleanupManager.renderPanel()))
 	}
+	if m.mailMove != nil {
+		return m.buildView(m.renderMailMovePicker())
+	}
 	if m.showAccountSwitcher {
 		return m.buildView(m.renderAccountSwitcherOverlayView())
 	}
@@ -3645,6 +3665,9 @@ func (m *Model) shouldReleaseMouseForTerminalLinks(content string) bool {
 
 // handleKeyMsg handles keyboard input
 func (m *Model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	if m.mailMove != nil && msg.String() != "ctrl+c" {
+		return m.handleMailMoveKey(msg)
+	}
 	if model, cmd, handled := m.handleDemoWelcomeKey(msg); handled {
 		return model, cmd
 	}

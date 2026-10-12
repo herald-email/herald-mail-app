@@ -369,3 +369,55 @@ func TestLocalBackendFetchesVirtualMailScenarios(t *testing.T) {
 		})
 	}
 }
+
+func TestLocalBackendMoveEmailInVirtualMailLab(t *testing.T) {
+	lab := testmail.Start(t)
+	alice := lab.Account(testmail.DefaultAliceAddress)
+	b, err := NewLocal(alice.Config(filepath.Join(t.TempDir(), "move-cache.db")), "", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer b.Close()
+	if err := b.mailSource.Connect(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	subject := "Move to chosen folder"
+	alice.AppendEML("INBOX", []byte("From: sender@example.test\r\nTo: "+alice.Address+"\r\nSubject: "+subject+"\r\nMessage-ID: <chosen-folder@herald.test>\r\n\r\nMove body\r\n"))
+	if err := b.mailSource.ProcessEmailsIncremental(context.Background(), "INBOX"); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := b.GetTimelineEmails("INBOX")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var target *models.EmailData
+	for _, row := range rows {
+		if row.Subject == subject {
+			target = row
+			break
+		}
+	}
+	if target == nil {
+		t.Fatal("fixture missing from cache")
+	}
+	if err := b.MoveEmail(target.MessageID, "INBOX", "Archive"); err != nil {
+		t.Fatal(err)
+	}
+	lab.WaitForSubject(alice.Address, "Archive", subject)
+	rows, err = b.GetTimelineEmails("INBOX")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, row := range rows {
+		if row.MessageID == target.MessageID {
+			t.Fatal("moved row remained in source cache")
+		}
+	}
+	status, err := b.GetFolderStatus([]string{"INBOX", "Archive"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status["INBOX"].Total != 0 || status["Archive"].Total != 1 {
+		t.Fatalf("wrong IMAP move counts: %+v", status)
+	}
+}

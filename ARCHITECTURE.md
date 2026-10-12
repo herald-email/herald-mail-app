@@ -583,3 +583,11 @@ CREATE TABLE folder_sync_state (
 ```
 
 WAL mode: `PRAGMA journal_mode=WAL` set at init. FTS5 virtual table (`emails_fts`) created if the SQLite build includes the `fts5` module; gracefully skipped otherwise.
+
+## Timeline folder moves
+
+Timeline snapshots selected message references before opening its destination picker. The move command uses the existing source-scoped backend boundary; no schema or Backend interface change is needed.
+
+- [x] Resolve `mail.move` through the keyboard profile and consume picker text before browse routing.
+- [x] Offer folders from the selected source, reject mixed-source selections and drafts, and run moves serially with explicit completion results.
+- [x] Refresh Timeline and folder counts after completion, retain failed selections, and make demo moves observable in both source and destination folders.

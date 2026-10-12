@@ -807,6 +807,7 @@ func (m *Model) timelineShortcutHelpSection() shortcutHelpSection {
 			m.commandHelpEntry("timeline", CommandMailDeleteConfirm, "delete after confirmation"),
 			m.commandHelpEntry("timeline", CommandMailDeleteImmediate, "delete immediately"),
 			m.commandHelpEntry("timeline", CommandMailArchiveCurrent, "archive immediately"),
+			m.commandHelpEntry("timeline", CommandMailMove, "move to a folder"),
 			{"* / " + m.commandHelpKey("timeline", CommandMailReclassify), "star or re-classify"},
 		}
 		if hasUnsub {
@@ -844,6 +845,7 @@ func (m *Model) timelineShortcutHelpSection() shortcutHelpSection {
 		m.commandHelpEntry("timeline", CommandMailDeleteConfirm, "delete highlighted or selected mail after confirmation"),
 		m.commandHelpEntry("timeline", CommandMailDeleteImmediate, "delete highlighted or selected mail immediately"),
 		m.commandHelpEntry("timeline", CommandMailArchiveCurrent, "archive highlighted or selected mail immediately"),
+		m.commandHelpEntry("timeline", CommandMailMove, "move highlighted or selected mail to a folder"),
 		{"Enter", "expand a thread or open an email preview"},
 		{"Space", "select highlighted messages"},
 		{"Shift+Up / Shift+Down", "toggle Timeline selection when supported"},

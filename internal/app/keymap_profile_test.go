@@ -825,8 +825,8 @@ func TestDeleteShortcutAliasesDoNotStealTextEntry(t *testing.T) {
 }
 
 func TestMailActionShortcutAliasesDoNotStealTextEntry(t *testing.T) {
-	keys := []string{"r", "R", "a", "e", "u", "U", "H"}
-	want := "rRaeuUH"
+	keys := []string{"r", "R", "a", "e", "u", "U", "H", "M"}
+	want := "rRaeuUHM"
 
 	t.Run("compose", func(t *testing.T) {
 		m := makeSizedModel(t, 140, 40)

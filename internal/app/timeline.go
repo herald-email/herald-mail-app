@@ -3016,7 +3016,7 @@ func (m *Model) timelinePrimaryMessageActionHintSegments() []string {
 		if m.timelineSelectedCount() > 0 {
 			segments := []string{"Del: delete selected", "Shift+Del: delete now"}
 			if len(m.selectedTimelineArchiveEmails()) > 0 {
-				segments = append(segments, m.commandHint("timeline", CommandMailArchiveCurrent, "archive selected"))
+				segments = append(segments, m.commandHint("timeline", CommandMailArchiveCurrent, "archive selected"), m.commandHint("timeline", CommandMailMove, "move selected"))
 			}
 			return segments
 		}
@@ -3030,7 +3030,7 @@ func (m *Model) timelinePrimaryMessageActionHintSegments() []string {
 			segments = append(segments, "Shift+Del: delete now")
 			return segments
 		}
-		return []string{"Ctrl+R: reply", "Ctrl+Shift+R: reply all", "Ctrl+F: forward", "Del: delete", "Shift+Del: delete now", m.commandHint("timeline", CommandMailArchiveCurrent, "archive")}
+		return []string{"Ctrl+R: reply", "Ctrl+Shift+R: reply all", "Ctrl+F: forward", "Del: delete", "Shift+Del: delete now", m.commandHint("timeline", CommandMailArchiveCurrent, "archive"), m.commandHint("timeline", CommandMailMove, "move")}
 	}
 	if m.timelineSelectedCount() > 0 {
 		segments := []string{
@@ -3038,7 +3038,7 @@ func (m *Model) timelinePrimaryMessageActionHintSegments() []string {
 			m.commandHint("timeline", CommandMailDeleteImmediate, "delete now"),
 		}
 		if len(m.selectedTimelineArchiveEmails()) > 0 {
-			segments = append(segments, m.commandHint("timeline", CommandMailArchiveCurrent, "archive selected"))
+			segments = append(segments, m.commandHint("timeline", CommandMailArchiveCurrent, "archive selected"), m.commandHint("timeline", CommandMailMove, "move selected"))
 		}
 		return segments
 	}
@@ -3052,7 +3052,7 @@ func (m *Model) timelinePrimaryMessageActionHintSegments() []string {
 		segments = append(segments, m.commandHint("timeline", CommandMailDeleteImmediate, "delete now"))
 		return segments
 	}
-	return []string{"*: star", m.commandHint("timeline", CommandMailReplyAll, "all"), m.commandHint("timeline", CommandMailReplySender, "sender"), m.commandHint("timeline", CommandMailForward, "forward"), m.commandHint("timeline", CommandMailDeleteConfirm, "delete"), m.commandHint("timeline", CommandMailDeleteImmediate, "delete now"), m.commandHint("timeline", CommandMailArchiveCurrent, "archive")}
+	return []string{"*: star", m.commandHint("timeline", CommandMailReplyAll, "all"), m.commandHint("timeline", CommandMailReplySender, "sender"), m.commandHint("timeline", CommandMailForward, "forward"), m.commandHint("timeline", CommandMailDeleteConfirm, "delete"), m.commandHint("timeline", CommandMailDeleteImmediate, "delete now"), m.commandHint("timeline", CommandMailArchiveCurrent, "archive"), m.commandHint("timeline", CommandMailMove, "move")}
 }
 
 func timelineReadOnlyPreviewHintText(backHint, closeHint string) string {
@@ -3968,6 +3968,8 @@ func (m *Model) handleTimelineResolvedCommand(command, key string) (tea.Model, t
 		return m, m.confirmDeleteSelected(), true
 	case CommandMailDeleteImmediate:
 		return m, m.deleteSelectedImmediately(), true
+	case CommandMailMove:
+		return m, m.openMailMovePicker(), true
 	case CommandMailArchiveCurrent:
 		return m, m.archiveSelectedImmediately(), true
 	case CommandMailReclassify:

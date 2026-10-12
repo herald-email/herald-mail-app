@@ -48,6 +48,7 @@ const (
 	CommandMailReplyAll             = "mail.reply_all"
 	CommandMailReplySender          = "mail.reply_sender"
 	CommandMailForward              = "mail.forward"
+	CommandMailMove                 = "mail.move"
 	CommandMailArchiveCurrent       = "mail.archive_current"
 	CommandMailDeleteConfirm        = "mail.delete_confirm"
 	CommandMailDeleteImmediate      = "mail.delete_immediate"
@@ -121,6 +122,7 @@ var commandCatalog = map[string]struct{}{
 	CommandMailReplyAll:             {},
 	CommandMailReplySender:          {},
 	CommandMailForward:              {},
+	CommandMailMove:                 {},
 	CommandMailArchiveCurrent:       {},
 	CommandMailDeleteConfirm:        {},
 	CommandMailDeleteImmediate:      {},
@@ -370,6 +372,7 @@ func builtInKeyboardProfile(profile string) (keyboardBindingMap, keyboardCommand
 	add("timeline", keyboardModeNormal, "R", CommandMailReplyAll)
 	add("timeline", keyboardModeNormal, "f", CommandMailForward)
 	add("timeline", keyboardModeNormal, "F", CommandMailForward)
+	add("timeline", keyboardModeNormal, "M", CommandMailMove)
 	add("timeline", keyboardModeNormal, "a", CommandMailArchiveCurrent)
 	add("timeline", keyboardModeNormal, "e", CommandMailArchiveCurrent)
 	add("timeline", keyboardModeNormal, "d", CommandMailDeleteConfirm)
@@ -584,6 +587,8 @@ func canonicalKeyForCommand(scope, command string) string {
 		return "R"
 	case CommandMailForward:
 		return "f"
+	case CommandMailMove:
+		return "M"
 	case CommandMailArchiveCurrent:
 		return "a"
 	case CommandMailDeleteConfirm:
