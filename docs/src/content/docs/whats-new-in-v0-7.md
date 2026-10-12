@@ -50,7 +50,7 @@ The v0.7 beta line started as a capability release and then tightened cross-acco
 - [x] `v0.7.3-beta.1` scopes new IMAP emails to their account, prunes archived emails from source state, clears stale inline images before Compose, and delays preview read marking until a loaded message has stayed open for 2.5 seconds.
 - [x] `v0.7.4-beta.1` adds the read-only Memories workspace, fast preview unsubscribe shortcut, Timeline star highlighting, provider-metadata thread grouping, duplicate-preview-link protection, Fastmail CalDAV and preset fixes, Settings account-action polish, safer multi-account Memories handling, non-ASCII send headers, preserved forwarded attachments, stable message-ref archive batching, and indented expanded thread replies.
 - [x] `v0.7.5-beta.1` fixes Enter preview targeting for expanded thread replies and refreshes folder counts after bulk mail actions.
-- [x] `beta-latest` points at `v0.7.5-beta.1`, and Homebrew installs the same release-built macOS binaries.
+- [x] `v0.7.5-beta.1` completed this release line; newer betas are listed on the current [What's New page](/whats-new-in-v0-8/).
 - [x] The release artifacts include `herald`, `herald-mcp-server`, and `herald-ssh-server` for both Apple Silicon and Intel macOS.
 
 ## How To Try It
@@ -68,3 +68,7 @@ From demo mode, press `g` to open chat, `S` to inspect AI and Memories settings,
 ## Previous Release
 
 The v0.6 release line graduated Gmail OAuth onto the Gmail API mail source, made Calendar provider-backed, and hardened multi-account source identity. See [What's New in v0.6](/whats-new-in-v0-6/) for that historical release checklist.
+
+## Next Release
+
+The v0.8 line adds sending identities, selected-mail folder moves, and native Linux packages. See [What's New in v0.8](/whats-new-in-v0-8/) for upgrade details.

@@ -58,9 +58,9 @@ configure AI, and save the generated config.
 
 Nightly builds are available as short-lived GitHub Actions artifacts for testers who want the latest successful `main` build before the next beta tag. See [Nightly Builds](/nightly-builds/) for download steps and channel rules.
 
-## New in v0.7
+## New in v0.8
 
-The `v0.7.5-beta.1` release line adds the read-only Herald Memories workspace, Compose Radar, the Gollem-backed chat agent path, macOS preview printing, Timeline range-selection polish, AI role assignment controls, Fastmail provider fixes, safer multi-account mail behavior, and focused Timeline reliability fixes for expanded-thread previews and folder counts after bulk actions. See [What's New in v0.7](/whats-new-in-v0-7/) for the release-delta checklist and screenshots; older release pages remain available under Release Archive so stable links keep working.
+`v0.8.0-beta.1` adds sending identities managed from account Settings, a searchable folder picker for moving selected mail, and native Linux packages. It also fixes IMAP connection recovery, CalDAV setup, and archive progress messages. See [What's New in v0.8](/whats-new-in-v0-8/) for upgrade details; older release pages remain available under Release Archive.
 
 ![Chat panel open beside Timeline](/screenshots/chat-panel-open.png)
 

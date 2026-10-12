@@ -58,9 +58,9 @@ Nightly builds are short-lived GitHub Actions artifacts for testing the latest s
 
 ## Linux installation
 
-The published `v0.7.5-beta.1` Homebrew formula contains macOS archives only; on Linux it fails with “formula requires at least a URL.” Until a release containing Linux archives reaches the tap, install from source using the Go commands below (Go 1.25+ and a C compiler are required).
+Starting with `v0.8.0-beta.1`, Homebrew and GitHub releases include native Linux x86_64 and arm64 archives with embedded OAuth defaults. Use the same tap, trust, and install commands shown above, or download an archive from [GitHub Releases](https://github.com/herald-email/herald-mail-app/releases/tag/beta-latest).
 
-The release workflow now targets Linux x86_64 and arm64 with native Ubuntu 24.04 builds and embedded OAuth defaults. These binaries require glibc 2.39 or newer; older glibc distributions and musl-based systems should build from source. After Linux artifacts are published, use the same tap, trust, and install commands shown above.
+Linux binaries are built on Ubuntu 24.04 and require glibc 2.39 or newer. Older glibc distributions and musl-based systems should build from source using Go 1.25+ and a C compiler.
 
 ## Install from source with Go
 
