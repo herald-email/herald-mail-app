@@ -243,6 +243,8 @@ func sshKeyBytes(key string) string {
 
 func (h *sshHarness) forceRedraw(t testing.TB, width, height int) {
 	t.Helper()
+	// A resize requests a fresh frame, but does not acknowledge pending input or
+	// asynchronous form navigation. Wait for the expected focus before typing.
 	intermediateWidth := width + 1
 	if width > 61 {
 		intermediateWidth = width - 1
@@ -281,6 +283,22 @@ func (h *sshHarness) waitForVisible(t testing.TB, want string) string {
 	}
 	t.Fatalf("timed out waiting for %q; current frame:\n%s\nraw:\n%q", want, h.currentVisibleFrame(), h.currentRawFrame())
 	return ""
+}
+
+func (h *sshHarness) waitForFocus(t testing.TB, field string) {
+	t.Helper()
+	want := normalizeSSHText("┃ " + field)
+	deadline := time.Now().Add(8 * time.Second)
+	for time.Now().Before(deadline) {
+		// The lightweight screen emulator does not implement scroll regions.
+		// Request a full frame, then check focus instead of treating output as
+		// acknowledgement of the preceding key's asynchronous navigation.
+		h.forceRedraw(t, h.width, h.height)
+		if strings.Contains(normalizeSSHText(h.currentVisibleFrame()), want) {
+			return
+		}
+	}
+	t.Fatalf("timed out waiting for focus on %q; current frame:\n%s\nraw:\n%q", field, h.currentVisibleFrame(), h.currentRawFrame())
 }
 
 func (h *sshHarness) currentRawFrame() string {
@@ -579,26 +597,25 @@ func TestVirtualLabSSHSettingsIdentities(t *testing.T) {
 	h.waitForVisible(t, "Add account")
 	h.sendKey(t, "\x1b[H")
 	h.sendKey(t, "enter")
-	h.waitForVisible(t, "Display Name")
+	h.waitForFocus(t, "Display Name")
 	h.sendKey(t, "\t")
-	h.forceRedraw(t, 80, 24)
+	h.waitForFocus(t, "Email address")
 	h.sendKey(t, "\t")
-	h.forceRedraw(t, 80, 24)
-	h.waitForVisible(t, "Edit sending identities")
+	h.waitForFocus(t, "> [ Edit sending identities ]")
 	h.sendKey(t, "enter")
 	h.waitForVisible(t, "Add identity")
 	h.sendKey(t, "\x1b[F")
 	h.sendKey(t, "\x1b[A")
 	h.sendKey(t, "enter")
-	h.waitForVisible(t, "Name (optional)")
+	h.waitForFocus(t, "Name (optional)")
 	h.sendKey(t, "SSH Alias")
 	h.sendKey(t, "\t")
-	h.forceRedraw(t, 80, 24)
+	h.waitForFocus(t, "Email address")
 	h.sendKey(t, "ssh-alias@herald.test")
 	h.sendKey(t, "\t")
-	h.forceRedraw(t, 80, 24)
+	h.waitForFocus(t, "Default for new messages")
 	h.sendKey(t, "y")
-	h.forceRedraw(t, 80, 24)
+	h.waitForFocus(t, "Action")
 	h.sendKey(t, "enter")
 	h.waitForVisible(t, "Changes staged")
 	h.forceRedraw(t, 80, 24)
