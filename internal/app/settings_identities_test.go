@@ -143,6 +143,50 @@ func TestSettingsIdentitiesValidationAndLiteralInput(t *testing.T) {
 	}
 }
 
+func TestSettingsIdentitiesQueuedNavigationSurvivesResize(t *testing.T) {
+	s := openIdentitySettings(t, identitySettingsFixture())
+	selectIdentityAction(s, "add")
+	s.setSize(80, 24)
+	_ = s.View()
+	s = updateSettingsForTest(t, s, keyRunes("SSH Alias"))
+	s = updateSettingsForTest(t, s, huh.NextField())
+	s = updateSettingsForTest(t, s, keyRunes("ssh-alias@herald.test"))
+
+	// A redraw can arrive before Huh's asynchronous NextField command. It must
+	// preserve the input and focus; the redraw itself is not a focus barrier.
+	_, pending := s.Update(tea.KeyPressMsg{Code: tea.KeyTab})
+	if pending == nil {
+		t.Fatal("Tab did not schedule navigation")
+	}
+	for _, width := range []int{79, 80} {
+		s = updateSettingsForTest(t, s, tea.WindowSizeMsg{Width: width, Height: 24})
+		view := stripANSI(s.View().Content)
+		if s.form.GetFocusedField().GetKey() != "identity.address" || !strings.Contains(view, "┃ Email address") {
+			t.Fatalf("redraw changed focus before navigation completed:\n%s", view)
+		}
+	}
+	// Deliver navigation after the resizes without running cursor blink timers.
+	s = updateSettingsForTest(t, s, huh.NextField())
+	if _, ok := s.form.GetFocusedField().(*huh.Confirm); !ok {
+		t.Fatal("queued Tab did not focus the default confirmation")
+	}
+	if view := stripANSI(s.View().Content); !strings.Contains(view, "┃ Default for new messages") {
+		t.Fatalf("confirmation focus is not visible:\n%s", view)
+	}
+
+	s, _ = updateAndPumpSettingsForTest(t, s, keyRunes("y"))
+	if s.identity.address != "ssh-alias@herald.test" || !s.identity.makeDefault {
+		t.Fatalf("confirmation changed the address or missed the default: %+v", s.identity)
+	}
+	if s.form.GetFocusedField().GetKey() != "identity.action" {
+		t.Fatal("confirmation did not advance to Apply")
+	}
+	s, _ = updateAndPumpSettingsForTest(t, s, tea.KeyPressMsg{Code: tea.KeyEnter})
+	if s.panelSection != settingsPanelSectionIdentities || s.identity.compose.DefaultIdentity != "ssh-alias@herald.test" {
+		t.Fatalf("identity not staged with the exact default address: %+v", s.identity)
+	}
+}
+
 func TestSettingsIdentitiesSavePreservesConfigAndUpdatesCompose(t *testing.T) {
 	cfg := identitySettingsFixture()
 	s := openIdentitySettings(t, cfg)
