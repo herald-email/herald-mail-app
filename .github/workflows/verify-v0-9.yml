@@ -1,0 +1,50 @@
+name: Verify v0.9 release
+on:
+  push:
+    branches: [verify/v0.9.0-beta.1]
+permissions:
+  contents: read
+jobs:
+  release-readiness:
+    runs-on: macos-15
+    timeout-minutes: 30
+    env:
+      TZ: UTC
+      HERALD_PRE_RELEASE_PORT_BASE: "7780"
+      HERALD_PRE_RELEASE_EVIDENCE_DIR: ${{ github.workspace }}/reports/v0.9-readiness
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.25.x"
+          cache: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: docs/package-lock.json
+      - name: Install visual gate dependencies
+        run: |
+          brew install tmux ttyd netcat aha
+          python3 -m venv reports/release-venv
+          reports/release-venv/bin/pip install Pillow
+          npm install --prefix reports/release-node playwright
+          echo "$PWD/reports/release-venv/bin" >> "$GITHUB_PATH"
+          echo "NODE_PATH=$PWD/reports/release-node/node_modules" >> "$GITHUB_ENV"
+          test -x "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+      - name: Run repository pre-release gate
+        run: env -u NO_COLOR COLORTERM=truecolor .agents/skills/pre-release-test/scripts/run_pre_release_gate.sh
+      - name: Check docs copy
+        if: ${{ !cancelled() }}
+        run: make docs-copy-drift
+      - name: Build release docs
+        if: ${{ !cancelled() }}
+        working-directory: docs
+        run: npm ci && npm run build
+      - name: Upload verification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v0.9-release-readiness
+          path: reports/v0.9-readiness/
+          retention-days: 14

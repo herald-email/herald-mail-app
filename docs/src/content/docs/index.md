@@ -58,9 +58,9 @@ configure AI, and save the generated config.
 
 Nightly builds are available as short-lived GitHub Actions artifacts for testers who want the latest successful `main` build before the next beta tag. See [Nightly Builds](/nightly-builds/) for download steps and channel rules.
 
-## New in v0.8
+## New in v0.9
 
-`v0.8.0-beta.1` adds sending identities managed from account Settings, a searchable folder picker for moving selected mail, and native Linux packages. It also fixes IMAP connection recovery, CalDAV setup, and archive progress messages. See [What's New in v0.8](/whats-new-in-v0-8/) for upgrade details; older release pages remain available under Release Archive.
+`v0.9.0-beta.1` adds external mailbox password commands for IMAP and SMTP while preserving existing literal passwords. Commands run only when authenticating a connection, and Settings preserves them when you leave the password field blank. This release also fixes account-title updates during editing. See [What's New in v0.9](/whats-new-in-v0-9/) for upgrade details; older release pages remain available under Release Archive.
 
 ![Chat panel open beside Timeline](/screenshots/chat-panel-open.png)
 
