@@ -70,6 +70,7 @@ High-level milestones. Detailed feature status is in each section below.
 - [x] Configurable keyboard profiles (Default, Vim, Emacs, Custom) with a central command catalog and git-friendly custom keymap files
 - [x] App-level theme system with terminal inheritance, Herald dark/light built-ins, local YAML installs, and Settings-based role editing
 - [x] Privacy-safe logging by default, with `-unsafe-logs` as an explicit local opt-in for unredacted diagnostics
+- [x] External mailbox password commands: shell strings or argument arrays, resolved only for IMAP/SMTP authentication and preserved by Settings saves.
 - [ ] Keychain integration (passwords stored in OS keychain, not plaintext YAML)
 - [x] README with MCP setup prompts for Claude / Cursor / Codex
 - [x] Daemon server (`herald serve`, Ollama-style)

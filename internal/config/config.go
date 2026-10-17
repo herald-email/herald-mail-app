@@ -30,7 +30,9 @@ func ExpandPath(p string) (string, error) {
 
 type CredentialsConfig struct {
 	Username string `yaml:"username"`
-	Password string `yaml:"password"`
+	Password string `yaml:"-"`
+	// PasswordCommand is kept unevaluated; only authentication may resolve it.
+	PasswordCommand *PasswordCommand `yaml:"-"`
 }
 
 type ServerConfig struct {
@@ -918,8 +920,8 @@ func (c *Config) validate() error {
 		if c.Credentials.Username == "" {
 			return fmt.Errorf("missing credentials.username")
 		}
-		if c.Credentials.Password == "" {
-			return fmt.Errorf("missing credentials.password")
+		if err := c.Credentials.ValidatePassword(); err != nil {
+			return err
 		}
 	}
 	if c.Server.Host == "" {
@@ -946,8 +948,11 @@ func (c *Config) validateExplicitSources() error {
 		if strings.TrimSpace(source.Credentials.Username) == "" {
 			return fmt.Errorf("mail source %q missing credentials.username", source.ID)
 		}
-		if strings.TrimSpace(source.Credentials.Password) == "" {
+		if source.Credentials.PasswordCommand == nil && strings.TrimSpace(source.Credentials.Password) == "" {
 			return fmt.Errorf("mail source %q missing credentials.password", source.ID)
+		}
+		if err := source.Credentials.ValidatePassword(); err != nil {
+			return fmt.Errorf("mail source %q: %w", source.ID, err)
 		}
 		if strings.TrimSpace(source.IMAP.Host) == "" {
 			return fmt.Errorf("mail source %q missing imap.host", source.ID)

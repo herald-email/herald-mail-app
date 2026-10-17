@@ -8,6 +8,16 @@ This manual QA specification defines the acceptance criteria for Herald's TUI ac
 
 ## Setup
 
+The following lanes cover interactive setup and mail operations using deterministic fixtures where possible.
+
+### Password command acceptance (issue #77)
+
+- [ ] Load both shell-string and argv-array `credentials.password.command`, including explicit mail sources; loading and saving must not execute the helper.
+- [ ] Authenticate and send with a virtual mailbox using command output; reconnect must obtain a fresh password and reuse of an authenticated connection must not rerun the command.
+- [ ] Failed, missing, empty-output, and timed-out helpers fail authentication without exposing the command, stdout, or stderr in errors or logs.
+- [ ] Edit an unrelated setting or account detail and save: preserve the command. Enter a new literal password: replace the command.
+- [ ] Run demo TUI, demo SSH, and cache-only MCP with a marker-writing password helper configured; the marker must remain absent.
+
 ### Build targets
 
 ```bash

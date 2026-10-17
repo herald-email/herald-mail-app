@@ -338,7 +338,15 @@ func (c *Client) connectLocked() error {
 		}
 	} else {
 		logger.Debug("Attempting to authenticate with username: %s", c.cfg.Credentials.Username)
-		if err := c.client.Login(c.cfg.Credentials.Username, c.cfg.Credentials.Password); err != nil {
+		password, err := c.cfg.Credentials.ResolvePassword(context.Background())
+		if err != nil {
+			return fmt.Errorf("IMAP password: %w", err)
+		}
+		if err := c.client.Login(c.cfg.Credentials.Username, password); err != nil {
+			if c.cfg.Credentials.PasswordCommand != nil {
+				// A server may echo credentials in its error response.
+				return errors.New("IMAP login failed with command-provided password")
+			}
 			logger.Error("Authentication failed: %v", err)
 			return fmt.Errorf("IMAP login failed: %w", err)
 		}

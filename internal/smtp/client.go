@@ -53,7 +53,11 @@ func (c *Client) auth(ctx context.Context, host string) (smtp.Auth, error) {
 		}
 		return xoauth2Auth{username: c.cfg.Gmail.Email, token: token}, nil
 	}
-	return smtp.PlainAuth("", c.cfg.Credentials.Username, c.cfg.Credentials.Password, host), nil
+	password, err := c.cfg.Credentials.ResolvePassword(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("SMTP password: %w", err)
+	}
+	return smtp.PlainAuth("", c.cfg.Credentials.Username, password, host), nil
 }
 
 // Check verifies that the configured SMTP server is reachable and accepts
@@ -116,12 +120,8 @@ func (c *Client) checkSMTPConn(ctx context.Context, conn net.Conn, host string) 
 			return fmt.Errorf("smtp STARTTLS: %w", err)
 		}
 	}
-	auth, err := c.auth(ctx, host)
-	if err != nil {
+	if err := c.authenticate(ctx, client, host); err != nil {
 		return err
-	}
-	if err := client.Auth(auth); err != nil {
-		return fmt.Errorf("smtp auth: %w", err)
 	}
 	_ = client.Quit()
 	return nil
@@ -171,12 +171,8 @@ func (c *Client) Send(from, to, subject, plainText, htmlBody string) error {
 	}
 	defer client.Quit()
 
-	auth, err := c.auth(context.Background(), host)
-	if err != nil {
+	if err := c.authenticate(context.Background(), client, host); err != nil {
 		return err
-	}
-	if err := client.Auth(auth); err != nil {
-		return fmt.Errorf("smtp auth: %w", err)
 	}
 
 	if err := client.Mail(fromEnvelope); err != nil {
@@ -329,12 +325,8 @@ func (c *Client) SendWithAttachments(from, to, subject, plainText, htmlBody stri
 	}
 	defer client.Quit()
 
-	auth, err := c.auth(context.Background(), host)
-	if err != nil {
+	if err := c.authenticate(context.Background(), client, host); err != nil {
 		return err
-	}
-	if err := client.Auth(auth); err != nil {
-		return fmt.Errorf("smtp auth: %w", err)
 	}
 	if err := client.Mail(fromEnvelope); err != nil {
 		return fmt.Errorf("smtp MAIL FROM: %w", err)
@@ -481,12 +473,8 @@ func (c *Client) SendWithInlineImages(from, to, subject, plainText, htmlBody, cc
 	}
 	defer client.Quit()
 
-	auth, err := c.auth(context.Background(), host)
-	if err != nil {
+	if err := c.authenticate(context.Background(), client, host); err != nil {
 		return err
-	}
-	if err := client.Auth(auth); err != nil {
-		return fmt.Errorf("smtp auth: %w", err)
 	}
 	if err := client.Mail(fromEnvelope); err != nil {
 		return fmt.Errorf("smtp MAIL FROM: %w", err)
@@ -589,12 +577,8 @@ func (c *Client) SendReply(from, to, subject, plainText, htmlBody, inReplyTo, re
 	}
 	defer client.Quit()
 
-	auth, err := c.auth(context.Background(), host)
-	if err != nil {
+	if err := c.authenticate(context.Background(), client, host); err != nil {
 		return err
-	}
-	if err := client.Auth(auth); err != nil {
-		return fmt.Errorf("smtp auth: %w", err)
 	}
 	if err := client.Mail(fromEnvelope); err != nil {
 		return fmt.Errorf("smtp MAIL FROM: %w", err)
@@ -629,13 +613,59 @@ func extFromMIME(mimeType string) string {
 	}
 }
 
-func (c *Client) sendPlain(addr, from string, rcpts []string, rawMsg string) error {
-	host := c.cfg.SMTP.Host
-	auth, err := c.auth(context.Background(), host)
+// authenticate is shared by checks and sends so command failures and server
+// authentication errors cannot disclose a command-provided secret.
+func (c *Client) authenticate(ctx context.Context, client *smtp.Client, host string) error {
+	auth, err := c.auth(ctx, host)
 	if err != nil {
 		return err
 	}
-	return smtp.SendMail(addr, auth, from, rcpts, []byte(rawMsg))
+	if err := client.Auth(auth); err != nil {
+		if !c.cfg.IsGmailOAuth() && c.cfg.Credentials.PasswordCommand != nil {
+			return fmt.Errorf("smtp authentication failed with command-provided password")
+		}
+		return fmt.Errorf("smtp auth: %w", err)
+	}
+	return nil
+}
+
+// deferredAuth keeps net/smtp.SendMail's transport and capability behavior while
+// resolving credentials only once the connection is ready to authenticate.
+type deferredAuth struct {
+	resolve       func() (smtp.Auth, error)
+	auth          smtp.Auth
+	resolveErr    error
+	started       bool
+	authenticated bool
+}
+
+func (a *deferredAuth) Start(server *smtp.ServerInfo) (string, []byte, error) {
+	a.started = true
+	a.auth, a.resolveErr = a.resolve()
+	if a.resolveErr != nil {
+		return "", nil, a.resolveErr
+	}
+	return a.auth.Start(server)
+}
+
+func (a *deferredAuth) Next(challenge []byte, more bool) ([]byte, error) {
+	response, err := a.auth.Next(challenge, more)
+	if err == nil && !more {
+		a.authenticated = true
+	}
+	return response, err
+}
+
+func (c *Client) sendPlain(addr, from string, rcpts []string, rawMsg string) error {
+	auth := &deferredAuth{resolve: func() (smtp.Auth, error) {
+		return c.auth(context.Background(), c.cfg.SMTP.Host)
+	}}
+	err := smtp.SendMail(addr, auth, from, rcpts, []byte(rawMsg))
+	if err != nil && auth.started && auth.resolveErr == nil && !auth.authenticated &&
+		!c.cfg.IsGmailOAuth() && c.cfg.Credentials.PasswordCommand != nil {
+		return fmt.Errorf("smtp authentication failed with command-provided password")
+	}
+	return err
 }
 
 // parseAddrs returns bare envelope addresses from a comma-separated header
