@@ -78,12 +78,8 @@ func (c *Client) sendRawMessage(addr, host, from string, rcpts []string, rawMsg 
 	}
 	defer client.Quit()
 
-	auth, err := c.auth(context.Background(), host)
-	if err != nil {
+	if err := c.authenticate(context.Background(), client, host); err != nil {
 		return err
-	}
-	if err := client.Auth(auth); err != nil {
-		return fmt.Errorf("smtp auth: %w", err)
 	}
 	if err := client.Mail(from); err != nil {
 		return fmt.Errorf("smtp MAIL FROM: %w", err)

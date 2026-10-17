@@ -62,6 +62,34 @@ memories:
     tag_mode: conservative
 ```
 
+## External mailbox passwords
+
+Use a password manager or secret store without writing the mailbox password into YAML. The same configuration works in legacy `credentials` and in each mail source's `sources[].credentials`.
+
+```yaml
+credentials:
+  username: "user@example.com"
+  password:
+    command: ["pass", "show", "mail/example"]
+```
+
+The array runs the executable directly, preserving each argument exactly; it does not expand shell variables, `~`, pipes, or wildcards. A shell string supports pipelines and expansion:
+
+```yaml
+credentials:
+  username: "user@example.com"
+  password:
+    command: "pass show mail/example | head -n 1"
+```
+
+- [x] Shell strings run with `sh -c` on Unix and `cmd.exe /C` on Windows. Configure only commands you trust; they run with Herald's user permissions and inherited environment.
+- [x] The helper must exit successfully and print one nonempty password line to stdout. Trailing CR/LF is removed, while spaces and tabs are preserved. If a password manager prints metadata, select only the password line as in the shell example.
+- [x] Commands run only when authenticating a new IMAP or SMTP connection, including an explicit account connection check. Reconnecting resolves the password again; an existing authenticated connection does not. OAuth authentication does not run password commands.
+- [x] Loading, validating, saving, editing Settings, demo mode, and cache-only operations do not execute commands. Resolved passwords are never cached in config or saved to disk.
+- [x] Execution is limited to 30 seconds (or an earlier caller deadline) and 64 KiB of stdout. Empty, multiline, NUL-containing, oversized, failed, and timed-out results are rejected. Standard input is closed and stderr is discarded; use a password manager's own unlock agent if needed.
+- [x] Errors omit command text, arguments, stdout, and stderr. On Unix, cancellation kills the helper's process group; on other platforms it terminates the direct helper process.
+- [x] Existing `password: "literal"` configs still work. Settings preserves an existing command when the password field is left blank; entering a new literal password replaces it. Edit YAML to add or change a command.
+
 ## Fields
 
 | YAML path | Purpose |
@@ -78,7 +106,8 @@ memories:
 | `theme.name` | Theme name: `inherited`, `herald-dark`, `herald-light`, another built-in theme such as `jade-signal`, or a local theme installed in `~/.herald/themes`. Default `inherited`. |
 | `theme.overrides` | Optional semantic role overrides keyed by role ID, e.g. `chrome.tab_active`. Colors accept `inherit`, `ansi:N`, `xterm:N`, or quoted `#RRGGBB`. |
 | `credentials.username` | IMAP/SMTP username or provider/bridge username. |
-| `credentials.password` | Password, app password, or bridge password. |
+| `credentials.password` | Literal password, app password, bridge password, or a mapping containing `command`. |
+| `credentials.password.command` | Shell string or argument array that prints the mailbox password at IMAP/SMTP authentication time. Also supported under `sources[].credentials`. |
 | `server.host` | IMAP host. Required for non-demo mode. |
 | `server.port` | IMAP port. Required for non-demo mode. |
 | `smtp.host` | SMTP host for Compose send. |

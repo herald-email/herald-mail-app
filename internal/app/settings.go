@@ -4039,14 +4039,12 @@ func (s *Settings) buildConfig() *config.Config {
 		cfg.Gmail.RefreshToken = ""
 		cfg.Gmail.TokenExpiry = ""
 		cfg.Gmail.Email = ""
-		cfg.Credentials.Username = ""
-		cfg.Credentials.Password = ""
+		cfg.Credentials = config.CredentialsConfig{}
 
 		if accountProvider == "gmail-oauth" {
 			cfg.Gmail.Email = s.email
 		} else {
-			cfg.Credentials.Username = s.email
-			cfg.Credentials.Password = s.password
+			cfg.Credentials = s.mailCredentialsConfig()
 		}
 
 		cfg.Server.Host = s.imapHost
@@ -4292,6 +4290,23 @@ func editableSourcesForSettings(cfg config.Config) []config.SourceConfig {
 	return cfg.ExplicitSourcesForEdit()
 }
 
+// A blank password field keeps an existing command without executing or displaying
+// it. Entering a literal explicitly replaces the command; new accounts inherit none.
+func (s *Settings) mailCredentialsConfig() config.CredentialsConfig {
+	credentials := config.CredentialsConfig{Username: strings.TrimSpace(s.email), Password: s.password}
+	if s.password != "" {
+		return credentials
+	}
+	if s.accountEditMode == settingsAccountEditExisting {
+		if source, ok := s.existingSourceForKind(models.SourceKindMail); ok {
+			credentials.PasswordCommand = source.Credentials.PasswordCommand
+		}
+	} else if s.mode == SettingsModeWizard && s.cfg != nil {
+		credentials.PasswordCommand = s.cfg.Credentials.PasswordCommand
+	}
+	return credentials
+}
+
 func (s *Settings) mailSourceConfig(accountID string, existing []config.SourceConfig) config.SourceConfig {
 	id := settingsUniqueSourceID(existing, firstNonEmptyString(s.accountDisplayName, s.email, accountID), "mail")
 	existingSource, hasExistingSource := s.existingSourceForKind(models.SourceKindMail)
@@ -4326,8 +4341,7 @@ func (s *Settings) mailSourceConfig(accountID string, existing []config.SourceCo
 			source.Google.Email = strings.TrimSpace(s.email)
 		}
 	} else {
-		source.Credentials.Username = strings.TrimSpace(s.email)
-		source.Credentials.Password = s.password
+		source.Credentials = s.mailCredentialsConfig()
 	}
 	return source
 }

@@ -165,3 +165,23 @@ func TestRegisterTUIFlagsAdvertisesUnsafeLogs(t *testing.T) {
 		t.Fatalf("expected help to advertise unsafe logs opt-in, got:\n%s", help)
 	}
 }
+
+func TestDemoOverridesNeverExecutePasswordCommand(t *testing.T) {
+	marker := filepath.Join(t.TempDir(), "called")
+	cfg := &config.Config{Credentials: config.CredentialsConfig{Username: "user@example.test", PasswordCommand: &config.PasswordCommand{Args: []string{"sh", "-c", `printf called > "$1"; printf password`, "helper", marker}}}, Server: config.ServerConfig{Host: "localhost", Port: 1143}}
+	cfg.Keyboard.Profile = "vim"
+	path := filepath.Join(t.TempDir(), "conf.yaml")
+	if err := cfg.Save(path); err != nil {
+		t.Fatal(err)
+	}
+	demoCfg := &config.Config{}
+	if applyDemoConfigOverrides(demoCfg, path) != path || demoCfg.Keyboard.Profile != "vim" {
+		t.Fatal("demo preferences failed to load")
+	}
+	if demoCfg.Credentials.PasswordCommand != nil {
+		t.Fatal("demo inherited real credentials")
+	}
+	if _, err := os.Stat(marker); !os.IsNotExist(err) {
+		t.Fatal("demo executed password command")
+	}
+}
