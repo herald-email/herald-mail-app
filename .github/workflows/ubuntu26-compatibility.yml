@@ -1,0 +1,97 @@
+name: Ubuntu 26 compatibility audit
+
+on:
+  push:
+    branches: [audit/ubuntu26-20261017]
+
+permissions:
+  contents: read
+
+env:
+  GO_VERSION: "1.25.x"
+
+jobs:
+  test:
+    name: Test and vet (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, ubuntu-26.04]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - name: Record image and toolchain; force fresh compilation
+        run: |
+          cat /etc/os-release
+          printf 'ImageOS=%s ImageVersion=%s\n' "$ImageOS" "$ImageVersion"
+          go version
+          go env CGO_ENABLED CC GOOS GOARCH
+          test "$(go env CGO_ENABLED)" = 1
+          gcc --version
+          ldd --version
+          go clean -cache -testcache
+      - name: Run tests
+        run: go test ./...
+      - name: Run go vet
+        run: go vet ./...
+
+  release-tools:
+    name: Release tooling dry run (ubuntu-26.04)
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+      - name: Inspect publishing tools and prepare fixture archives
+        run: |
+          set -euo pipefail
+          bash --version
+          git --version
+          gh --version
+          perl --version
+          shasum --version
+          tar --version
+          gh release create --help >/dev/null
+          gh release edit --help >/dev/null
+          gh release upload --help >/dev/null
+          mkdir -p fixture dist
+          printf 'Compatibility fixture, not a release binary.\n' > fixture/README
+          for os in darwin linux; do
+            for arch in arm64 amd64; do
+              tar -czf "dist/herald-v0.0.0-beta.0-${os}-${arch}.tar.gz" -C fixture README
+            done
+          done
+          (cd dist && shasum -a 256 *.tar.gz > checksums.txt)
+      - name: Upload fixture artifacts
+        uses: actions/upload-artifact@v6
+        with:
+          name: ubuntu26-audit-fixtures
+          path: dist/*
+          retention-days: 1
+      - name: Download fixture artifacts
+        uses: actions/download-artifact@v7
+        with:
+          pattern: ubuntu26-audit-fixtures
+          path: downloaded
+          merge-multiple: true
+      - name: Verify checksums and release scripts without publishing
+        run: |
+          set -euo pipefail
+          (cd downloaded && shasum -a 256 -c checksums.txt)
+          for archive in downloaded/*.tar.gz; do
+            tar -tzf "$archive" | grep -qx README
+          done
+          bash .github/scripts/release-channel.sh v0.0.0-beta.0 > beta-channel.txt
+          grep -qx 'update_beta_latest=true' beta-channel.txt
+          bash .github/scripts/release-channel.sh v0.0.0 > stable-channel.txt
+          grep -qx 'make_latest=true' stable-channel.txt
+          bash .github/scripts/render-homebrew-formula.sh v0.0.0-beta.0 downloaded/checksums.txt rendered/herald.rb
+          test "$(grep -c 'sha256 ' rendered/herald.rb)" -eq 4
+          ruby -c rendered/herald.rb
