@@ -296,6 +296,24 @@ type conditionalSettingsField struct {
 	hide  func() bool
 }
 
+// settingsTitleNote evaluates cheap titles on the UI loop, when Huh builds
+// the group view. Unlike Note.TitleFunc, it never reads form backing values
+// from an asynchronous command and reflects input changes in the same frame.
+type settingsTitleNote struct {
+	*huh.Note
+	title func() string
+}
+
+func (n *settingsTitleNote) Update(msg tea.Msg) (huh.Model, tea.Cmd) {
+	_, cmd := n.Note.Update(msg)
+	return n, cmd
+}
+
+func (n *settingsTitleNote) View() string {
+	n.Note.Title(n.title())
+	return n.Note.View()
+}
+
 func hideSettingsFieldWhen(field huh.Field, hide func() bool) huh.Field {
 	return &conditionalSettingsField{field: field, hide: hide}
 }
@@ -2029,8 +2047,9 @@ func (s *Settings) buildForm() {
 	).Title("Connect mail account")
 
 	accountDeleteConfirmGroup := huh.NewGroup(
-		huh.NewNote().
-			TitleFunc(func() string {
+		&settingsTitleNote{
+			Note: huh.NewNote().Description("This removes the account from Herald and deletes its local cached mail/calendar data. Provider mail and calendars are not deleted."),
+			title: func() string {
 				name := strings.TrimSpace(s.accountDisplayName)
 				if name == "" {
 					name = s.selectedAccountID
@@ -2039,8 +2058,8 @@ func (s *Settings) buildForm() {
 					name = "selected account"
 				}
 				return "Disconnect " + name + "?"
-			}, &s.accountDisplayName).
-			Description("This removes the account from Herald and deletes its local cached mail/calendar data. Provider mail and calendars are not deleted."),
+			},
+		},
 		huh.NewConfirm().
 			Title("Disconnect account").
 			Affirmative("Disconnect").
@@ -2049,21 +2068,22 @@ func (s *Settings) buildForm() {
 	).Title("Disconnect account")
 
 	existingAccountEditGroup := huh.NewGroup(
-		huh.NewNote().
-			TitleFunc(func() string {
-				name := strings.TrimSpace(s.accountDisplayName)
-				if name == "" {
-					name = "Account"
-				}
-				return name
-			}, &s.accountDisplayName).
-			DescriptionFunc(func() string {
+		&settingsTitleNote{
+			Note: huh.NewNote().DescriptionFunc(func() string {
 				capability := s.accountDetailCapability()
 				if capability == "" {
 					capability = "Account"
 				}
 				return capability + ". Edit the label and credentials, then save."
 			}, []any{&s.provider, &s.calendarProvider, &s.alsoAddCalendar}),
+			title: func() string {
+				name := strings.TrimSpace(s.accountDisplayName)
+				if name == "" {
+					name = "Account"
+				}
+				return name
+			},
+		},
 		huh.NewInput().
 			Title("Display Name").
 			Inline(true).
