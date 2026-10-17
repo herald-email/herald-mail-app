@@ -40,3 +40,7 @@ Select mail with Space and press `M` to open the folder picker. For identities, 
 ## Previous Release
 
 The v0.7 line introduced Herald Memories, Compose Radar, expanded chat capabilities, and reading improvements. See [What's New in v0.7](/whats-new-in-v0-7/) for that release history.
+
+## Next Release
+
+The v0.9 line adds external mailbox password commands and fixes account-title updates in Settings. See [What's New in v0.9](/whats-new-in-v0-9/) for upgrade details.
