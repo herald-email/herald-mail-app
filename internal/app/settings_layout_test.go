@@ -668,6 +668,7 @@ func TestSettingsPanelThemeSelectionCategoryShowsPickerAndInstallOnly(t *testing
 
 	for _, want := range []string{
 		"Current Theme",
+		"Image style",
 		"Install local theme YAML",
 		"Save changes",
 	} {

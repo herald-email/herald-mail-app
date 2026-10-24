@@ -25,6 +25,7 @@ keyboard:
   custom_keymap: ""
 theme:
   name: inherited
+  image_style: auto
   overrides:
     chrome.tab_active:
       fg: "#ffffff"
@@ -104,6 +105,7 @@ credentials:
 | `keyboard.profile` | Keyboard profile: `default`, `vim`, `emacs`, or `custom`. Default `default`. |
 | `keyboard.custom_keymap` | Optional path to a YAML custom keymap file when `keyboard.profile` is `custom`. |
 | `theme.name` | Theme name: `inherited`, `herald-dark`, `herald-light`, another built-in theme such as `jade-signal`, or a local theme installed in `~/.herald/themes`. Default `inherited`. |
+| `theme.image_style` | `auto` (default, follows CRT themes), `original`, `amber-crt`, `burnt-amber-crt`, `vault-green-crt`, or `dark-olive-crt`. Independent of image protocol; local static inline effects only. |
 | `theme.overrides` | Optional semantic role overrides keyed by role ID, e.g. `chrome.tab_active`. Colors accept `inherit`, `ansi:N`, `xterm:N`, or quoted `#RRGGBB`. |
 | `credentials.username` | IMAP/SMTP username or provider/bridge username. |
 | `credentials.password` | Literal password, app password, bridge password, or a mapping containing `command`. |

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/herald-email/herald-mail-app/internal/imagefx"
 	"github.com/herald-email/herald-mail-app/internal/logger"
 	"github.com/herald-email/herald-mail-app/internal/memory"
 	"github.com/herald-email/herald-mail-app/internal/models"
@@ -258,8 +259,9 @@ type Config struct {
 }
 
 type ThemeConfig struct {
-	Name      string                   `yaml:"name,omitempty"`
-	Overrides map[string]ThemeOverride `yaml:"overrides,omitempty"`
+	ImageStyle string                   `yaml:"image_style,omitempty"`
+	Name       string                   `yaml:"name,omitempty"`
+	Overrides  map[string]ThemeOverride `yaml:"overrides,omitempty"`
 }
 
 type ThemeOverride struct {
@@ -905,6 +907,9 @@ func Load(configPath string) (*Config, error) {
 
 // validate checks that all required configuration fields are present
 func (c *Config) validate() error {
+	if _, err := imagefx.Parse(c.Theme.ImageStyle); err != nil {
+		return err
+	}
 	for _, source := range c.NormalizedSources() {
 		if source.Kind == string(models.SourceKindMail) {
 			if err := source.Compose.ValidateIdentities(sourceAddress(source)); err != nil {

@@ -2843,3 +2843,22 @@ Account settings expose sending identities so aliases can be managed without edi
 - [x] Save and reopen; identities persist and are immediately available in Compose. Editing/removing a default updates it predictably.
 - [x] Escape cancels an editor or discards the manager's unsaved changes without altering configuration; write errors retain edits for retry.
 - [x] Verify literal input, long lists, 220×50, 80×24, 50×15 guard/recovery, and SSH/MCP smoke.
+
+## TC-CRT-75: Amber CRT presentation
+
+Amber CRT and Burnt Amber CRT pair readable warm terminal palettes with optional local static phosphor image effects. Presentation never changes source attachments, clipboard image bytes, remote-image consent, or transport fallbacks.
+
+- [x] Select amber-crt or burnt-amber-crt in Theme Selection; verify foreground, selection, warnings and destructive confirmation remain readable.
+- [x] Choose Image style: Follow theme, Original, Amber CRT, or Burnt Amber CRT; save/reopen and verify persistence. Original disables effects even with an amber theme; explicit styles work with other themes.
+- [x] Open demo Step 5 image sampler in split and full-screen preview; static grain, scanlines and tracking distortion render without repeated processing on scroll.
+- [x] Change styles while previewing, navigate between messages and resize; stale async results do not replace the current style. Originals remain available to copy/save/open links; SSH placeholders and image-off stay unchanged.
+- [x] Reject invalid image styles; cap decoded pixels, output size and cache memory. Unsupported or oversized images safely retain original rendering behavior.
+- [x] Verify 220×50, 80×24, 50×15 guard/recovery, browser raster pixels, SSH and MCP smoke.
+
+## TC-CRT-76: Green CRT palettes and split preview evidence
+
+Vault Green and Dark Olive CRT extend the same local effect pipeline without changing Amber or Original behavior. Evidence must show the email list alongside the rendered image, in addition to the full-screen reader.
+
+- [x] Select vault-green-crt or dark-olive-crt as a theme and as an independent image style; Follow theme resolves both correctly and Original overrides either.
+- [x] Verify deterministic green phosphor pixels, bounded output, and preserved originals through the shared tests.
+- [x] Capture actual Vault Green and Dark Olive split previews with visible Timeline list and inline raster images; capture full-screen variants as well.

@@ -997,6 +997,8 @@ type Model struct {
 	terminalLinkBrowserFallback bool
 	terminalLinkHover           terminalLinkHoverState
 	terminalLinkOpenGesture     terminalLinkOpenGestureState
+	imageStyleOverride          string
+	styledImages                styledImageState
 	previewImageMode            previewImageMode
 	imagePreviewLinks           *imagePreviewServer
 
@@ -1785,6 +1787,7 @@ func (m *Model) SetLaunchTheme(value string) error {
 
 func (m *Model) applyTheme(theme Theme) {
 	m.theme = theme
+	m.clearTimelinePreviewDocumentCache()
 	m.baseStyle = theme.BasePanelStyle()
 	m.headerStyle = theme.TitleBarStyle()
 	m.loadingStyle = theme.LoadingStyle()
@@ -2005,8 +2008,8 @@ func purgeAccountCacheFromBackend(b backend.Backend, accountID models.AccountID,
 	return purger.PurgeAccountCache(accountID, sourceIDs)
 }
 
-// Update implements tea.Model
-func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+// update handles app events; Update also schedules background image styling.
+func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 
 	// Handle rule editor messages before forwarding, so we can close it cleanly.

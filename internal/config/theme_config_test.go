@@ -65,3 +65,24 @@ func TestThemeConfigDefaultsToInherited(t *testing.T) {
 		t.Fatalf("default Theme.Overrides should be an empty map for settings edits")
 	}
 }
+
+func TestImageStyleRoundTripAndValidation(t *testing.T) {
+	cfg := minimalOAuthConfig()
+	cfg.Theme.Name = "amber-crt"
+	cfg.Theme.ImageStyle = "original"
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	if err := cfg.Save(path); err != nil {
+		t.Fatal(err)
+	}
+	got, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Theme.ImageStyle != "original" {
+		t.Fatal("lost image style")
+	}
+	cfg.Theme.ImageStyle = "bad"
+	if err := cfg.validate(); err == nil {
+		t.Fatal("accepted invalid image style")
+	}
+}

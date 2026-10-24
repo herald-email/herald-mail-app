@@ -185,3 +185,14 @@ func TestDemoOverridesNeverExecutePasswordCommand(t *testing.T) {
 		t.Fatal("demo executed password command")
 	}
 }
+
+func TestCRTLaunchFlags(t *testing.T) {
+	fs := flag.NewFlagSet("crt", flag.ContinueOnError)
+	opts := registerTUIFlags(fs)
+	if err := fs.Parse([]string{"--demo", "-theme", "amber-crt", "-image-style", "original"}); err != nil {
+		t.Fatal(err)
+	}
+	if *opts.imageStyle != "original" || *opts.theme != "amber-crt" {
+		t.Fatal("CRT launch flags not registered")
+	}
+}

@@ -642,3 +642,23 @@ func TestVirtualLabSSHSettingsIdentities(t *testing.T) {
 	requireVisibleContains(t, frame, "From:", "SSH Alias", "ssh-alias@herald.test")
 	requireVisibleFitsWidth(t, frame, 80)
 }
+
+func TestVirtualLabSSHCRTThemeSettings(t *testing.T) {
+	h := startVirtualLabSSH(t, testmail.ScenarioCalendlyInvite, 80, 24, func(cfg *config.Config) { cfg.Theme.Name = "amber-crt"; cfg.Theme.ImageStyle = "original" })
+	h.waitForVisible(t, "Invitation")
+	h.sendKey(t, "enter")
+	h.waitForVisible(t, "Join meeting")
+	h.sendKey(t, "S")
+	h.waitForVisible(t, "Theme Selection")
+	for i := 0; i < 6; i++ {
+		h.sendKey(t, "\x1b[B")
+	}
+	h.sendKey(t, "enter")
+	h.waitForFocus(t, "Current Theme")
+	h.sendKey(t, "\t")
+	h.waitForFocus(t, "Image style")
+	frame := h.currentVisibleFrame()
+	requireVisibleContains(t, frame, "Image style", "Original", "Amber CRT", "Burnt Amber CRT")
+	requireVisibleFitsWidth(t, frame, 80)
+	t.Log(frame)
+}

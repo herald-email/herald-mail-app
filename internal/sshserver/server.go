@@ -25,6 +25,7 @@ import (
 	"github.com/herald-email/herald-mail-app/internal/backend"
 	"github.com/herald-email/herald-mail-app/internal/config"
 	demodata "github.com/herald-email/herald-mail-app/internal/demo"
+	"github.com/herald-email/herald-mail-app/internal/imagefx"
 	"github.com/herald-email/herald-mail-app/internal/logger"
 	"github.com/herald-email/herald-mail-app/internal/printing"
 	appsmtp "github.com/herald-email/herald-mail-app/internal/smtp"
@@ -38,6 +39,8 @@ func Run(commandName string, args []string) error {
 	addr := fs.String("addr", ":2222", "SSH server listen address")
 	hostKey := fs.String("host-key", ".ssh/host_ed25519", "Path to SSH host private key (created if missing)")
 	daemonURL := fs.String("daemon", "", "connect to herald daemon at URL instead of opening IMAP")
+	imageStyle := fs.String("image-style", "", "Inline image style: auto, original, amber-crt, burnt-amber-crt, vault-green-crt, dark-olive-crt")
+	theme := fs.String("theme", "", "One-session theme override")
 	imageProtocol := fs.String("image-protocol", "auto", "Inline image protocol: auto, iterm2, kitty, links, placeholder, off")
 	unsafeLogs := fs.Bool("unsafe-logs", false, "Write unredacted private data to logs for explicit local diagnostics")
 	showVersion := fs.Bool("version", false, "Show version information")
@@ -53,6 +56,15 @@ func Run(commandName string, args []string) error {
 	imageMode, err := app.ParsePreviewImageMode(*imageProtocol)
 	if err != nil {
 		return err
+	}
+
+	if _, err := imagefx.Parse(*imageStyle); err != nil {
+		return err
+	}
+	if *theme != "" {
+		if _, err := app.ResolveLaunchTheme(*theme, ""); err != nil {
+			return err
+		}
 	}
 
 	if err := logger.Init(false, logger.WithUnsafeLogs(*unsafeLogs)); err != nil {
@@ -102,6 +114,8 @@ func Run(commandName string, args []string) error {
 		DemoMode:       *demoMode,
 		DaemonURL:      *daemonURL,
 		ImageMode:      imageMode,
+		ImageStyle:     *imageStyle,
+		Theme:          *theme,
 		Mailer:         mailer,
 		Classifier:     classifier,
 	})
@@ -142,6 +156,8 @@ func Run(commandName string, args []string) error {
 }
 
 type sshServerOptions struct {
+	ImageStyle     string
+	Theme          string
 	Addr           string
 	HostKeyPath    string
 	Config         *config.Config
@@ -213,6 +229,12 @@ func newSessionModel(s ssh.Session, opts sshServerOptions) (tea.Model, []tea.Pro
 	m.SetPreviewImageMode(opts.ImageMode)
 	m.SetConfigPath(opts.ResolvedConfig)
 	m.SetConfig(opts.Config)
+	if opts.ImageStyle != "" {
+		_ = m.SetPreviewImageStyle(opts.ImageStyle)
+	}
+	if opts.Theme != "" {
+		_ = m.SetLaunchTheme(opts.Theme)
+	}
 	return m, app.ProgramOptions()
 }
 

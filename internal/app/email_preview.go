@@ -766,6 +766,7 @@ func (m *Model) timelinePreviewDocumentLayout(innerW, availableRows int) preview
 	images := previewDocumentRenderableImages(doc, m.timeline.remoteImageLoads)
 	imageLinks := m.localImageLinkMap(scopeKey, images, mode)
 	layout := layoutPreviewDocument(doc, previewLayoutOptions{
+		ImageRenderer: m.renderStyledPreviewImage,
 		InnerWidth:    innerW,
 		AvailableRows: availableRows,
 		ImageMode:     mode,

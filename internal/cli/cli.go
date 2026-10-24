@@ -25,6 +25,7 @@ import (
 	"github.com/herald-email/herald-mail-app/internal/config"
 	"github.com/herald-email/herald-mail-app/internal/daemon"
 	demodata "github.com/herald-email/herald-mail-app/internal/demo"
+	"github.com/herald-email/herald-mail-app/internal/imagefx"
 	"github.com/herald-email/herald-mail-app/internal/logger"
 	"github.com/herald-email/herald-mail-app/internal/mcpserver"
 	"github.com/herald-email/herald-mail-app/internal/models"
@@ -362,7 +363,7 @@ func newWizardPreferencesSettings(existing *config.Config, configPath string, ex
 }
 
 // runDemo starts the app with synthetic data and no real IMAP connection.
-func runDemo(imageMode app.PreviewImageMode, dryRun bool, demoKeys bool, demoMultiAccount bool, themeValue string, unsafeLogs bool, openDeepLink string, configPath string) {
+func runDemo(imageStyle string, imageMode app.PreviewImageMode, dryRun bool, demoKeys bool, demoMultiAccount bool, themeValue string, unsafeLogs bool, openDeepLink string, configPath string) {
 	if err := logger.Init(false, logger.WithUnsafeLogs(unsafeLogs)); err != nil {
 		log.Fatalf("Failed to initialize logging: %v", err)
 	}
@@ -403,6 +404,9 @@ func runDemo(imageMode app.PreviewImageMode, dryRun bool, demoKeys bool, demoMul
 	// Build the TUI model
 	model := app.New(demoBackend, mailer, cfg.Credentials.Username, classifier, dryRun)
 	model.SetPreviewImageMode(imageMode)
+	if imageStyle != "" {
+		_ = model.SetPreviewImageStyle(imageStyle)
+	}
 	model.SetDemoKeyOverlay(demoKeys)
 	model.SetConfigPath(demoConfigPath)
 	model.SetConfig(cfg)
@@ -456,6 +460,7 @@ type tuiFlagOptions struct {
 	dryRun        *bool
 	experimental  *bool
 	imageProtocol *string
+	imageStyle    *string
 	theme         *string
 	openDeepLink  *string
 	configPath    *string
@@ -474,6 +479,7 @@ func registerTUIFlags(fs *flag.FlagSet) tuiFlagOptions {
 		demoMulti:     fs.Bool("demo-multi-account", false, "Start demo mode with two deterministic mail accounts"),
 		dryRun:        fs.Bool("dry-run", false, "Log rule and cleanup actions without executing them (dry run)"),
 		experimental:  fs.Bool("experimental", false, "Show experimental email service onboarding options"),
+		imageStyle:    fs.String("image-style", "", "Inline image style: auto, original, amber-crt, burnt-amber-crt, vault-green-crt, dark-olive-crt (default: config/follow theme)"),
 		imageProtocol: fs.String("image-protocol", "auto", "Inline image protocol: auto, iterm2, kitty, links, placeholder, off"),
 		theme:         fs.String("theme", "", "Start with a built-in theme name or theme YAML file path without saving config"),
 		openDeepLink:  fs.String("open", "", "Open Herald to a herald:// deep-link context"),
@@ -807,9 +813,14 @@ func runTUI() {
 		log.Fatalf("%v", err)
 	}
 
+	imageStyle := *opts.imageStyle
+	if _, err := imagefx.Parse(imageStyle); err != nil {
+		log.Fatalf("%v", err)
+	}
+
 	// Demo mode: skip all real IMAP setup
 	if shouldRunDemo(*opts.demo, *opts.demoMulti) {
-		runDemo(imageMode, *opts.dryRun, *opts.demoKeys, *opts.demoMulti, *opts.theme, *opts.unsafeLogs, *opts.openDeepLink, *opts.configPath)
+		runDemo(imageStyle, imageMode, *opts.dryRun, *opts.demoKeys, *opts.demoMulti, *opts.theme, *opts.unsafeLogs, *opts.openDeepLink, *opts.configPath)
 		return
 	}
 
@@ -989,6 +1000,9 @@ func runTUI() {
 	// Create the TUI application
 	model := app.New(b, mailer, configuredEmailAddress(cfg), classifier, *opts.dryRun)
 	model.SetPreviewImageMode(imageMode)
+	if imageStyle != "" {
+		_ = model.SetPreviewImageStyle(imageStyle)
+	}
 	model.SetConfigPath(resolvedConfig)
 	model.SetConfig(cfg)
 	model.SetNotifier(notifications.New(notifications.Options{Enabled: cfg.Notifications.Enabled, Sound: cfg.Notifications.Sound}))

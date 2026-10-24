@@ -15,6 +15,25 @@ Use `-theme` with either a built-in theme name or a local theme YAML file. The f
 ./bin/herald -config ~/.herald/conf.yaml -theme amber-furnace
 ```
 
+## CRT themes
+
+Amber CRT and Burnt Amber CRT provide warm terminal palettes; Vault Green CRT provides Fallout-inspired green phosphor, and Dark Olive CRT provides a muted olive alternative. All four pair their palettes with optional static phosphor image effects. Grain, scanlines, ghosting and horizontal tracking distortion are computed locally in the background and cached for the current preview, with no continuous animation.
+
+- [x] Launch `herald --demo -theme amber-crt` or `-theme burnt-amber-crt` and open the Step 5 image sampler.
+- [x] Choose **Image style** in **Settings → Theme Selection**: Follow theme, Original, Amber CRT, Burnt Amber CRT, Vault Green CRT, or Dark Olive CRT. Follow theme applies CRT only to the four matching CRT themes.
+- [x] Override just this session with `-image-style original` to keep original image colors, or `-image-style amber-crt` to use the effect with any theme.
+- [x] iTerm2 and Kitty inline previews support the effect; local open-image links, clipboard images, saved attachments, placeholders, and image-off retain their original behavior. SSH supports the same flags with explicit raster opt-in.
+
+```sh
+./bin/herald --demo -theme amber-crt -image-protocol iterm2
+./bin/herald --demo -theme burnt-amber-crt -image-protocol kitty
+./bin/herald --demo -theme amber-crt -image-style original
+./bin/herald --demo -theme vault-green-crt
+./bin/herald --demo -theme dark-olive-crt
+```
+
+Original images appear while processing completes. At most eight images per current preview are processed, with a 16 MiB output cache, 5 MiB input limit per image, 16-million-pixel decode limit, and output bounded to 960×540. Unsupported or over-budget images retain original rendering; remote content still requires explicit reveal. Animated sources use their first frame when styled.
+
 ## Build Your Own
 
 Start from the [Jade Signal baseline YAML](/examples/themes/jade-signal-baseline.yaml) when you want a complete local theme file to copy and edit. The sample uses the installable slug `my-jade-signal` so it does not conflict with Herald's reserved built-in `jade-signal` theme.

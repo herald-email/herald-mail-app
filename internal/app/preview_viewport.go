@@ -13,6 +13,7 @@ import (
 )
 
 type previewLayoutOptions struct {
+	ImageRenderer func(previewImageRenderRequest) previewImageRenderResult
 	InnerWidth    int
 	AvailableRows int
 	ImageMode     previewImageMode
@@ -121,7 +122,11 @@ func layoutPreviewImageBlock(block previewDocumentBlock, opts previewLayoutOptio
 		desc = opts.Descriptions[key]
 	}
 	link := opts.ImageLinks[key]
-	rendered := renderPreviewImageBlock(previewImageRenderRequest{
+	renderer := opts.ImageRenderer
+	if renderer == nil {
+		renderer = renderPreviewImageBlock
+	}
+	rendered := renderer(previewImageRenderRequest{
 		Mode:          opts.ImageMode,
 		Image:         block.Image,
 		Alt:           block.Alt,
@@ -157,7 +162,11 @@ func layoutPreviewRemoteImageBlock(block previewDocumentBlock, opts previewLayou
 		image.MIMEType = "image"
 	}
 	link := opts.ImageLinks[normalizeContentID(key)]
-	rendered := renderPreviewImageBlock(previewImageRenderRequest{
+	renderer := opts.ImageRenderer
+	if renderer == nil {
+		renderer = renderPreviewImageBlock
+	}
+	rendered := renderer(previewImageRenderRequest{
 		Mode:          opts.ImageMode,
 		Image:         image,
 		Alt:           block.Remote.Alt,

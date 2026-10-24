@@ -22,7 +22,7 @@ Press `S` from the main UI to open settings. The overlay reads the current confi
 | Sync & Cleanup | Poll interval minutes, IMAP IDLE setting, offline cache policy, manual offline-cache reclaim, cleanup schedule hours, automation-rule launcher, custom-prompt launcher, and cleanup-rule manager launcher. |
 | Memories | Memory directory, included sources, vault path, destinations, Obsidian output modes, update rules, prompt templates, confidence thresholds, research safety, and read-only store counts. |
 | Keyboard | Keyboard profile and optional custom keymap YAML path. |
-| Theme Selection | App theme selection and local YAML install. |
+| Theme Selection | App theme selection, independent inline image style, and local YAML install. |
 | Theme Editor | Semantic role color editing, live preview, reset controls, and custom theme creation. |
 | Signature | Multiline default Compose signature text. |
 | Save/cancel controls | Category-level save returns to the menu; `esc` backs out one level before exiting and does not save unsaved category edits. |
@@ -118,7 +118,7 @@ Theme settings stay local-first while separating quick selection from deeper edi
 1. Press `S`.
 2. Choose `Theme Selection`.
 3. Choose `Inherited`, `Herald dark`, `Herald light`, a built-in palette such as `Jade Signal` or `Amber Furnace`, or an installed theme.
-4. Optionally enter a local YAML theme file path to install it into `~/.herald/themes`.
+4. Set **Image style** to Follow theme, Original, Amber CRT, Burnt Amber CRT, Vault Green CRT, or Dark Olive CRT. Optionally enter a local YAML theme file path to install it into `~/.herald/themes`.
 5. Save.
 6. Reopen Settings and choose `Theme Editor`.
 7. Select a semantic role, edit foreground/background with `inherit`, `ansi:N`, `xterm:N`, or `#RRGGBB`, and review the swatches/live preview.

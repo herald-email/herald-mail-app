@@ -45,6 +45,8 @@ type previewImageSize struct {
 }
 
 type previewImageRenderRequest struct {
+	// RasterData is a display-only PNG; geometry and copy data use Image.
+	RasterData    []byte
 	Mode          previewImageMode
 	Image         models.InlineImage
 	Alt           string
@@ -230,13 +232,18 @@ func renderPreviewImageBlock(req previewImageRenderRequest) previewImageRenderRe
 		return oneLinePreviewImageFallback("[image unavailable: empty data]", req.InnerWidth)
 	}
 
+	rasterImage := req.Image
+	if len(req.RasterData) > 0 {
+		rasterImage.Data = req.RasterData
+		rasterImage.MIMEType = "image/png"
+	}
 	switch mode {
 	case previewImageModeIterm2:
 		if len(req.Image.Data) > maxPreviewImageBytes {
 			return oneLinePreviewImageFallback(fmt.Sprintf("[image too large to render inline: %s]", req.Image.MIMEType), req.InnerWidth)
 		}
 		size := previewImageCellSizeForMode(mode, req.Image, req.InnerWidth, req.AvailableRows)
-		rendered := strings.TrimRight(iterm2.RenderInlineImageOnly(req.Image.Data, size.Width, size.Rows), "\n")
+		rendered := strings.TrimRight(iterm2.RenderInlineImageOnly(rasterImage.Data, size.Width, size.Rows), "\n")
 		if rendered == "" {
 			return oneLinePreviewImageFallback(previewImagePlaceholderText(req), req.InnerWidth)
 		}
@@ -245,14 +252,14 @@ func renderPreviewImageBlock(req previewImageRenderRequest) previewImageRenderRe
 			Rows:                 size.Rows,
 			Width:                size.Width,
 			TerminalConsumesRows: true,
-			NativeImage:          &previewNativeImageSource{Image: req.Image, Width: size.Width, Rows: size.Rows},
+			NativeImage:          &previewNativeImageSource{Image: rasterImage, Width: size.Width, Rows: size.Rows},
 		}
 	case previewImageModeKitty:
 		if len(req.Image.Data) > maxPreviewImageBytes {
 			return oneLinePreviewImageFallback(fmt.Sprintf("[image too large to render inline: %s]", req.Image.MIMEType), req.InnerWidth)
 		}
 		size := previewImageCellSizeForMode(mode, req.Image, req.InnerWidth, req.AvailableRows)
-		rendered, err := kittyimg.RenderInline(req.Image.Data, size.Width, size.Rows)
+		rendered, err := kittyimg.RenderInline(rasterImage.Data, size.Width, size.Rows)
 		if err != nil || rendered == "" {
 			return oneLinePreviewImageFallback(previewImagePlaceholderText(req), req.InnerWidth)
 		}
@@ -260,7 +267,7 @@ func renderPreviewImageBlock(req previewImageRenderRequest) previewImageRenderRe
 			Content:     strings.TrimRight(rendered, "\n"),
 			Rows:        size.Rows,
 			Width:       size.Width,
-			NativeImage: &previewNativeImageSource{Image: req.Image, Width: size.Width, Rows: size.Rows},
+			NativeImage: &previewNativeImageSource{Image: rasterImage, Width: size.Width, Rows: size.Rows},
 		}
 	case previewImageModeLinks:
 		if req.LinkURL != "" && req.LinkLabel != "" {

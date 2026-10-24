@@ -279,6 +279,7 @@ type Settings struct {
 
 	// form field backing variables — theme
 	themeName        string
+	imageStyle       string
 	themeInstallPath string
 	themeRole        string
 	themeFG          string
@@ -523,6 +524,7 @@ func NewSettingsWithPathAndOptions(mode SettingsMode, existing *config.Config, c
 		s.keyboardProfile = existing.Keyboard.Profile
 		s.customKeymap = existing.Keyboard.CustomKeymap
 		s.themeName = existing.Theme.Name
+		s.imageStyle = existing.Theme.ImageStyle
 		s.themeOverrides = cloneThemeOverrides(existing.Theme.Overrides)
 		s.themeRole = firstThemeRole(existing.Theme.Overrides)
 		if override, ok := existing.Theme.Overrides[s.themeRole]; ok {
@@ -583,6 +585,9 @@ func NewSettingsWithPathAndOptions(mode SettingsMode, existing *config.Config, c
 	}
 	if s.themeName == "" {
 		s.themeName = "inherited"
+	}
+	if s.imageStyle == "" {
+		s.imageStyle = "auto"
 	}
 	if s.themeRole == "" {
 		s.themeRole = "chrome.tab_active"
@@ -1894,6 +1899,14 @@ func (s *Settings) buildForm() {
 			Title("Current Theme").
 			Options(settingsThemeOptions()...).
 			Value(&s.themeName),
+		huh.NewSelect[string]().Title("Image style").Description("Static CRT effects for inline images. Open/save keeps originals.").Options(
+			huh.NewOption("Follow theme", "auto"),
+			huh.NewOption("Original", "original"),
+			huh.NewOption("Amber CRT", "amber-crt"),
+			huh.NewOption("Burnt Amber CRT", "burnt-amber-crt"),
+			huh.NewOption("Vault Green CRT", "vault-green-crt"),
+			huh.NewOption("Dark Olive CRT", "dark-olive-crt"),
+		).Value(&s.imageStyle),
 		huh.NewInput().
 			Title("Install local theme YAML").
 			Description("Validated and copied into ~/.herald/themes. Leave blank to skip install.").
@@ -2650,6 +2663,18 @@ func settingsThemeOptions() []huh.Option[string] {
 }
 
 func themeDisplayName(name string) string {
+	if name == "vault-green-crt" {
+		return "Vault Green CRT"
+	}
+	if name == "dark-olive-crt" {
+		return "Dark Olive CRT"
+	}
+	if name == "amber-crt" {
+		return "Amber CRT"
+	}
+	if name == "burnt-amber-crt" {
+		return "Burnt Amber CRT"
+	}
 	switch name {
 	case "inherited":
 		return "Inherited"
@@ -4143,6 +4168,7 @@ func (s *Settings) buildConfig() *config.Config {
 	cfg.Compose.Signature.Text = normalizeSignatureText(s.signatureText)
 	cfg.Keyboard.Profile = s.keyboardProfile
 	cfg.Keyboard.CustomKeymap = strings.TrimSpace(s.customKeymap)
+	cfg.Theme.ImageStyle = s.imageStyle
 	cfg.Theme.Name = strings.TrimSpace(s.themeName)
 	if cfg.Theme.Name == "" {
 		cfg.Theme.Name = "inherited"

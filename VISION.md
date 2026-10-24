@@ -993,6 +993,8 @@ Integration tests and headless test harnesses ensure the app works correctly at 
 
 ## Theming
 
+- [x] Vault Green and Dark Olive CRT themes and image styles with split-preview screenshot evidence
+- [x] Amber CRT and Burnt Amber CRT themes with independently selectable, cached local static image effects and an Original option
 - [x] App-level theme system (configurable in `~/.herald/conf.yaml`)
 - [x] Inherit terminal color profile by default via `theme.name: inherited`
 - [x] Herald dark and Herald light built-in themes, with `adaptive` and `legacy-dark` accepted as backward-compatible aliases
