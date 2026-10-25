@@ -20,7 +20,9 @@ Use `-theme` with either a built-in theme name or a local theme YAML file. The f
 Amber CRT and Burnt Amber CRT provide warm terminal palettes; Vault Green CRT provides Fallout-inspired green phosphor, and Dark Olive CRT provides a muted olive alternative. All four pair their palettes with optional static phosphor image effects. Grain, scanlines, ghosting and horizontal tracking distortion are computed locally in the background and cached for the current preview, with no continuous animation.
 
 - [x] Launch `herald --demo -theme amber-crt` or `-theme burnt-amber-crt` and open the Step 5 image sampler.
-- [x] Choose **Image style** in **Settings → Theme Selection**: Follow theme, Original, Amber CRT, Burnt Amber CRT, Vault Green CRT, or Dark Olive CRT. Follow theme applies CRT only to the four matching CRT themes.
+- [x] **Old Color TV** softens edges with a fine RGB mask; **Worn VHS** adds faded colors, horizontal color bleed and bottom-edge tracking noise; **Haunted Broadcast** adds dark ghosting and localized interference. Select these image styles independently of the UI theme. All effects are static and cached.
+- [x] Gloom CRT preserves source colors with darker exposure, grain, scanlines and tracking distortion. Select it independently with any theme; Follow theme still uses the four matching phosphor styles.
+- [x] Choose **Image style** in **Settings → Theme Selection**: Follow theme, Original, Amber CRT, Burnt Amber CRT, Vault Green CRT, Dark Olive CRT, Gloom CRT, Old Color TV, Worn VHS, or Haunted Broadcast. Follow theme applies CRT only to the four matching CRT themes.
 - [x] Override just this session with `-image-style original` to keep original image colors, or `-image-style amber-crt` to use the effect with any theme.
 - [x] iTerm2 and Kitty inline previews support the effect; local open-image links, clipboard images, saved attachments, placeholders, and image-off retain their original behavior. SSH supports the same flags with explicit raster opt-in.
 
@@ -30,6 +32,7 @@ Amber CRT and Burnt Amber CRT provide warm terminal palettes; Vault Green CRT pr
 ./bin/herald --demo -theme amber-crt -image-style original
 ./bin/herald --demo -theme vault-green-crt
 ./bin/herald --demo -theme dark-olive-crt
+./bin/herald --demo -theme dark-olive-crt -image-style gloom-crt
 ```
 
 Original images appear while processing completes. At most eight images per current preview are processed, with a 16 MiB output cache, 5 MiB input limit per image, 16-million-pixel decode limit, and output bounded to 960×540. Unsupported or over-budget images retain original rendering; remote content still requires explicit reveal. Animated sources use their first frame when styled.

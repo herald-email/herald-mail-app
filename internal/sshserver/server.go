@@ -39,7 +39,7 @@ func Run(commandName string, args []string) error {
 	addr := fs.String("addr", ":2222", "SSH server listen address")
 	hostKey := fs.String("host-key", ".ssh/host_ed25519", "Path to SSH host private key (created if missing)")
 	daemonURL := fs.String("daemon", "", "connect to herald daemon at URL instead of opening IMAP")
-	imageStyle := fs.String("image-style", "", "Inline image style: auto, original, amber-crt, burnt-amber-crt, vault-green-crt, dark-olive-crt")
+	imageStyle := fs.String("image-style", "", "Inline image style: auto, original, amber-crt, burnt-amber-crt, vault-green-crt, dark-olive-crt, gloom-crt, old-color-tv, worn-vhs, haunted-broadcast")
 	theme := fs.String("theme", "", "One-session theme override")
 	imageProtocol := fs.String("image-protocol", "auto", "Inline image protocol: auto, iterm2, kitty, links, placeholder, off")
 	unsafeLogs := fs.Bool("unsafe-logs", false, "Write unredacted private data to logs for explicit local diagnostics")

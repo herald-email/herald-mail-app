@@ -993,6 +993,8 @@ Integration tests and headless test harnesses ensure the app works correctly at 
 
 ## Theming
 
+- [x] Old Color TV, Worn VHS and Haunted Broadcast image styles with cached local processing and split-view evidence
+- [x] Gloom CRT image style preserves source colors with darker exposure and cached static grain/distortion
 - [x] Vault Green and Dark Olive CRT themes and image styles with split-preview screenshot evidence
 - [x] Amber CRT and Burnt Amber CRT themes with independently selectable, cached local static image effects and an Original option
 - [x] App-level theme system (configurable in `~/.herald/conf.yaml`)

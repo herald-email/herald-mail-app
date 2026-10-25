@@ -86,3 +86,31 @@ func TestImageStyleRoundTripAndValidation(t *testing.T) {
 		t.Fatal("accepted invalid image style")
 	}
 }
+
+func TestGloomImageStyleConfigRoundTrip(t *testing.T) {
+	cfg := minimalOAuthConfig()
+	cfg.Theme.ImageStyle = "gloom-crt"
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	if err := cfg.Save(path); err != nil {
+		t.Fatal(err)
+	}
+	got, err := Load(path)
+	if err != nil || got.Theme.ImageStyle != "gloom-crt" {
+		t.Fatal("lost gloom preference", err)
+	}
+}
+
+func TestAnalogStyleConfigRoundTrip(t *testing.T) {
+	for _, name := range []string{"old-color-tv", "worn-vhs", "haunted-broadcast"} {
+		cfg := minimalOAuthConfig()
+		cfg.Theme.ImageStyle = name
+		path := filepath.Join(t.TempDir(), "config.yaml")
+		if err := cfg.Save(path); err != nil {
+			t.Fatal(err)
+		}
+		got, err := Load(path)
+		if err != nil || got.Theme.ImageStyle != name {
+			t.Fatal("lost style", name, err)
+		}
+	}
+}

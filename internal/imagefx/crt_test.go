@@ -55,10 +55,12 @@ func TestFilterPreservesAlpha(t *testing.T) {
 	for i := range src.Pix {
 		src.Pix[i] = uint8(i)
 	}
-	got := filter(src, Amber)
-	for i := 3; i < len(src.Pix); i += 4 {
-		if got.Pix[i] != src.Pix[i] {
-			t.Fatal("alpha mask changed")
+	for _, style := range []Style{Amber, Gloom} {
+		got := filter(src, style)
+		for i := 3; i < len(src.Pix); i += 4 {
+			if got.Pix[i] != src.Pix[i] {
+				t.Fatal("alpha mask changed")
+			}
 		}
 	}
 }
@@ -147,5 +149,61 @@ func TestGreenCRTStyles(t *testing.T) {
 	}
 	if bytes.Equal(results[0], results[1]) {
 		t.Fatal("green palettes must differ")
+	}
+}
+
+func TestGloomPreservesColorsAndDarkens(t *testing.T) {
+	for _, color := range []color.NRGBA{{220, 60, 30, 255}, {30, 220, 60, 255}, {60, 30, 220, 255}, {160, 160, 160, 255}} {
+		src := image.NewNRGBA(image.Rect(0, 0, 64, 64))
+		for y := 0; y < 64; y++ {
+			for x := 0; x < 64; x++ {
+				src.SetNRGBA(x, y, color)
+			}
+		}
+		got := filter(src, Gloom)
+		var before, after int
+		levels := map[uint8]bool{}
+		for i := 0; i < len(got.Pix); i += 4 {
+			for c := 0; c < 3; c++ {
+				before += int(src.Pix[i+c])
+				after += int(got.Pix[i+c])
+				for d := c + 1; d < 3; d++ {
+					if src.Pix[i+c] > src.Pix[i+d] && got.Pix[i+c] < got.Pix[i+d] {
+						t.Fatal("hue reversed")
+					}
+					if src.Pix[i+c] == src.Pix[i+d] && got.Pix[i+c] != got.Pix[i+d] {
+						t.Fatal("neutral tinted")
+					}
+				}
+			}
+			levels[got.Pix[i]] = true
+		}
+		if after >= before*70/100 || after < before*20/100 {
+			t.Fatal("exposure outside gloomy range", before, after)
+		}
+		if len(levels) < 3 {
+			t.Fatal("missing static texture")
+		}
+		if !bytes.Equal(got.Pix, filter(src, Gloom).Pix) {
+			t.Fatal("non-deterministic")
+		}
+	}
+	style, err := Parse(" Gloom-CRT ")
+	if err != nil || style != Gloom || Resolve(style, "amber-crt") != Gloom {
+		t.Fatal("style selection", err)
+	}
+}
+
+func BenchmarkTransformGloom(b *testing.B) {
+	data, err := os.ReadFile("../demo/assets/changing-landscape-960px.jpg")
+	if err != nil {
+		b.Fatal(err)
+	}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if _, err := Transform(data, Gloom); err != nil {
+			b.Fatal(err)
+		}
 	}
 }

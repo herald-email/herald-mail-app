@@ -15,16 +15,20 @@ import (
 type Style string
 
 const (
-	Auto          Style = "auto"
-	Original      Style = "original"
-	Amber         Style = "amber-crt"
-	BurntAmber    Style = "burnt-amber-crt"
-	VaultGreen    Style = "vault-green-crt"
-	DarkOlive     Style = "dark-olive-crt"
-	MaxInputBytes       = 5 * 1024 * 1024
-	MaxPixels           = 16 * 1000 * 1000
-	MaxWidth            = 960
-	MaxHeight           = 540
+	Auto             Style = "auto"
+	Original         Style = "original"
+	Amber            Style = "amber-crt"
+	BurntAmber       Style = "burnt-amber-crt"
+	VaultGreen       Style = "vault-green-crt"
+	DarkOlive        Style = "dark-olive-crt"
+	Gloom            Style = "gloom-crt"
+	OldColorTV       Style = "old-color-tv"
+	WornVHS          Style = "worn-vhs"
+	HauntedBroadcast Style = "haunted-broadcast"
+	MaxInputBytes          = 5 * 1024 * 1024
+	MaxPixels              = 16 * 1000 * 1000
+	MaxWidth               = 960
+	MaxHeight              = 540
 )
 
 func Parse(value string) (Style, error) {
@@ -33,10 +37,10 @@ func Parse(value string) (Style, error) {
 		s = Auto
 	}
 	switch s {
-	case Auto, Original, Amber, BurntAmber, VaultGreen, DarkOlive:
+	case Auto, Original, Amber, BurntAmber, VaultGreen, DarkOlive, Gloom, OldColorTV, WornVHS, HauntedBroadcast:
 		return s, nil
 	}
-	return "", fmt.Errorf("invalid image style %q (valid: auto, original, amber-crt, burnt-amber-crt, vault-green-crt, dark-olive-crt)", value)
+	return "", fmt.Errorf("invalid image style %q (valid: auto, original, amber-crt, burnt-amber-crt, vault-green-crt, dark-olive-crt, gloom-crt, old-color-tv, worn-vhs, haunted-broadcast)", value)
 }
 func Resolve(style Style, theme string) Style {
 	if style == "" || style == Auto {
@@ -62,7 +66,7 @@ func Transform(data []byte, style Style) ([]byte, error) {
 	if style == Original {
 		return data, nil
 	}
-	if style != Amber && style != BurntAmber && style != VaultGreen && style != DarkOlive {
+	if style != Amber && style != BurntAmber && style != VaultGreen && style != DarkOlive && style != Gloom && style != OldColorTV && style != WornVHS && style != HauntedBroadcast {
 		return nil, fmt.Errorf("unresolved image style %q", style)
 	}
 	if len(data) > MaxInputBytes {
@@ -127,6 +131,9 @@ func abs(v int) int {
 	return v
 }
 func filter(src *image.NRGBA, style Style) *image.NRGBA {
+	if style == OldColorTV || style == WornVHS || style == HauntedBroadcast {
+		return filterAnalog(src, style)
+	}
 	dst := image.NewNRGBA(src.Bounds())
 	w, h := src.Bounds().Dx(), src.Bounds().Dy()
 	black, ink := [3]int{10, 5, 1}, [3]int{220, 131, 36}
@@ -155,6 +162,7 @@ func filter(src *image.NRGBA, style Style) *image.NRGBA {
 			ghost := y*src.Stride + max(0, min(w-1, sx-5))*4
 			gl := (54*int(src.Pix[ghost]) + 183*int(src.Pix[ghost+1]) + 19*int(src.Pix[ghost+2])) >> 8
 			l = (l*9 + gl) / 10
+			colorLuma := max(1, l)
 			l = max(0, l-12)*85/100 + noise(x, y)*5 + noise(x/2, y/2)*3
 			if y%3 == 2 {
 				l = l * 70 / 100
@@ -167,7 +175,13 @@ func filter(src *image.NRGBA, style Style) *image.NRGBA {
 			// Preserve the destination alpha mask: tracking must not smear transparency
 			// into surrounding text or change the silhouette of transparent artwork.
 			for c := 0; c < 3; c++ {
-				dst.Pix[j+c] = uint8(black[c] + l*ink[c]/255)
+				if style == Gloom {
+					// Scale all source channels by the same exposure to retain hues.
+					channel := (9*int(src.Pix[i+c]) + int(src.Pix[ghost+c])) / 10
+					dst.Pix[j+c] = uint8(min(255, channel*l*72/(colorLuma*100)))
+				} else {
+					dst.Pix[j+c] = uint8(black[c] + l*ink[c]/255)
+				}
 			}
 			dst.Pix[j+3] = src.Pix[y*src.Stride+x*4+3]
 		}

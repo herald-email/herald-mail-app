@@ -167,3 +167,43 @@ func TestGreenCRTThemeAndSettings(t *testing.T) {
 		}
 	}
 }
+
+func TestGloomSettingsAndBackgroundWorker(t *testing.T) {
+	m := crtTestModel(t)
+	cfg := &config.Config{}
+	cfg.Theme.ImageStyle = "gloom-crt"
+	s := NewSettings(SettingsModePanel, cfg)
+	m.SetConfig(s.buildConfig())
+	if m.currentImageStyle() != imagefx.Gloom {
+		t.Fatal("preference lost")
+	}
+	cmd := m.prepareStyledImages()
+	if cmd == nil {
+		t.Fatal("missing worker")
+	}
+	m.Update(cmd())
+	if len(m.styledImages.ready) == 0 || m.prepareStyledImages() != nil {
+		t.Fatal("missing cached output")
+	}
+}
+
+func TestAnalogSettingsAndBackgroundCache(t *testing.T) {
+	for _, name := range []string{"old-color-tv", "worn-vhs", "haunted-broadcast"} {
+		m := crtTestModel(t)
+		cfg := &config.Config{}
+		cfg.Theme.ImageStyle = name
+		s := NewSettings(SettingsModePanel, cfg)
+		m.SetConfig(s.buildConfig())
+		if string(m.currentImageStyle()) != name {
+			t.Fatal("lost style", name)
+		}
+		cmd := m.prepareStyledImages()
+		if cmd == nil {
+			t.Fatal("missing worker", name)
+		}
+		m.Update(cmd())
+		if len(m.styledImages.ready) == 0 || m.prepareStyledImages() != nil {
+			t.Fatal("missing cached result", name)
+		}
+	}
+}

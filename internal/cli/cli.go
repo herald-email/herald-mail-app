@@ -479,7 +479,7 @@ func registerTUIFlags(fs *flag.FlagSet) tuiFlagOptions {
 		demoMulti:     fs.Bool("demo-multi-account", false, "Start demo mode with two deterministic mail accounts"),
 		dryRun:        fs.Bool("dry-run", false, "Log rule and cleanup actions without executing them (dry run)"),
 		experimental:  fs.Bool("experimental", false, "Show experimental email service onboarding options"),
-		imageStyle:    fs.String("image-style", "", "Inline image style: auto, original, amber-crt, burnt-amber-crt, vault-green-crt, dark-olive-crt (default: config/follow theme)"),
+		imageStyle:    fs.String("image-style", "", "Inline image style: auto, original, amber-crt, burnt-amber-crt, vault-green-crt, dark-olive-crt, gloom-crt, old-color-tv, worn-vhs, haunted-broadcast (default: config/follow theme)"),
 		imageProtocol: fs.String("image-protocol", "auto", "Inline image protocol: auto, iterm2, kitty, links, placeholder, off"),
 		theme:         fs.String("theme", "", "Start with a built-in theme name or theme YAML file path without saving config"),
 		openDeepLink:  fs.String("open", "", "Open Herald to a herald:// deep-link context"),

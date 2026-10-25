@@ -1906,6 +1906,10 @@ func (s *Settings) buildForm() {
 			huh.NewOption("Burnt Amber CRT", "burnt-amber-crt"),
 			huh.NewOption("Vault Green CRT", "vault-green-crt"),
 			huh.NewOption("Dark Olive CRT", "dark-olive-crt"),
+			huh.NewOption("Gloom CRT (original colors)", "gloom-crt"),
+			huh.NewOption("Old Color TV", "old-color-tv"),
+			huh.NewOption("Worn VHS", "worn-vhs"),
+			huh.NewOption("Haunted Broadcast", "haunted-broadcast"),
 		).Value(&s.imageStyle),
 		huh.NewInput().
 			Title("Install local theme YAML").

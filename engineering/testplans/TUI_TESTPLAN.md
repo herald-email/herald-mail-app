@@ -2862,3 +2862,21 @@ Vault Green and Dark Olive CRT extend the same local effect pipeline without cha
 - [x] Select vault-green-crt or dark-olive-crt as a theme and as an independent image style; Follow theme resolves both correctly and Original overrides either.
 - [x] Verify deterministic green phosphor pixels, bounded output, and preserved originals through the shared tests.
 - [x] Capture actual Vault Green and Dark Olive split previews with visible Timeline list and inline raster images; capture full-screen variants as well.
+
+## TC-CRT-77: Gloom CRT preserves source colors
+
+Gloom CRT darkens color images with static grain, scanlines and tracking distortion while retaining their source hues. It uses the existing bounded background cache and is independent of the UI theme.
+
+- [x] Select Gloom CRT in Image style, save/reopen, and verify CLI/config selection.
+- [x] Verify red, green and blue remain distinct, neutral grays stay neutral, and images become darker without losing transparency or modifying originals.
+- [x] Capture split preview and full-screen images; check tmux at 220×50, 80×24 and 50×15 with wide recovery.
+- [x] Existing amber/green styles and Original/Jade image gates remain unchanged.
+
+## TC-CRT-78: Analog TV and videotape styles
+
+Three independent image styles provide distinct static analog treatments while retaining the existing bounded background cache. The Original, Gloom and phosphor presets must remain unchanged.
+
+- [x] Old Color TV retains colors with softer edges and a subtle RGB mask; Worn VHS fades colors and adds horizontal bleed and bottom-edge tracking noise; Haunted Broadcast adds dark ghosting and localized interference.
+- [x] All three persist through Settings/config and work through local/SSH style selection.
+- [x] Verify deterministic output, preserved source bytes/alpha, bounded dimensions and cached processing.
+- [x] Capture each in split preview; verify terminal size recovery and Original/Jade image gates.
