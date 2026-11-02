@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/herald-email/herald-mail-app/internal/config"
 )
 
 // OpenAICompatClient implements AIClient using OpenAI-compatible APIs.
@@ -24,13 +26,14 @@ type OpenAICompatClient struct {
 
 // NewOpenAICompatClient creates an OpenAICompatClient.
 // baseURL defaults to "https://api.openai.com/v1" if empty.
-// model defaults to "gpt-5-mini" if empty.
+// model defaults to config.DefaultOpenAIModel if empty. For compatible providers,
+// pass a model ID supported by that provider.
 func NewOpenAICompatClient(apiKey, baseURL, model string) *OpenAICompatClient {
 	if baseURL == "" {
 		baseURL = "https://api.openai.com/v1"
 	}
 	if model == "" {
-		model = "gpt-5-mini"
+		model = config.DefaultOpenAIModel
 	}
 	return &OpenAICompatClient{
 		apiKey:         apiKey,

@@ -2,12 +2,16 @@ package app
 
 import (
 	"context"
+	"encoding/json"
+	"io"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
 
 	"charm.land/bubbles/v2/textarea"
 	tea "charm.land/bubbletea/v2"
+	"github.com/fugue-labs/gollem/provider/openai"
 	"github.com/herald-email/herald-mail-app/internal/agent"
 	"github.com/herald-email/herald-mail-app/internal/ai"
 	"github.com/herald-email/herald-mail-app/internal/backend"
@@ -518,11 +522,103 @@ func TestChatAgentProviderConfigDefaultsOpenAIReasoningEffortLow(t *testing.T) {
 	openAICfg.AI.Provider = "openai"
 
 	openAIProvider := chatAgentProviderConfig(openAICfg)
-	if openAIProvider.Model != "gpt-5-mini" {
-		t.Fatalf("openai model = %q, want gpt-5-mini", openAIProvider.Model)
+	if openAIProvider.Model != "gpt-5.6-terra" {
+		t.Fatalf("openai model = %q, want gpt-5.6-terra", openAIProvider.Model)
 	}
 	if openAIProvider.ReasoningEffort != agent.ReasoningEffortLow {
 		t.Fatalf("openai reasoning effort = %q, want %q", openAIProvider.ReasoningEffort, agent.ReasoningEffortLow)
+	}
+}
+
+func TestChatAgentOpenAIModelPrecedence(t *testing.T) {
+	for _, tt := range []struct {
+		name, model, agentModel, want string
+	}{
+		{"global model", "local-model", "", "local-model"},
+		{"agent override", "local-model", "agent-model", "agent-model"},
+		{"explicit legacy override", "gpt-5.6-terra", "gpt-5-mini", "gpt-5-mini"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &config.Config{}
+			cfg.AI.Provider = "openai"
+			cfg.OpenAI.BaseURL = "https://compatible.example/v1"
+			cfg.OpenAI.Model = tt.model
+			cfg.AI.Agent.Model = tt.agentModel
+			got := chatAgentProviderConfig(cfg)
+			if got.Model != tt.want || got.BaseURL != cfg.OpenAI.BaseURL {
+				t.Fatalf("provider config = %#v, want model %q and configured base URL", got, tt.want)
+			}
+		})
+	}
+}
+
+type chatAgentRoundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f chatAgentRoundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) {
+	return f(r)
+}
+
+func TestChatAgentOpenAIModelRequest(t *testing.T) {
+	for _, tt := range []struct {
+		name, baseURL, model, wantModel, url, response string
+	}{
+		{
+			"default uses Responses", "", "", "gpt-5.6-terra", "https://api.openai.com/v1/responses",
+			`{"id":"resp_test","output":[{"type":"function_call","call_id":"call_test","name":"final_result","arguments":"{\"reply\":\"ready\"}"}]}`,
+		},
+		{
+			"compatible model uses Chat Completions", "https://compatible.example/v1", "local-model", "local-model", "https://compatible.example/v1/chat/completions",
+			`{"choices":[{"message":{"role":"assistant","tool_calls":[{"id":"call_test","type":"function","function":{"name":"final_result","arguments":"{\"reply\":\"ready\"}"}}]},"finish_reason":"tool_calls"}]}`,
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			client := &http.Client{Transport: chatAgentRoundTripFunc(func(r *http.Request) (*http.Response, error) {
+				defer r.Body.Close()
+				if r.URL.String() != tt.url {
+					t.Errorf("URL = %q, want %q", r.URL, tt.url)
+				}
+				var req struct {
+					Model     string            `json:"model"`
+					Tools     []json.RawMessage `json:"tools"`
+					Reasoning struct {
+						Effort string `json:"effort"`
+					} `json:"reasoning"`
+				}
+				if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+					return nil, err
+				}
+				if req.Model != tt.wantModel || len(req.Tools) == 0 {
+					t.Errorf("model = %q, tools = %d; want %q with output tool", req.Model, len(req.Tools), tt.wantModel)
+				}
+				if tt.baseURL == "" && req.Reasoning.Effort != "low" {
+					t.Errorf("reasoning effort = %q, want low", req.Reasoning.Effort)
+				}
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Header:     http.Header{"Content-Type": {"application/json"}},
+					Body:       io.NopCloser(strings.NewReader(tt.response)),
+				}, nil
+			})}
+
+			cfg := &config.Config{}
+			cfg.AI.Provider = "openai"
+			cfg.OpenAI.APIKey = "test-key"
+			cfg.OpenAI.BaseURL = tt.baseURL
+			cfg.OpenAI.Model = tt.model
+			provider := chatAgentProviderConfig(cfg)
+			model, err := agent.BuildModel(provider)
+			if err != nil {
+				t.Fatal(err)
+			}
+			openai.WithHTTPClient(client)(model.(*openai.Provider))
+			runner := agent.NewGollemRunner(model, agent.RunnerOptionsForProviderConfig(provider)...)
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			result, err := runner.Run(ctx, agent.ChatInput{UserMessage: "hello"})
+			if err != nil || result.Reply != "ready" {
+				t.Fatalf("Run = %#v, %v; want ready", result, err)
+			}
+		})
 	}
 }
 

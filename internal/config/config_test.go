@@ -891,8 +891,8 @@ func TestDefaultOpenAIModelsAndEmbeddingProvider(t *testing.T) {
 	c.OpenAI.APIKey = "sk-test"
 	c.applyDefaults()
 
-	if c.OpenAI.Model != "gpt-5-mini" {
-		t.Errorf("expected default OpenAI model %q, got %q", "gpt-5-mini", c.OpenAI.Model)
+	if c.OpenAI.Model != "gpt-5.6-terra" {
+		t.Errorf("expected default OpenAI model %q, got %q", "gpt-5.6-terra", c.OpenAI.Model)
 	}
 	if c.OpenAI.EmbeddingModel != "text-embedding-3-small" {
 		t.Errorf("expected default OpenAI embedding model %q, got %q", "text-embedding-3-small", c.OpenAI.EmbeddingModel)
@@ -905,6 +905,42 @@ func TestDefaultOpenAIModelsAndEmbeddingProvider(t *testing.T) {
 	}
 	if got := c.EffectiveEmbeddingIdentity(); got != "openai:text-embedding-3-small" {
 		t.Errorf("EffectiveEmbeddingIdentity() = %q, want openai:text-embedding-3-small", got)
+	}
+}
+
+func TestOpenAIModelConfigRoundTrip(t *testing.T) {
+	for _, tt := range []struct {
+		name, baseURL, model, want string
+	}{
+		{"default", "https://api.openai.com/v1", "", "gpt-5.6-terra"},
+		{"explicit legacy model", "https://api.openai.com/v1", "gpt-5-mini", "gpt-5-mini"},
+		{"pinned snapshot", "https://api.openai.com/v1", "gpt-5-mini-2025-08-07", "gpt-5-mini-2025-08-07"},
+		{"compatible provider", "http://localhost:1234/v1", "local-model", "local-model"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := minimalOAuthConfig()
+			cfg.AI.Provider = "openai"
+			cfg.OpenAI.BaseURL = tt.baseURL
+			cfg.OpenAI.Model = tt.model
+			cfg.AI.Agent.Model = "agent-model"
+			path := filepath.Join(t.TempDir(), "config.yaml")
+			for i := 0; i < 2; i++ {
+				if err := cfg.Save(path); err != nil {
+					t.Fatal(err)
+				}
+				var err error
+				cfg, err = Load(path)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if cfg.OpenAI.Model != tt.want || cfg.OpenAI.BaseURL != tt.baseURL {
+					t.Fatalf("OpenAI config = %#v, want model %q and base URL %q", cfg.OpenAI, tt.want, tt.baseURL)
+				}
+				if cfg.AI.Agent.Model != "agent-model" {
+					t.Fatalf("agent override = %q, want agent-model", cfg.AI.Agent.Model)
+				}
+			}
+		})
 	}
 }
 
