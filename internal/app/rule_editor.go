@@ -30,7 +30,7 @@ type RuleEditor struct {
 	savedErr   string
 
 	// backing variables — trigger
-	triggerType  string // "sender" | "domain" | "category"
+	triggerType  string // "sender" | "domain" | "category" | "subject"
 	triggerValue string
 
 	// backing variables — actions
@@ -79,11 +79,12 @@ func (r *RuleEditor) buildForm() {
 				huh.NewOption("Sender address", "sender"),
 				huh.NewOption("Sender domain", "domain"),
 				huh.NewOption("AI category", "category"),
+				huh.NewOption("Subject contains", "subject"),
 			).
 			Value(&r.triggerType),
 		huh.NewInput().
 			Title("Trigger value").
-			Description("e.g. newsletter@example.com, example.com, or Newsletters").
+			Description("e.g. newsletter@example.com, example.com, Newsletters, or Your receipt").
 			Value(&r.triggerValue),
 	)
 

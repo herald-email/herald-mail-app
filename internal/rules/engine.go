@@ -183,6 +183,11 @@ func MatchRule(r *models.Rule, email *models.EmailData, category string) bool {
 		return strings.EqualFold(extractDomain(email.Sender), r.TriggerValue)
 	case models.TriggerCategory:
 		return strings.EqualFold(category, r.TriggerValue)
+	case models.TriggerSubject:
+		if r.TriggerValue == "" {
+			return false
+		}
+		return strings.Contains(strings.ToLower(email.Subject), strings.ToLower(r.TriggerValue))
 	default:
 		return false
 	}

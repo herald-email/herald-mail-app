@@ -205,6 +205,28 @@ func TestMatchRule_Category(t *testing.T) {
 	}
 }
 
+func TestMatchRule_Subject(t *testing.T) {
+	email := makeEmail("yourprovider@simplepractice.com", "New billing document from Lauren", "INBOX", "msg1")
+	rule := makeRule(1, models.TriggerSubject, "billing document")
+
+	if !MatchRule(rule, email, "") {
+		t.Error("expected subject substring match to return true")
+	}
+
+	// case-insensitive
+	if !MatchRule(makeRule(1, models.TriggerSubject, "NEW BILLING"), email, "") {
+		t.Error("expected case-insensitive subject match to return true")
+	}
+
+	if MatchRule(makeRule(1, models.TriggerSubject, "appointment reminder"), email, "") {
+		t.Error("expected non-matching subject to return false")
+	}
+
+	if MatchRule(makeRule(1, models.TriggerSubject, ""), email, "") {
+		t.Error("expected empty subject trigger to match nothing")
+	}
+}
+
 func TestMatchRule_Unknown(t *testing.T) {
 	email := makeEmail("sender@example.com", "Hi", "INBOX", "msg1")
 	rule := makeRule(1, models.RuleTriggerType("bogus"), "anything")
