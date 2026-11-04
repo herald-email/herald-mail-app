@@ -225,6 +225,26 @@ func TestMatchRule_Subject(t *testing.T) {
 	if MatchRule(makeRule(1, models.TriggerSubject, ""), email, "") {
 		t.Error("expected empty subject trigger to match nothing")
 	}
+
+	if MatchRule(makeRule(1, models.TriggerSubject, " \t "), email, "") {
+		t.Error("expected whitespace-only subject trigger to match nothing")
+	}
+}
+
+func TestMatchRule_SubjectDecodesMIMEWords(t *testing.T) {
+	email := makeEmail("billing@example.com", "=?UTF-8?Q?Fakt=C3=BAra_k_platb=C4=9B?=", "INBOX", "msg1")
+
+	if !MatchRule(makeRule(1, models.TriggerSubject, "Faktúra"), email, "") {
+		t.Error("expected RFC 2047 encoded subject to match its decoded text")
+	}
+}
+
+func TestMatchRule_SubjectUnicodeCaseFolding(t *testing.T) {
+	email := makeEmail("news@example.gr", "ΝΕΟΣ ΚΑΤΑΛΟΓΟΣ", "INBOX", "msg1")
+
+	if !MatchRule(makeRule(1, models.TriggerSubject, "καταλογος"), email, "") {
+		t.Error("expected Greek final sigma to match case-insensitively")
+	}
 }
 
 func TestMatchRule_Unknown(t *testing.T) {
