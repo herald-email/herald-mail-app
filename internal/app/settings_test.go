@@ -2866,6 +2866,35 @@ func TestNewSettings_OpenAIConfigPrefillsEmbeddingProviderAndModel(t *testing.T)
 	}
 }
 
+func TestSettingsOpenAIModelDefaultsAndPreservation(t *testing.T) {
+	for _, tt := range []struct {
+		name, baseURL, model, want string
+	}{
+		{"default", defaultOpenAIBaseURL, "", "gpt-5.6-terra"},
+		{"explicit legacy model", defaultOpenAIBaseURL, "gpt-5-mini", "gpt-5-mini"},
+		{"compatible provider", "http://localhost:1234/v1", "local-model", "local-model"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			existing := &config.Config{}
+			existing.AI.Provider = "openai"
+			existing.OpenAI.BaseURL = tt.baseURL
+			existing.OpenAI.Model = tt.model
+			existing.AI.Agent.Model = "agent-model"
+			s := NewSettings(SettingsModePanel, existing)
+			if s.openAIModel != tt.want {
+				t.Fatalf("Settings model = %q, want %q", s.openAIModel, tt.want)
+			}
+			cfg := s.buildConfig()
+			if cfg.OpenAI.Model != tt.want || cfg.OpenAI.BaseURL != tt.baseURL {
+				t.Fatalf("OpenAI config = %#v, want model %q and base URL %q", cfg.OpenAI, tt.want, tt.baseURL)
+			}
+			if cfg.AI.Agent.Model != "agent-model" {
+				t.Fatalf("agent override = %q, want agent-model", cfg.AI.Agent.Model)
+			}
+		})
+	}
+}
+
 func TestNewSettings_OpenAIChatWithOllamaEmbeddingsUsesAdvancedManualPreset(t *testing.T) {
 	existing := &config.Config{}
 	existing.AI.Provider = "openai"

@@ -112,13 +112,13 @@ Gollem is the framework contract. Provider differences should be isolated so app
 | --- | --- | --- |
 | Ollama/local | Gollem OpenAI-compatible/Ollama provider | Offline path; reliability depends on local model tool and structured-output quality |
 | Anthropic | Gollem Anthropic provider | Primary high-quality remote path |
-| OpenAI | Gollem OpenAI-compatible provider | Global `ai.provider: openai` path and baseline hosted models; default is the smaller/faster `gpt-5-mini` with low reasoning effort for UI chat |
+| OpenAI | Gollem OpenAI-compatible provider | Global `ai.provider: openai` path and baseline hosted models; default is `gpt-5.6-terra` with low reasoning effort for UI chat |
 | Kimi | Gollem OpenAI-compatible provider | Useful for Kimi-specific models and long-context experiments |
 | Fireworks | Gollem OpenAI-compatible provider | Hosted open-model path, including Kimi variants when desired |
 
 - [x] Config selects provider, model, optional base URL, and API key under a chat-agent config block.
 - [x] Existing embedding config remains separate because semantic search depends on the current embedding cache contract.
-- [x] OpenAI live smoke passes plain reply plus tool-backed search, summary, citation, and explicit Timeline intent with the default smaller chat model and low reasoning effort.
+- [x] OpenAI live smoke passed plain reply plus tool-backed search, summary, citation, and explicit Timeline intent with the former `gpt-5-mini` default and low reasoning effort. The opt-in smoke now follows the current default; that historical result does not validate a new model.
 - [x] Settings exposes OpenAI chat-agent reasoning effort (`low`, `medium`, `high`, `xhigh`) while defaulting to `low` for interactive speed.
 - [ ] Ollama/local, Anthropic, Kimi, and Fireworks still need equivalent live-provider smoke before M7 is complete.
 - [ ] Provider bakeoff results should become recommendations before making any nonlocal provider a default.

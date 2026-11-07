@@ -243,7 +243,7 @@ type Config struct {
 	OpenAI struct {
 		APIKey         string `yaml:"api_key"`
 		BaseURL        string `yaml:"base_url"`        // default: "https://api.openai.com/v1"
-		Model          string `yaml:"model"`           // default: "gpt-5-mini"
+		Model          string `yaml:"model"`           // default: DefaultOpenAIModel
 		EmbeddingModel string `yaml:"embedding_model"` // default: "text-embedding-3-small"
 	} `yaml:"openai"`
 
@@ -299,6 +299,9 @@ const (
 
 	EmbeddingProviderOllama = "ollama"
 	EmbeddingProviderOpenAI = "openai"
+
+	// DefaultOpenAIModel is used only when no chat/classification model is configured.
+	DefaultOpenAIModel = "gpt-5.6-terra"
 
 	defaultOllamaEmbeddingModel = "nomic-embed-text-v2-moe"
 	defaultOpenAIEmbeddingModel = "text-embedding-3-small"
@@ -783,7 +786,7 @@ func (c *Config) applyDefaults() {
 		c.OpenAI.BaseURL = "https://api.openai.com/v1"
 	}
 	if c.OpenAI.Model == "" {
-		c.OpenAI.Model = "gpt-5-mini"
+		c.OpenAI.Model = DefaultOpenAIModel
 	}
 	if c.OpenAI.EmbeddingModel == "" {
 		c.OpenAI.EmbeddingModel = defaultOpenAIEmbeddingModel
@@ -836,12 +839,6 @@ func (c *Config) applyDefaults() {
 	}
 	if c.Claude.Model == "" {
 		c.Claude.Model = "claude-sonnet-4-6"
-	}
-	if c.OpenAI.BaseURL == "" {
-		c.OpenAI.BaseURL = "https://api.openai.com/v1"
-	}
-	if c.OpenAI.Model == "" {
-		c.OpenAI.Model = "gpt-5-mini"
 	}
 	if c.Keyboard.Profile == "" {
 		c.Keyboard.Profile = "default"

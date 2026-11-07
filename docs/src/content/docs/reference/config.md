@@ -148,7 +148,7 @@ credentials:
 | `claude.model` | Claude model. Default `claude-sonnet-4-6`. |
 | `openai.api_key` | OpenAI or compatible provider key. |
 | `openai.base_url` | API base URL. Default `https://api.openai.com/v1`. |
-| `openai.model` | OpenAI-compatible model. Default `gpt-5-mini`. |
+| `openai.model` | OpenAI-compatible model. Default `gpt-5.6-terra` when empty. For a third-party endpoint, explicitly select a model that provider supports. |
 | `ai.provider` | `ollama`, `claude`, `openai`, or `disabled`. Default `ollama`. |
 | `ai.local_max_concurrency` | Local AI concurrency. Default `1`. |
 | `ai.external_max_concurrency` | External AI concurrency. Default `4`. |
@@ -243,6 +243,14 @@ Use `-theme` to launch a built-in theme or theme file for one session without ch
 ```
 
 To install a local file from the TUI, open Settings with `S`, choose `Theme Selection`, and enter the YAML path in `Install local theme YAML`. After installation, set `theme.name` to the file's slug, for example `my-jade-signal`.
+
+## OpenAI Model Defaults
+
+Herald uses `gpt-5.6-terra` when `openai.model` is empty. The OpenAI chat agent inherits this model unless `ai.agent.model` overrides it; its default reasoning effort remains `low`.
+
+OpenAI [schedules `gpt-5-mini` and `gpt-5-mini-2025-08-07` for shutdown on December 11, 2026](https://developers.openai.com/api/docs/deprecations), with `gpt-5.6-terra` as the recommended replacement. Existing explicit model selections are preserved. If your configuration pins either retiring model on OpenAI, update `openai.model` and any `ai.agent.model` override before that date, or remove the pin to use the default.
+
+Changing `openai.base_url` does not discover or select a model for that provider. With LM Studio, llama.cpp, or another OpenAI-compatible service, set `openai.model` (and any `ai.agent.model` override) to a supported provider-specific ID. Herald preserves those IDs and custom base URLs. Embedding models are unchanged.
 
 ## Related Pages
 

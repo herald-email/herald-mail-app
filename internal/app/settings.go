@@ -63,7 +63,7 @@ const (
 
 	defaultOllamaHost     = "http://localhost:11434"
 	defaultOllamaModel    = "gemma3:4b"
-	defaultChatModel      = "gpt-5-mini"
+	defaultChatModel      = config.DefaultOpenAIModel
 	defaultChatEffort     = agent.ReasoningEffortLow
 	defaultEmbeddingModel = "nomic-embed-text-v2-moe"
 	defaultOpenAIBaseURL  = "https://api.openai.com/v1"

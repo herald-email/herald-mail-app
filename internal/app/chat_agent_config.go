@@ -95,7 +95,7 @@ func chatAgentProviderConfig(cfg *config.Config) agent.ProviderConfig {
 			out.BaseURL = strings.TrimSpace(cfg.OpenAI.BaseURL)
 		}
 		if out.Model == "" {
-			out.Model = "gpt-5-mini"
+			out.Model = config.DefaultOpenAIModel
 		}
 		if out.BaseURL == "" {
 			out.BaseURL = "https://api.openai.com/v1"
