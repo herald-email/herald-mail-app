@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/herald-email/herald-mail-app/internal/config"
 	"github.com/herald-email/herald-mail-app/internal/models"
 )
 
@@ -20,7 +21,7 @@ func TestLiveOpenAISmoke(t *testing.T) {
 	}
 	modelName := strings.TrimSpace(os.Getenv("HERALD_OPENAI_SMOKE_MODEL"))
 	if modelName == "" {
-		modelName = "gpt-5-mini"
+		modelName = config.DefaultOpenAIModel
 	}
 	reasoningEffort := NormalizeReasoningEffort(os.Getenv("HERALD_OPENAI_SMOKE_REASONING_EFFORT"))
 	if reasoningEffort == "" {

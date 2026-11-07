@@ -4,10 +4,13 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"mime"
 	"net/mail"
 	"strings"
 	"text/template"
 	"time"
+
+	"golang.org/x/text/cases"
 
 	"github.com/herald-email/herald-mail-app/internal/ai"
 	"github.com/herald-email/herald-mail-app/internal/deeplink"
@@ -183,9 +186,26 @@ func MatchRule(r *models.Rule, email *models.EmailData, category string) bool {
 		return strings.EqualFold(extractDomain(email.Sender), r.TriggerValue)
 	case models.TriggerCategory:
 		return strings.EqualFold(category, r.TriggerValue)
+	case models.TriggerSubject:
+		return subjectContains(email.Subject, r.TriggerValue)
 	default:
 		return false
 	}
+}
+
+// subjectContains reports whether subject contains value, ignoring case.
+// Whitespace-only values never match so a blank-looking rule cannot sweep
+// the mailbox, and RFC 2047 encoded subjects are decoded before comparing.
+func subjectContains(subject, value string) bool {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return false
+	}
+	if decoded, err := (&mime.WordDecoder{}).DecodeHeader(subject); err == nil {
+		subject = decoded
+	}
+	fold := cases.Fold()
+	return strings.Contains(fold.String(subject), fold.String(value))
 }
 
 // PlanDryRun builds a structured preview for automation rules without touching

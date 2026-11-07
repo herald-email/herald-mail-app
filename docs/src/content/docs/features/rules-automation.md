@@ -14,7 +14,7 @@ Use `Settings > Sync & Cleanup` for future-mail automation rules, reusable AI pr
 | Area | What it shows |
 | --- | --- |
 | Automation rule editor | `Automation Rule` form with trigger group, action multiselect, action detail fields, and saved-rule summary. |
-| Trigger fields | Trigger type sender, domain, or AI category; trigger value such as address, domain, or category. |
+| Trigger fields | Trigger type sender, domain, AI category, or subject; trigger value such as address, domain, category, or text the subject contains (case-insensitive). |
 | Action list | Desktop notification with Herald message context where supported, move, archive, delete, webhook POST, and shell command. |
 | Action detail fields | Destination folder, webhook URL/body, shell command, notification title/body. |
 | Prompt editor | Name, output variable, system prompt, user template, and saved-prompt summary. |
@@ -115,7 +115,7 @@ Rules are stored in Herald's backend and may include trigger values, destination
 
 ## Troubleshooting
 
-If a rule does not match, compare trigger type and value with the exact sender/domain/category shown in Timeline grouping.
+If a rule does not match, compare trigger type and value with the exact sender/domain/category shown in Timeline grouping, or check that a subject trigger value appears in the message subject.
 
 If a custom prompt saves but appears to do nothing, remember that saved prompts are invoked by rules or MCP tools; saving alone does not run a prompt.
 

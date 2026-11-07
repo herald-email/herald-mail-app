@@ -2564,7 +2564,7 @@ This case covers the Gmail API mail source behind Gmail OAuth. It proves the tra
 - The default Ollama preset names `gemma3:4b` and `nomic-embed-text-v2-moe`, warns that the recommended defaults are comfortable with at least 16GB RAM, and says 8GB can work more slowly.
 - Custom Ollama setup offers curated chat options including `gemma3:4b`, `qwen3.5:0.8b`, `llama3.2:1b`, `llama3.2:3b`, and a freeform custom model name, with downgrade guidance that flags `llama3.x` as weaker for translation.
 - Custom Ollama setup offers curated embedding options including `nomic-embed-text-v2-moe`, `nomic-embed-text`, `all-minilm`, `mxbai-embed-large`, `bge-m3`, and a freeform custom model name.
-- OpenAI-compatible setup defaults the chat model to `gpt-5.4-mini`, exposes an `OpenAI Embedding Model` default of `text-embedding-3-small`, and lets the user choose external OpenAI-compatible or local Ollama embeddings.
+- OpenAI-compatible setup defaults the chat model to `gpt-5.6-terra`, preserves explicit model names and custom base URLs, exposes an `OpenAI Embedding Model` default of `text-embedding-3-small`, and lets the user choose external OpenAI-compatible or local Ollama embeddings.
 - Save appears on the last useful AI configuration screen when the terminal has room, rather than as a standalone AI-only screen.
 - Missing first-run Ollama models block the final save, leave the config path missing or unchanged, and show exact `ollama pull <model>` commands in the setup chrome.
 - Installed or mocked-installed Ollama models allow first-run setup to continue and save normally.

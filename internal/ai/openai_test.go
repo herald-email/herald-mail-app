@@ -117,10 +117,48 @@ func TestOpenAICompatClientDefaultsApplied(t *testing.T) {
 	if c.baseURL != "https://api.openai.com/v1" {
 		t.Errorf("unexpected baseURL: %q", c.baseURL)
 	}
-	if c.model != "gpt-5-mini" {
+	if c.model != "gpt-5.6-terra" {
 		t.Errorf("unexpected model: %q", c.model)
 	}
 	if c.embeddingModel != "text-embedding-3-small" {
 		t.Errorf("unexpected embeddingModel: %q", c.embeddingModel)
+	}
+}
+
+func TestOpenAICompatClientRequestModel(t *testing.T) {
+	for _, tt := range []struct {
+		name, model, want string
+	}{
+		{"default", "", "gpt-5.6-terra"},
+		{"explicit legacy model", "gpt-5-mini", "gpt-5-mini"},
+		{"compatible provider model", "local-model", "local-model"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != "/v1/chat/completions" {
+					t.Errorf("request path = %q", r.URL.Path)
+				}
+				var req openAIChatRequest
+				if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+					t.Errorf("decode request: %v", err)
+					http.Error(w, err.Error(), http.StatusBadRequest)
+					return
+				}
+				if req.Model != tt.want {
+					t.Errorf("request model = %q, want %q", req.Model, tt.want)
+				}
+				w.Header().Set("Content-Type", "application/json")
+				json.NewEncoder(w).Encode(openAIOKResponse("txn"))
+			}))
+			defer srv.Close()
+
+			client := NewOpenAICompatClient("test-key", srv.URL+"/v1/", tt.model)
+			if _, err := client.Chat([]ChatMessage{{Role: "user", Content: "hi"}}); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := client.Classify("store@example.com", "Order shipped"); err != nil {
+				t.Fatal(err)
+			}
+		})
 	}
 }

@@ -885,8 +885,8 @@ func newMCPServerWithConfig(c *cache.Cache, classifier ai.AIClient, cfg *config.
 	// Tool: add_rule
 	s.AddTool(mcp.NewTool("add_rule",
 		mcp.WithDescription("Create a new email automation rule"),
-		mcp.WithString("trigger_type", mcp.Required(), mcp.Description("sender | domain | category")),
-		mcp.WithString("trigger_value", mcp.Required(), mcp.Description("The value to match (email address, domain, or category name)")),
+		mcp.WithString("trigger_type", mcp.Required(), mcp.Description("sender | domain | category | subject")),
+		mcp.WithString("trigger_value", mcp.Required(), mcp.Description("The value to match (email address, domain, category name, or case-insensitive subject substring)")),
 		mcp.WithString("name", mcp.Description("Rule name (optional, auto-generated if empty)")),
 		mcp.WithString("actions", mcp.Required(), mcp.Description("JSON array of RuleAction objects")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {

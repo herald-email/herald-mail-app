@@ -231,7 +231,7 @@ Read-only preview printing is a local platform action over the same `EmailData` 
 **Quality-first local AI defaults**
 
 - New configs default local Ollama chat/classification to `gemma3:4b` and embeddings to `nomic-embed-text-v2-moe` so translation, writing assistance, and semantic search start from stronger local models
-- OpenAI-compatible configs default chat to `gpt-5.4-mini` and embeddings to `text-embedding-3-small`, while preserving user-specified model names and base URLs for other vendors
+- OpenAI-compatible configs default chat to `gpt-5.6-terra` and embeddings to `text-embedding-3-small`, while preserving user-specified model names and base URLs for other vendors
 - Setup warns that these recommended defaults are comfortable with at least 16GB RAM; 8GB can still work, but users should expect slower local AI responses
 - Custom Ollama setup uses curated selectors for common chat and embedding model sizes, while preserving freeform model names and a downgrade path for constrained machines; the downgrade copy calls out that `llama3.x` is weaker for translation
 - Existing explicit model values remain authoritative; default changes only fill blank config values
