@@ -8,6 +8,7 @@ const (
 	TriggerSender   RuleTriggerType = "sender"
 	TriggerDomain   RuleTriggerType = "domain"
 	TriggerCategory RuleTriggerType = "category"
+	TriggerSubject  RuleTriggerType = "subject"
 )
 
 type RuleActionType string

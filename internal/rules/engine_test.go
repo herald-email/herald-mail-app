@@ -205,6 +205,48 @@ func TestMatchRule_Category(t *testing.T) {
 	}
 }
 
+func TestMatchRule_Subject(t *testing.T) {
+	email := makeEmail("yourprovider@simplepractice.com", "New billing document from Lauren", "INBOX", "msg1")
+	rule := makeRule(1, models.TriggerSubject, "billing document")
+
+	if !MatchRule(rule, email, "") {
+		t.Error("expected subject substring match to return true")
+	}
+
+	// case-insensitive
+	if !MatchRule(makeRule(1, models.TriggerSubject, "NEW BILLING"), email, "") {
+		t.Error("expected case-insensitive subject match to return true")
+	}
+
+	if MatchRule(makeRule(1, models.TriggerSubject, "appointment reminder"), email, "") {
+		t.Error("expected non-matching subject to return false")
+	}
+
+	if MatchRule(makeRule(1, models.TriggerSubject, ""), email, "") {
+		t.Error("expected empty subject trigger to match nothing")
+	}
+
+	if MatchRule(makeRule(1, models.TriggerSubject, " \t "), email, "") {
+		t.Error("expected whitespace-only subject trigger to match nothing")
+	}
+}
+
+func TestMatchRule_SubjectDecodesMIMEWords(t *testing.T) {
+	email := makeEmail("billing@example.com", "=?UTF-8?Q?Fakt=C3=BAra_k_platb=C4=9B?=", "INBOX", "msg1")
+
+	if !MatchRule(makeRule(1, models.TriggerSubject, "Faktúra"), email, "") {
+		t.Error("expected RFC 2047 encoded subject to match its decoded text")
+	}
+}
+
+func TestMatchRule_SubjectUnicodeCaseFolding(t *testing.T) {
+	email := makeEmail("news@example.gr", "ΝΕΟΣ ΚΑΤΑΛΟΓΟΣ", "INBOX", "msg1")
+
+	if !MatchRule(makeRule(1, models.TriggerSubject, "καταλογος"), email, "") {
+		t.Error("expected Greek final sigma to match case-insensitively")
+	}
+}
+
 func TestMatchRule_Unknown(t *testing.T) {
 	email := makeEmail("sender@example.com", "Hi", "INBOX", "msg1")
 	rule := makeRule(1, models.RuleTriggerType("bogus"), "anything")
