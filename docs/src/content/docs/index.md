@@ -58,9 +58,9 @@ configure AI, and save the generated config.
 
 Nightly builds are available as short-lived GitHub Actions artifacts for testers who want the latest successful `main` build before the next beta tag. See [Nightly Builds](/nightly-builds/) for download steps and channel rules.
 
-## New in v0.9
+## New in v0.10
 
-`v0.9.0-beta.1` adds external mailbox password commands for IMAP and SMTP while preserving existing literal passwords. Commands run only when authenticating a connection, and Settings preserves them when you leave the password field blank. This release also fixes account-title updates during editing. See [What's New in v0.9](/whats-new-in-v0-9/) for upgrade details; older release pages remain available under Release Archive.
+`v0.10.0-beta.1` adds secure Google OAuth token storage, PKCE, and separate consent for AI, background processing, and MCP sharing. It also adds subject-based automation rules and local CRT/analog image styles. See [What's New in v0.10](/whats-new-in-v0-10/) for upgrade requirements, including headless token storage and consent for existing integrations.
 
 ![Chat panel open beside Timeline](/screenshots/chat-panel-open.png)
 

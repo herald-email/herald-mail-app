@@ -45,3 +45,7 @@ Use an entry containing only the password. For a shell command, use `command: "p
 ## Previous Release
 
 The v0.8 line introduced sending identities, selected-message folder moves, native Linux packages, and connection recovery. See [What's New in v0.8](/whats-new-in-v0-8/) for that release history.
+
+## Next Release
+
+See [What's New in v0.10](/whats-new-in-v0-10/) for Google credential protection, sharing consent, subject rules, and local image styles.
