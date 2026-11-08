@@ -257,6 +257,7 @@ func TestSettingsIdentitiesSavePreservesConfigAndUpdatesCompose(t *testing.T) {
 }
 
 func TestSettingsIdentitiesWriteFailureRetainsStagedEdits(t *testing.T) {
+	t.Setenv("HERALD_TOKEN_STORE_KEY", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
 	cfg := identitySettingsFixture()
 	s := openIdentitySettings(t, cfg)
 	selectIdentityAction(s, "add")
@@ -266,7 +267,11 @@ func TestSettingsIdentitiesWriteFailureRetainsStagedEdits(t *testing.T) {
 	m := New(&stubBackend{}, nil, "me@example.test", nil, false)
 	m.cfg = cfg
 	m.settingsPanel = s
-	m.configPath = filepath.Join(t.TempDir(), "missing", "config.yaml")
+	blockedParent := filepath.Join(t.TempDir(), "not-a-directory")
+	if err := os.WriteFile(blockedParent, []byte("block config save"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	m.configPath = filepath.Join(blockedParent, "config.yaml")
 	m.saveSettingsIdentities(msg)
 	if m.cfg != cfg || s.done || len(s.identity.compose.Identities) != 1 || !strings.Contains(s.identity.status, "Could not save") {
 		t.Fatal("failed save changed config or discarded edits")

@@ -55,6 +55,7 @@ func makeMouseTimelineModel(t *testing.T) *Model {
 
 func makeMouseCalendarModel(t *testing.T) (*Model, string) {
 	t.Helper()
+	t.Setenv("HERALD_TOKEN_STORE_KEY", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
 	events := testCalendarEvents()
 	collections := []models.CalendarCollection{
 		{
