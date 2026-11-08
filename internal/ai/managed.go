@@ -299,6 +299,7 @@ func normalizeSourceID(sourceID string) string {
 }
 
 type ManagedClient struct {
+	consent   func(bool) error
 	base      AIClient
 	scheduler *managedScheduler
 	priority  Priority
@@ -318,6 +319,7 @@ func NewManagedClient(base AIClient, cfg ManagedConfig) *ManagedClient {
 
 func (c *ManagedClient) withPriority(priority Priority) AIClient {
 	return &ManagedClient{
+		consent:   c.consent,
 		base:      c.base,
 		scheduler: c.scheduler,
 		priority:  priority,
@@ -328,6 +330,7 @@ func (c *ManagedClient) withPriority(priority Priority) AIClient {
 
 func (c *ManagedClient) withTaskKind(kind TaskKind) AIClient {
 	return &ManagedClient{
+		consent:   c.consent,
 		base:      c.base,
 		scheduler: c.scheduler,
 		priority:  c.priority,
@@ -338,6 +341,7 @@ func (c *ManagedClient) withTaskKind(kind TaskKind) AIClient {
 
 func (c *ManagedClient) withSourceID(sourceID string) AIClient {
 	return &ManagedClient{
+		consent:   c.consent,
 		base:      c.base,
 		scheduler: c.scheduler,
 		priority:  c.priority,
@@ -410,7 +414,14 @@ func (c *ManagedClient) do(priority Priority, kind TaskKind, fn func() error) er
 	if c == nil || c.base == nil || c.scheduler == nil {
 		return nil
 	}
-	return c.scheduler.submitWithSource(c.effectivePriority(priority), c.effectiveKind(kind), c.sourceID, fn)
+	return c.scheduler.submitWithSource(c.effectivePriority(priority), c.effectiveKind(kind), c.sourceID, func() error {
+		if c.consent != nil {
+			if err := c.consent(c.effectivePriority(priority) == PriorityBackground); err != nil {
+				return err
+			}
+		}
+		return fn()
+	})
 }
 
 func (c *ManagedClient) schedule(priority Priority, kind TaskKind, sourceID string, fn func() error) error {

@@ -15,6 +15,7 @@ func TestNewFromConfigOllama(t *testing.T) {
 	cfg.Ollama.Model = "gemma2"
 	cfg.AI.Provider = "ollama"
 
+	cfg.GrantSharing(true, true, false)
 	client, err := NewFromConfig(cfg)
 	if err != nil {
 		t.Fatal(err)
@@ -32,6 +33,7 @@ func TestNewFromConfigNoAI(t *testing.T) {
 	cfg.AI.Provider = "ollama"
 	// No Ollama host = no AI
 
+	cfg.GrantSharing(true, true, false)
 	client, err := NewFromConfig(cfg)
 	if err != nil {
 		t.Fatal(err)
@@ -48,6 +50,7 @@ func TestNewFromConfigDisabled(t *testing.T) {
 	cfg.Claude.APIKey = "sk-ant-test"
 	cfg.OpenAI.APIKey = "sk-test"
 
+	cfg.GrantSharing(true, true, false)
 	client, err := NewFromConfig(cfg)
 	if err != nil {
 		t.Fatal(err)
@@ -63,6 +66,7 @@ func TestNewFromConfigClaude(t *testing.T) {
 	cfg.Claude.APIKey = "sk-ant-test"
 	cfg.Claude.Model = "claude-sonnet-4-6"
 
+	cfg.GrantSharing(true, true, false)
 	client, err := NewFromConfig(cfg)
 	if err != nil {
 		t.Fatal(err)
@@ -81,6 +85,7 @@ func TestNewFromConfigClaudeWithOllamaEmbedding(t *testing.T) {
 	cfg.Claude.APIKey = "sk-ant-test"
 	cfg.Ollama.Host = "http://localhost:11434"
 
+	cfg.GrantSharing(true, true, false)
 	client, err := NewFromConfig(cfg)
 	if err != nil {
 		t.Fatal(err)
@@ -97,6 +102,7 @@ func TestNewFromConfigOpenAI(t *testing.T) {
 	cfg.OpenAI.BaseURL = "https://api.openai.com/v1"
 	cfg.OpenAI.Model = "gpt-5-mini"
 
+	cfg.GrantSharing(true, true, false)
 	client, err := NewFromConfig(cfg)
 	if err != nil {
 		t.Fatal(err)
@@ -134,6 +140,7 @@ func TestNewFromConfigOpenAIUsesConfiguredEmbeddingModel(t *testing.T) {
 	cfg.Semantic.Provider = config.EmbeddingProviderOpenAI
 	cfg.Semantic.Model = "text-embedding-3-large"
 
+	cfg.GrantSharing(true, true, false)
 	client, err := NewFromConfig(cfg)
 	if err != nil {
 		t.Fatal(err)
@@ -174,6 +181,7 @@ func TestNewFromConfigClaudeCanUseOpenAIEmbeddingProvider(t *testing.T) {
 	cfg.Semantic.Provider = config.EmbeddingProviderOpenAI
 	cfg.Semantic.Model = "text-embedding-3-small"
 
+	cfg.GrantSharing(true, true, false)
 	client, err := NewFromConfig(cfg)
 	if err != nil {
 		t.Fatal(err)
@@ -195,6 +203,7 @@ func TestNewFromConfigReturnsNilInterface(t *testing.T) {
 	cfg := &config.Config{} // no AI configured
 	cfg.AI.Provider = "ollama"
 
+	cfg.GrantSharing(true, true, false)
 	client, err := NewFromConfig(cfg)
 	if err != nil {
 		t.Fatal(err)

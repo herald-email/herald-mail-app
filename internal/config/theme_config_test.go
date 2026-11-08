@@ -6,6 +6,7 @@ import (
 )
 
 func TestThemeConfigDefaultsAndRoundTrip(t *testing.T) {
+	t.Setenv("HERALD_TOKEN_STORE_KEY", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.yaml")
 
@@ -46,6 +47,7 @@ func TestThemeConfigDefaultsAndRoundTrip(t *testing.T) {
 }
 
 func TestThemeConfigDefaultsToInherited(t *testing.T) {
+	t.Setenv("HERALD_TOKEN_STORE_KEY", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.yaml")
 	original := minimalOAuthConfig()
@@ -67,6 +69,7 @@ func TestThemeConfigDefaultsToInherited(t *testing.T) {
 }
 
 func TestImageStyleRoundTripAndValidation(t *testing.T) {
+	t.Setenv("HERALD_TOKEN_STORE_KEY", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
 	cfg := minimalOAuthConfig()
 	cfg.Theme.Name = "amber-crt"
 	cfg.Theme.ImageStyle = "original"
@@ -88,6 +91,7 @@ func TestImageStyleRoundTripAndValidation(t *testing.T) {
 }
 
 func TestGloomImageStyleConfigRoundTrip(t *testing.T) {
+	t.Setenv("HERALD_TOKEN_STORE_KEY", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
 	cfg := minimalOAuthConfig()
 	cfg.Theme.ImageStyle = "gloom-crt"
 	path := filepath.Join(t.TempDir(), "config.yaml")
@@ -101,6 +105,7 @@ func TestGloomImageStyleConfigRoundTrip(t *testing.T) {
 }
 
 func TestAnalogStyleConfigRoundTrip(t *testing.T) {
+	t.Setenv("HERALD_TOKEN_STORE_KEY", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
 	for _, name := range []string{"old-color-tv", "worn-vhs", "haunted-broadcast"} {
 		cfg := minimalOAuthConfig()
 		cfg.Theme.ImageStyle = name

@@ -18,7 +18,7 @@ import (
 
 func TestVirtualLabCacheBackedMCPReadsScenarioMail(t *testing.T) {
 	c, msgID := populateVirtualLabScenarioCache(t, testmail.ScenarioCalendlyInvite)
-	s := newMCPServer(c, nil)
+	s := newConsentedTestMCPServer(c, nil)
 
 	listJSON := callVirtualLabTool(t, s, 1, "list_recent_emails", map[string]any{
 		"folder": "INBOX",

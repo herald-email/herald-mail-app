@@ -1,7 +1,9 @@
 package app
 
 import (
+	"context"
 	"fmt"
+	"github.com/fugue-labs/gollem/core"
 	"strings"
 
 	"github.com/herald-email/herald-mail-app/internal/agent"
@@ -14,12 +16,17 @@ func (m *Model) applyChatAgentConfig(cfg *config.Config) {
 	if cfg == nil || strings.EqualFold(strings.TrimSpace(cfg.AI.Provider), "disabled") {
 		return
 	}
+	if err := cfg.CheckSharing("ai"); err != nil {
+		m.statusMessage = err.Error()
+		return
+	}
 	providerCfg := chatAgentProviderConfig(cfg)
 	model, err := agent.BuildModel(providerCfg)
 	if err != nil {
 		m.statusMessage = fmt.Sprintf("Chat agent unavailable: %v", err)
 		return
 	}
+	model = &sharingModel{Model: model, cfg: cfg, fingerprint: cfg.SharingFingerprint("ai")}
 	runnerOptions := agent.RunnerOptionsForProviderConfig(providerCfg)
 	if m.backend != nil {
 		emailOptions := agent.EmailToolOptions{
@@ -105,4 +112,30 @@ func chatAgentProviderConfig(cfg *config.Config) agent.ProviderConfig {
 		}
 	}
 	return out
+}
+
+// Check every provider request, including agent follow-up/tool turns.
+type sharingModel struct {
+	core.Model
+	cfg         *config.Config
+	fingerprint string
+}
+
+func (m *sharingModel) Request(ctx context.Context, messages []core.ModelMessage, settings *core.ModelSettings, params *core.ModelRequestParameters) (*core.ModelResponse, error) {
+	if m.fingerprint != m.cfg.SharingFingerprint("ai") {
+		return nil, fmt.Errorf("AI destinations changed; reopen settings")
+	}
+	if err := m.cfg.CheckSharing("ai"); err != nil {
+		return nil, err
+	}
+	return m.Model.Request(ctx, messages, settings, params)
+}
+func (m *sharingModel) RequestStream(ctx context.Context, messages []core.ModelMessage, settings *core.ModelSettings, params *core.ModelRequestParameters) (core.StreamedResponse, error) {
+	if m.fingerprint != m.cfg.SharingFingerprint("ai") {
+		return nil, fmt.Errorf("AI destinations changed; reopen settings")
+	}
+	if err := m.cfg.CheckSharing("ai"); err != nil {
+		return nil, err
+	}
+	return m.Model.RequestStream(ctx, messages, settings, params)
 }

@@ -2880,3 +2880,13 @@ Three independent image styles provide distinct static analog treatments while r
 - [x] All three persist through Settings/config and work through local/SSH style selection.
 - [x] Verify deterministic output, preserved source bytes/alpha, bounded dimensions and cached processing.
 - [x] Capture each in split preview; verify terminal size recovery and Original/Jade image gates.
+
+## Google security and sharing consent
+
+These controls protect Google account credentials and make private-data sharing explicit across desktop and headless entry points.
+
+- [x] OAuth uses a fresh S256 PKCE challenge per flow and supplies its verifier only at exchange.
+- [x] OAuth tokens migrate from YAML into secure storage; failed writes leave the original config intact.
+- [x] AI sharing and background processing require separate affirmative consent; changing destinations or accounts invalidates consent.
+- [x] MCP refuses access without explicit consent; demo remains available.
+- [x] Consent controls render at 220×50, 80×24 and recover from 50×15.

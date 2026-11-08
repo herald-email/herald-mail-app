@@ -188,6 +188,7 @@ func TestSettingsIdentitiesQueuedNavigationSurvivesResize(t *testing.T) {
 }
 
 func TestSettingsIdentitiesSavePreservesConfigAndUpdatesCompose(t *testing.T) {
+	t.Setenv("HERALD_TOKEN_STORE_KEY", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
 	cfg := identitySettingsFixture()
 	s := openIdentitySettings(t, cfg)
 	selectIdentityAction(s, "add")
@@ -219,9 +220,24 @@ func TestSettingsIdentitiesSavePreservesConfigAndUpdatesCompose(t *testing.T) {
 	if err := yaml.Unmarshal(data, &disk); err != nil {
 		t.Fatal(err)
 	}
+	// Disk stores references; the runtime config retains hydrated tokens.
+	for i := range next.Sources {
+		if disk.Sources[i].Google.AccessToken != "" || disk.Sources[i].Google.RefreshToken != "" {
+			t.Fatal("plaintext OAuth tokens on disk")
+		}
+		if next.Sources[i].Google.AccessToken != "" || next.Sources[i].Google.RefreshToken != "" {
+			if disk.Sources[i].Google.TokenRef == "" {
+				t.Fatal("missing secure token reference")
+			}
+		}
+		next.Sources[i].Google.AccessToken = ""
+		next.Sources[i].Google.RefreshToken = ""
+		next.Sources[i].Google.TokenRef = disk.Sources[i].Google.TokenRef
+	}
 	if !reflect.DeepEqual(disk.Sources, next.Sources) {
 		t.Fatal("disk save mismatch")
 	}
+
 	info, _ := os.Stat(m.configPath)
 	if info.Mode().Perm() != 0600 {
 		t.Fatal("config permissions")

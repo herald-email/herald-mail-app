@@ -284,6 +284,7 @@ func TestRemoveAccountSourcesBlocksLastMailSourceAndPreservesOtherSources(t *tes
 }
 
 func TestLoadRoundTripPreservesExplicitSources(t *testing.T) {
+	t.Setenv("HERALD_TOKEN_STORE_KEY", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.yaml")
 
@@ -340,6 +341,7 @@ func TestLoadRoundTripPreservesExplicitSources(t *testing.T) {
 }
 
 func TestSaveRoundTrip(t *testing.T) {
+	t.Setenv("HERALD_TOKEN_STORE_KEY", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.yaml")
 
@@ -393,6 +395,7 @@ func TestSaveRoundTrip(t *testing.T) {
 }
 
 func TestSaveRoundTrip_ComposeSignature(t *testing.T) {
+	t.Setenv("HERALD_TOKEN_STORE_KEY", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.yaml")
 
@@ -414,6 +417,7 @@ func TestSaveRoundTrip_ComposeSignature(t *testing.T) {
 }
 
 func TestLoadKeyboardConfigDefaultsAndRoundTrip(t *testing.T) {
+	t.Setenv("HERALD_TOKEN_STORE_KEY", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.yaml")
 
@@ -451,6 +455,7 @@ func TestLoadKeyboardConfigDefaultsAndRoundTrip(t *testing.T) {
 }
 
 func TestLoadCalendarWeekStartDefaultsAndRoundTrip(t *testing.T) {
+	t.Setenv("HERALD_TOKEN_STORE_KEY", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
 	dir := t.TempDir()
 	path := filepath.Join(dir, "calendar.yaml")
 	body := []byte(strings.Join([]string{
@@ -492,6 +497,7 @@ func TestLoadCalendarWeekStartDefaultsAndRoundTrip(t *testing.T) {
 }
 
 func TestCalendarSelectedCalendarsConfigRoundTrip(t *testing.T) {
+	t.Setenv("HERALD_TOKEN_STORE_KEY", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
 	dir := t.TempDir()
 	path := filepath.Join(dir, "calendar-selected.yaml")
 	original := minimalOAuthConfig()
@@ -543,6 +549,7 @@ func TestNormalizeCacheStoragePolicyDefaultsToNoAttachments(t *testing.T) {
 }
 
 func TestEnsureCacheDatabasePathUsesConfiguredYAMLPath(t *testing.T) {
+	t.Setenv("HERALD_TOKEN_STORE_KEY", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
 	dir := t.TempDir()
 	path := filepath.Join(dir, "work.yaml")
 	wantPath := filepath.Join(dir, "explicit-cache.db")
@@ -579,6 +586,7 @@ func TestEnsureCacheDatabasePathUsesConfiguredYAMLPath(t *testing.T) {
 }
 
 func TestEnsureCacheDatabasePathKeepsExplicitRelativeYAMLPath(t *testing.T) {
+	t.Setenv("HERALD_TOKEN_STORE_KEY", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
 	dir := t.TempDir()
 	path := filepath.Join(dir, "work.yaml")
 	wantPath := filepath.Join("custom", "relative-cache.db")
@@ -615,6 +623,7 @@ func TestEnsureCacheDatabasePathKeepsExplicitRelativeYAMLPath(t *testing.T) {
 }
 
 func TestEnsureCacheDatabasePathExpandsExplicitHomeYAMLPath(t *testing.T) {
+	t.Setenv("HERALD_TOKEN_STORE_KEY", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
 	dir := t.TempDir()
 	home := filepath.Join(dir, "home")
 	setHomeForTest(t, home)
@@ -654,6 +663,7 @@ func TestEnsureCacheDatabasePathExpandsExplicitHomeYAMLPath(t *testing.T) {
 }
 
 func TestEnsureCacheDatabasePathGeneratesAndPersistsPerConfigPath(t *testing.T) {
+	t.Setenv("HERALD_TOKEN_STORE_KEY", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
 	dir := t.TempDir()
 	home := filepath.Join(dir, "home")
 	setHomeForTest(t, home)
@@ -695,6 +705,7 @@ func TestEnsureCacheDatabasePathGeneratesAndPersistsPerConfigPath(t *testing.T) 
 }
 
 func TestEnsureCacheDatabasePathDisambiguatesExistingGeneratedPath(t *testing.T) {
+	t.Setenv("HERALD_TOKEN_STORE_KEY", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
 	dir := t.TempDir()
 	home := filepath.Join(dir, "home")
 	setHomeForTest(t, home)
@@ -790,6 +801,7 @@ func TestMemoryDefaultsUseHeraldDirectoryAndObsidianProfile(t *testing.T) {
 }
 
 func TestLoadMemoryConfigPreservesExplicitToggles(t *testing.T) {
+	t.Setenv("HERALD_TOKEN_STORE_KEY", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.yaml")
 	data := []byte(`
@@ -909,6 +921,7 @@ func TestDefaultOpenAIModelsAndEmbeddingProvider(t *testing.T) {
 }
 
 func TestOpenAIModelConfigRoundTrip(t *testing.T) {
+	t.Setenv("HERALD_TOKEN_STORE_KEY", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
 	for _, tt := range []struct {
 		name, baseURL, model, want string
 	}{
@@ -996,6 +1009,7 @@ func TestValidateRequiresCredentialsWithoutOAuth(t *testing.T) {
 }
 
 func TestConfigSave_SyncAndAIFields(t *testing.T) {
+	t.Setenv("HERALD_TOKEN_STORE_KEY", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.yaml")
 
@@ -1073,6 +1087,7 @@ func TestNotificationDefaults(t *testing.T) {
 }
 
 func TestNotificationExplicitFalsePreserved(t *testing.T) {
+	t.Setenv("HERALD_TOKEN_STORE_KEY", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.yaml")
 	if err := os.WriteFile(path, []byte(`

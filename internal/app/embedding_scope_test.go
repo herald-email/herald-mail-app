@@ -85,6 +85,7 @@ func TestRunEmbeddingBatchStoresChunksByScopedRef(t *testing.T) {
 		cfg:        &config.Config{},
 	}
 	m.cfg.Semantic.Enabled = true
+	m.cfg.GrantSharing(true, true, false)
 
 	cmd := m.runEmbeddingBatch("INBOX", 7)
 	if cmd == nil {
@@ -195,6 +196,7 @@ func TestRunContactEnrichmentTagsBackgroundAIWithActiveSource(t *testing.T) {
 	})
 	cfg := &config.Config{}
 	cfg.Semantic.Enabled = true
+	cfg.GrantSharing(true, true, false)
 
 	modelFor := func(sourceID models.SourceID, accountID models.AccountID, contactEmail string) *Model {
 		return &Model{

@@ -42,6 +42,7 @@ type ServerConfig struct {
 }
 
 type GoogleConfig struct {
+	TokenRef     string `yaml:"token_ref,omitempty"`
 	AccessToken  string `yaml:"access_token,omitempty"`
 	RefreshToken string `yaml:"refresh_token,omitempty"`
 	TokenExpiry  string `yaml:"token_expiry,omitempty"`
@@ -162,8 +163,10 @@ type AccountGroup struct {
 
 // Config represents the application configuration
 type Config struct {
-	Vendor string `yaml:"vendor"` // gmail | protonmail | fastmail | outlook | icloud
-	Cache  struct {
+	Sharing     SharingConfig `yaml:"sharing,omitempty"`
+	sharingPath string
+	Vendor      string `yaml:"vendor"` // gmail | protonmail | fastmail | outlook | icloud
+	Cache       struct {
 		DatabasePath  string `yaml:"database_path,omitempty"`
 		StoragePolicy string `yaml:"storage_policy,omitempty"` // lightweight | no_attachments | preserve_all
 	} `yaml:"cache,omitempty"`
@@ -201,6 +204,7 @@ type Config struct {
 		MinScore  float64 `yaml:"min_score"`  // default: 0.65
 	} `yaml:"semantic"`
 	Gmail struct {
+		TokenRef     string `yaml:"token_ref,omitempty"`
 		AccessToken  string `yaml:"access_token,omitempty"`
 		RefreshToken string `yaml:"refresh_token,omitempty"`
 		// TokenExpiry is the OAuth access-token expiry in RFC3339 format.
@@ -359,7 +363,7 @@ func (c *Config) ApplyVendorPreset() {
 // IsGmailOAuth returns true when the config contains a Gmail OAuth refresh token,
 // indicating the user authenticates via OAuth rather than username/password.
 func (c *Config) IsGmailOAuth() bool {
-	return c.Gmail.RefreshToken != ""
+	return c.Gmail.RefreshToken != "" || c.Gmail.TokenRef != ""
 }
 
 // NormalizeEmbeddingProvider returns a supported embedding provider name.
@@ -550,6 +554,7 @@ func (c *Config) syncLegacyFieldsFromFirstMailSource() {
 		c.Credentials = source.Credentials
 		c.Server = source.IMAP
 		c.SMTP = source.SMTP
+		c.Gmail.TokenRef = source.Google.TokenRef
 		c.Gmail.AccessToken = source.Google.AccessToken
 		c.Gmail.RefreshToken = source.Google.RefreshToken
 		c.Gmail.TokenExpiry = source.Google.TokenExpiry
@@ -630,6 +635,7 @@ func legacyDefaultMailSource(c Config) SourceConfig {
 		IMAP:        c.Server,
 		SMTP:        c.SMTP,
 		Google: GoogleConfig{
+			TokenRef:     c.Gmail.TokenRef,
 			AccessToken:  c.Gmail.AccessToken,
 			RefreshToken: c.Gmail.RefreshToken,
 			TokenExpiry:  c.Gmail.TokenExpiry,
@@ -746,7 +752,11 @@ func fileExists(path string) (bool, error) {
 
 // Save marshals the config to YAML and writes it atomically to path with 0600 permissions.
 func (c *Config) Save(path string) error {
-	data, err := yaml.Marshal(c)
+	protected, err := c.protectedCopy(path)
+	if err != nil {
+		return err
+	}
+	data, err := yaml.Marshal(protected)
 	if err != nil {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
@@ -770,6 +780,11 @@ func (c *Config) Save(path string) error {
 	}
 	if err := os.Rename(tmpName, path); err != nil {
 		return fmt.Errorf("failed to rename config file: %w", err)
+	}
+	// Bind new configurations before they are handed to workers. Loaded configs
+	// retain their immutable path, so token refresh saves do not mutate client state.
+	if c.sharingPath == "" {
+		c.sharingPath = path
 	}
 	return nil
 }
@@ -891,6 +906,10 @@ func Load(configPath string) (*Config, error) {
 		return nil, fmt.Errorf("failed to parse config file: %w", err)
 	}
 
+	legacyTokens, err := config.hydrateTokens(configPath)
+	if err != nil {
+		return nil, err
+	}
 	config.ApplyVendorPreset()
 	config.applyDefaults()
 
@@ -899,6 +918,12 @@ func Load(configPath string) (*Config, error) {
 		return nil, fmt.Errorf("config validation failed: %w", err)
 	}
 
+	if legacyTokens {
+		if err := config.Save(configPath); err != nil {
+			return nil, fmt.Errorf("OAuth token migration: %w", err)
+		}
+	}
+	config.sharingPath = configPath
 	return &config, nil
 }
 

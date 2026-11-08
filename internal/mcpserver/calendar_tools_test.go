@@ -68,7 +68,7 @@ func seedMCPCalendarCache(t *testing.T) (*cache.Cache, models.CalendarEvent) {
 
 func TestMCPListsCalendarEventsWithScopedRefs(t *testing.T) {
 	c, event := seedMCPCalendarCache(t)
-	s := newMCPServer(c, nil)
+	s := newConsentedTestMCPServer(c, nil)
 
 	got := callVirtualLabTool(t, s, 1, "list_calendar_events", map[string]any{
 		"source_id":  "work-calendar",
@@ -96,7 +96,7 @@ func TestMCPListsCalendarEventsWithScopedRefs(t *testing.T) {
 
 func TestMCPSearchAndGetCalendarEventUseScopedRefs(t *testing.T) {
 	c, event := seedMCPCalendarCache(t)
-	s := newMCPServer(c, nil)
+	s := newConsentedTestMCPServer(c, nil)
 
 	search := callVirtualLabTool(t, s, 2, "search_calendar_events", map[string]any{
 		"source_id":  "work-calendar",
@@ -171,7 +171,7 @@ func TestMCPCalendarMutationToolsForwardToDaemon(t *testing.T) {
 			t.Fatalf("unexpected daemon call: %s %s", r.Method, r.URL.String())
 		}
 	}))
-	s := newMCPServer(newScopedMutationTestMCP(t), nil)
+	s := newConsentedTestMCPServer(newScopedMutationTestMCP(t), nil)
 
 	created := callVirtualLabTool(t, s, 10, "create_calendar_event", map[string]any{
 		"source_id":      "work-calendar",

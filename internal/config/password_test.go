@@ -15,6 +15,7 @@ import (
 )
 
 func TestLoadPasswordCommand(t *testing.T) {
+	t.Setenv("HERALD_TOKEN_STORE_KEY", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
 	for _, password := range []string{`{command: "printf password"}`, `{command: ["printf", "password"]}`} {
 		t.Run(password, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "conf.yaml")
@@ -201,6 +202,7 @@ func TestPasswordCommandShell(t *testing.T) {
 }
 
 func TestPasswordCommandConfigOperationsDoNotExecute(t *testing.T) {
+	t.Setenv("HERALD_TOKEN_STORE_KEY", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
 	for _, explicit := range []bool{false, true} {
 		t.Run(fmt.Sprint(explicit), func(t *testing.T) {
 			marker := filepath.Join(t.TempDir(), "called")

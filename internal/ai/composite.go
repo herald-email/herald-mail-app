@@ -81,3 +81,13 @@ var _ AIClient = (*CompositeClient)(nil)
 var _ StatusReporter = (*CompositeClient)(nil)
 var _ AIClient = (*ClaudeClient)(nil)
 var _ AIClient = (*OpenAICompatClient)(nil)
+
+func (c *CompositeClient) withPriority(priority Priority) AIClient {
+	return NewCompositeClient(WithPriority(c.chat, priority), WithPriority(c.embedding, priority))
+}
+func (c *CompositeClient) withTaskKind(kind TaskKind) AIClient {
+	return NewCompositeClient(WithTaskKind(c.chat, kind), WithTaskKind(c.embedding, kind))
+}
+func (c *CompositeClient) withSourceID(id string) AIClient {
+	return NewCompositeClient(WithSourceID(c.chat, id), WithSourceID(c.embedding, id))
+}

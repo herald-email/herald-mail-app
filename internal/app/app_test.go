@@ -277,6 +277,7 @@ func TestSettingsSaved_ChatModelChangeAppliesImmediately(t *testing.T) {
 	defer srv.Close()
 
 	original := ollamaAppConfig(srv.URL, "old-chat-model", "embed-model")
+	original.GrantSharing(true, true, false)
 	classifier, err := ai.NewFromConfig(original)
 	if err != nil {
 		t.Fatal(err)
@@ -285,6 +286,7 @@ func TestSettingsSaved_ChatModelChangeAppliesImmediately(t *testing.T) {
 	m.SetConfig(original)
 
 	next := ollamaAppConfig(srv.URL, "new-chat-model", "embed-model")
+	next.GrantSharing(true, true, false)
 	updatedModel, _ := m.Update(SettingsSavedMsg{Config: next})
 	updated := updatedModel.(*Model)
 
@@ -433,6 +435,7 @@ func TestOAuthErrorShowsVisibleAccountMismatchMessage(t *testing.T) {
 }
 
 func TestAccountSettingsValidationSuccessSavesAndSwapsBackend(t *testing.T) {
+	t.Setenv("HERALD_TOKEN_STORE_KEY", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
 	oldValidate := validateAccountConfig
 	validateAccountConfig = func(context.Context, *config.Config, string) accountcheck.Result {
 		return accountcheck.Result{
@@ -927,6 +930,7 @@ func TestSettingsSaved_UnrelatedChangeKeepsStartupAIWarningDown(t *testing.T) {
 }
 
 func TestDisableAIFromWarningSavesDisabledConfig(t *testing.T) {
+	t.Setenv("HERALD_TOKEN_STORE_KEY", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
 	configPath := t.TempDir() + "/conf.yaml"
 	m := New(&stubBackend{}, nil, "user@example.test", nil, false)
 	m.SetConfig(ollamaAppConfig("http://ollama.test", "missing-chat", "nomic-embed-text"))
@@ -984,6 +988,7 @@ func TestHandleTimelineMsg_DedupesBackgroundEmbeddingBatchStart(t *testing.T) {
 	m.classifier = &stubClassifier{}
 	m.cfg = &config.Config{}
 	m.cfg.Semantic.Enabled = true
+	m.cfg.GrantSharing(true, true, false)
 
 	model, cmd, handled := m.handleTimelineMsg(TimelineLoadedMsg{Emails: mockEmails()})
 	if !handled {
@@ -1031,6 +1036,7 @@ func TestHandleTimelineMsg_SkipsAutomaticSemanticWorkInDemoMode(t *testing.T) {
 	m.demoMode = true
 	m.cfg = &config.Config{}
 	m.cfg.Semantic.Enabled = true
+	m.cfg.GrantSharing(true, true, false)
 
 	model, cmd, handled := m.handleTimelineMsg(TimelineLoadedMsg{Emails: mockEmails()})
 	if !handled {

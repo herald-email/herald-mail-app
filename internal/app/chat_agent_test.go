@@ -450,7 +450,9 @@ func TestChatAgentResponseUsesFallbackForEmptyReply(t *testing.T) {
 func TestSetConfigEnablesGollemChatAgentByDefaultWhenAIConfigured(t *testing.T) {
 	m := &Model{chatAgent: &fakeChatAgentRunner{}}
 
-	m.SetConfig(&config.Config{})
+	cfg := &config.Config{}
+	cfg.GrantSharing(true, false, false)
+	m.SetConfig(cfg)
 
 	if m.chatAgent == nil {
 		t.Fatal("chatAgent should default to Gollem when global AI is configured")
@@ -473,6 +475,7 @@ func TestSetConfigEnablesGollemChatAgentWhenConfigured(t *testing.T) {
 	cfg := &config.Config{}
 	cfg.AI.Agent.Provider = "ollama"
 	cfg.AI.Agent.Model = "llama3.1"
+	cfg.GrantSharing(true, false, false)
 
 	m := &Model{}
 	m.SetConfig(cfg)

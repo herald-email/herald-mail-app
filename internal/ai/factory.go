@@ -1,6 +1,9 @@
 package ai
 
-import "github.com/herald-email/herald-mail-app/internal/config"
+import (
+	"fmt"
+	"github.com/herald-email/herald-mail-app/internal/config"
+)
 
 // NewFromConfig constructs the right AIClient based on cfg.AI.Provider.
 // Returns (nil, nil) when no AI credentials are configured.
@@ -8,27 +11,43 @@ import "github.com/herald-email/herald-mail-app/internal/config"
 // IMPORTANT: This function returns a true nil interface value when no AI is
 // configured, NOT a typed nil pointer. Callers must check: if client == nil { ... }
 func NewFromConfig(cfg *config.Config) (AIClient, error) {
+	fingerprint := cfg.SharingFingerprint("ai")
+	guard := func(client *ManagedClient) AIClient {
+		client.consent = func(background bool) error {
+			if cfg.SharingFingerprint("ai") != fingerprint {
+				return fmt.Errorf("AI destinations changed; rebuild client after consent")
+			}
+			if err := cfg.CheckSharing("ai"); err != nil {
+				return err
+			}
+			if background {
+				return cfg.CheckSharing("background")
+			}
+			return nil
+		}
+		return client
+	}
 	embeddingProvider := cfg.EffectiveEmbeddingProvider()
 	embeddingModel := cfg.EffectiveEmbeddingModel()
 	wrapLocal := func(client AIClient) AIClient {
 		if client == nil {
 			return nil
 		}
-		return NewManagedClient(client, ManagedConfig{
+		return guard(NewManagedClient(client, ManagedConfig{
 			MaxConcurrency:                  cfg.AI.LocalMaxConcurrency,
 			QueueLimit:                      cfg.AI.BackgroundQueueLimit,
 			PauseBackgroundWhileInteractive: cfg.AI.PauseBackgroundWhileInteractive,
-		})
+		}))
 	}
 	wrapExternal := func(client AIClient) AIClient {
 		if client == nil {
 			return nil
 		}
-		return NewManagedClient(client, ManagedConfig{
+		return guard(NewManagedClient(client, ManagedConfig{
 			MaxConcurrency:                  cfg.AI.ExternalMaxConcurrency,
 			QueueLimit:                      cfg.AI.BackgroundQueueLimit,
 			PauseBackgroundWhileInteractive: false,
-		})
+		}))
 	}
 	newOllamaEmbedding := func() AIClient {
 		if cfg.Ollama.Host == "" {

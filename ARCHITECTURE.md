@@ -613,3 +613,11 @@ Sending identities are account-scoped Compose configuration, independent of auth
 The Settings identity manager edits a detached Compose configuration for one mail source. A dedicated save message writes the candidate config atomically before updating the active model, preserving the backend connection and retaining staged edits on write failure.
 
 - [x] Identity saves preserve all unrelated account and global fields; legacy single-account configuration remains top-level.
+
+## OAuth secrets and sharing boundaries
+
+These controls protect Google account credentials and make private-data sharing explicit across desktop and headless entry points.
+
+- [x] Persist OAuth tokens through a secure store, leaving only references in configuration.
+- [x] Bind AI consent to configured recipients and accounts, enforce it at client boundaries, and gate background work separately.
+- [x] Require MCP consent before opening private data.

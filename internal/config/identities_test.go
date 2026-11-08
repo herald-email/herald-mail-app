@@ -30,6 +30,7 @@ func TestComposeIdentitiesValidation(t *testing.T) {
 }
 
 func TestComposeIdentitiesLoadAndRoundTrip(t *testing.T) {
+	t.Setenv("HERALD_TOKEN_STORE_KEY", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
 	for _, explicit := range []bool{false, true} {
 		t.Run(fmt.Sprint(explicit), func(t *testing.T) {
 			cfg := Config{Credentials: CredentialsConfig{Username: "me@example.test", Password: "test"}, Server: ServerConfig{Host: "127.0.0.1", Port: 1143}, SMTP: ServerConfig{Host: "127.0.0.1", Port: 1025}, Compose: ComposeConfig{Identities: []IdentityConfig{{Name: "Shop", Address: "shop@example.test"}}, DefaultIdentity: "shop@example.test"}}

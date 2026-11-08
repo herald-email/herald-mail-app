@@ -935,6 +935,7 @@ func TestMouseDoubleClickCalendarEventOpensDetail(t *testing.T) {
 }
 
 func TestMouseClickCalendarRailTogglePersistsSelection(t *testing.T) {
+	t.Setenv("HERALD_TOKEN_STORE_KEY", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
 	m, configPath := makeMouseCalendarModel(t)
 	x, y := calendarCollectionPointForTest(t, m, 1)
 

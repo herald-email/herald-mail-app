@@ -228,7 +228,7 @@ func TestOAuthWaitModel_TimeoutExplainsBrowserConsentPath(t *testing.T) {
 
 func TestOAuthWaitModel_CodeSuccessDoesNotSaveBeforeValidation(t *testing.T) {
 	originalExchange := exchangeOAuthCodeFn
-	exchangeOAuthCodeFn = func(_ context.Context, _, _ string) (*oauth2.Token, error) {
+	exchangeOAuthCodeFn = func(_ context.Context, _, _, _ string) (*oauth2.Token, error) {
 		return googleOAuthTokenForTest("test@gmail.com")
 	}
 	t.Cleanup(func() { exchangeOAuthCodeFn = originalExchange })
@@ -262,7 +262,7 @@ func TestOAuthWaitModel_CodeSuccessDoesNotSaveBeforeValidation(t *testing.T) {
 
 func TestOAuthWaitModel_CodeSuccessWithoutSourceIDsDoesNotFanOutGoogleTokens(t *testing.T) {
 	originalExchange := exchangeOAuthCodeFn
-	exchangeOAuthCodeFn = func(_ context.Context, _, _ string) (*oauth2.Token, error) {
+	exchangeOAuthCodeFn = func(_ context.Context, _, _, _ string) (*oauth2.Token, error) {
 		return googleOAuthTokenForTest("work@example.test")
 	}
 	t.Cleanup(func() { exchangeOAuthCodeFn = originalExchange })
@@ -331,7 +331,7 @@ func TestOAuthWaitModel_CodeSuccessWithoutSourceIDsDoesNotFanOutGoogleTokens(t *
 
 func TestOAuthWaitModel_CodeSuccessForSecondAccountDoesNotOverwriteLegacyGmail(t *testing.T) {
 	originalExchange := exchangeOAuthCodeFn
-	exchangeOAuthCodeFn = func(_ context.Context, _, _ string) (*oauth2.Token, error) {
+	exchangeOAuthCodeFn = func(_ context.Context, _, _, _ string) (*oauth2.Token, error) {
 		return googleOAuthTokenForTest("me@example.test")
 	}
 	t.Cleanup(func() { exchangeOAuthCodeFn = originalExchange })
@@ -384,7 +384,7 @@ func TestOAuthWaitModel_CodeSuccessForSecondAccountDoesNotOverwriteLegacyGmail(t
 
 func TestOAuthWaitModel_CodeSuccessRejectsAuthenticatedEmailMismatch(t *testing.T) {
 	originalExchange := exchangeOAuthCodeFn
-	exchangeOAuthCodeFn = func(_ context.Context, _, _ string) (*oauth2.Token, error) {
+	exchangeOAuthCodeFn = func(_ context.Context, _, _, _ string) (*oauth2.Token, error) {
 		return googleOAuthTokenForTest("wrong@example.test")
 	}
 	t.Cleanup(func() { exchangeOAuthCodeFn = originalExchange })
@@ -424,7 +424,7 @@ func TestOAuthWaitModel_CodeSuccessRejectsAuthenticatedEmailMismatch(t *testing.
 
 func TestOAuthWaitModel_CodeSuccessAppliesTokensToTargetGoogleSources(t *testing.T) {
 	originalExchange := exchangeOAuthCodeFn
-	exchangeOAuthCodeFn = func(_ context.Context, _, _ string) (*oauth2.Token, error) {
+	exchangeOAuthCodeFn = func(_ context.Context, _, _, _ string) (*oauth2.Token, error) {
 		return googleOAuthTokenForTest("work@example.test")
 	}
 	t.Cleanup(func() { exchangeOAuthCodeFn = originalExchange })

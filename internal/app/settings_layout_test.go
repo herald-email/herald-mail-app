@@ -1271,7 +1271,13 @@ func TestSettingsPanelAIAdvancedManualShowsRoleSelectorsAndInlineSave(t *testing
 	chatView := renderSettingsViewForTest(t, s, 120, 40)
 	s.form.NextGroup()
 	embeddingView := renderSettingsViewForTest(t, s, 120, 40)
-	rendered := strings.Join([]string{roleView, chatView, embeddingView}, "\n")
+	s.form.NextGroup()
+	consentView := renderSettingsViewForTest(t, s, 120, 40)
+	s.form.NextGroup()
+	backgroundView := renderSettingsViewForTest(t, s, 120, 40)
+	s.form.NextGroup()
+	mcpView := renderSettingsViewForTest(t, s, 120, 40)
+	rendered := strings.Join([]string{roleView, chatView, embeddingView, consentView, backgroundView, mcpView}, "\n")
 
 	for _, want := range []string{
 		"Chat Role",

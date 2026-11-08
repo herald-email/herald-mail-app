@@ -11,9 +11,11 @@ import (
 )
 
 func TestCacheOnlyMCPNeverExecutesPasswordCommand(t *testing.T) {
+	t.Setenv("HERALD_TOKEN_STORE_KEY", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
 	c, _ := populateVirtualLabScenarioCache(t, testmail.ScenarioCalendlyInvite)
 	marker := filepath.Join(t.TempDir(), "called")
 	cfg := &config.Config{Credentials: config.CredentialsConfig{Username: "user@example.test", PasswordCommand: &config.PasswordCommand{Args: []string{"sh", "-c", `printf called > "$1"; printf password`, "helper", marker}}}, Server: config.ServerConfig{Host: "localhost", Port: 1143}}
+	cfg.GrantSharing(false, false, true)
 	path := filepath.Join(t.TempDir(), "conf.yaml")
 	if err := cfg.Save(path); err != nil {
 		t.Fatal(err)

@@ -62,7 +62,7 @@ func TestMCPMutationToolForwardsScopedRefToDaemon(t *testing.T) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
-	s := newMCPServer(newScopedMutationTestMCP(t), nil)
+	s := newConsentedTestMCPServer(newScopedMutationTestMCP(t), nil)
 	got := callVirtualLabTool(t, s, 1, "mark_read", map[string]any{
 		"message_id": "same-message",
 		"folder":     "INBOX",
@@ -100,7 +100,7 @@ func TestMCPMoveEmailForwardsScopedRefToDaemon(t *testing.T) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
-	s := newMCPServer(newScopedMutationTestMCP(t), nil)
+	s := newConsentedTestMCPServer(newScopedMutationTestMCP(t), nil)
 	got := callVirtualLabTool(t, s, 2, "move_email", map[string]any{
 		"message_id":  "same-message",
 		"from_folder": "INBOX",

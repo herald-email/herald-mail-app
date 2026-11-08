@@ -27,7 +27,7 @@ func TestMCPBulkDeleteForwardsScopedLocalIDs(t *testing.T) {
 		_, _ = w.Write([]byte(`{"message":"Deleted 1 emails"}`))
 	}))
 
-	s := newMCPServer(newScopedMutationTestMCP(t), nil)
+	s := newConsentedTestMCPServer(newScopedMutationTestMCP(t), nil)
 	got := callVirtualLabTool(t, s, 1, "bulk_delete", map[string]any{
 		"message_ids": `["same-message"]`,
 		"local_ids":   `["mail:work-mail:work:INBOX:same-message"]`,
@@ -58,7 +58,7 @@ func TestMCPThreadAndSenderMutationsForwardSourceScope(t *testing.T) {
 		_, _ = w.Write([]byte(`{"message":"ok"}`))
 	}))
 
-	s := newMCPServer(newScopedMutationTestMCP(t), nil)
+	s := newConsentedTestMCPServer(newScopedMutationTestMCP(t), nil)
 	archiveThread := callVirtualLabTool(t, s, 2, "archive_thread", map[string]any{
 		"folder":     "INBOX",
 		"subject":    "Roadmap",

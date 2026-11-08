@@ -45,7 +45,7 @@ func TestMCPListingOutputsScopedMessageRef(t *testing.T) {
 		t.Fatalf("CacheEmail: %v", err)
 	}
 
-	s := newMCPServer(c, nil)
+	s := newConsentedTestMCPServer(c, nil)
 	got := callVirtualLabTool(t, s, 1, "list_recent_emails", map[string]any{
 		"folder": "INBOX",
 		"limit":  1,

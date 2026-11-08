@@ -346,6 +346,7 @@ func TestVirtualLabDaemonBackedMCPBulkMoveAndDelete(t *testing.T) {
 }
 
 func TestVirtualLabDaemonBackedMCPUnsubscribeAndSoftUnsubscribe(t *testing.T) {
+	t.Setenv("HERALD_TOKEN_STORE_KEY", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
 	h := startMCPVirtualLabDaemon(t)
 
 	var posts atomic.Int32
@@ -415,6 +416,7 @@ func TestVirtualLabDaemonBackedMCPUnsubscribeAndSoftUnsubscribe(t *testing.T) {
 }
 
 func TestVirtualLabMCPMutationReportsMissingDaemon(t *testing.T) {
+	t.Setenv("HERALD_TOKEN_STORE_KEY", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
 	setMCPDaemonURLForTest(t, "")
 
 	c, err := cache.New(filepath.Join(t.TempDir(), "missing-daemon-cache.db"))
@@ -423,7 +425,7 @@ func TestVirtualLabMCPMutationReportsMissingDaemon(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = c.Close() })
 
-	s := newMCPServer(c, nil)
+	s := newConsentedTestMCPServer(c, nil)
 	callJSON := callVirtualLabTool(t, s, 1, "send_email", map[string]any{
 		"to":      testmail.DefaultBobAddress,
 		"subject": "No daemon",
@@ -545,7 +547,7 @@ func startMCPVirtualLabDaemon(t *testing.T) *mcpVirtualLabDaemon {
 		baseURL:         baseURL,
 		daemon:          daemonServer,
 		cache:           c,
-		mcp:             newMCPServer(c, nil),
+		mcp:             newConsentedTestMCPServer(c, nil),
 		originalID:      originalID,
 		originalSubject: originalSubject,
 	}

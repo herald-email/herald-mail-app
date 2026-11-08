@@ -160,14 +160,17 @@ var googleOAuthCredentialsConfigured = oauth.Configured
 
 // Settings is a self-contained huh-based settings form component.
 type Settings struct {
-	mode       SettingsMode
-	form       *huh.Form
-	cfg        *config.Config // working copy
-	configPath string         // path to the config file for saving
-	width      int
-	height     int
-	done       bool // set once we've emitted the completion message
-	saveButton bool
+	allowAISharing         bool
+	allowBackgroundSharing bool
+	allowMCPSharing        bool
+	mode                   SettingsMode
+	form                   *huh.Form
+	cfg                    *config.Config // working copy
+	configPath             string         // path to the config file for saving
+	width                  int
+	height                 int
+	done                   bool // set once we've emitted the completion message
+	saveButton             bool
 
 	showExperimentalEmailServices bool
 	firstRunAccountOnly           bool
@@ -1408,18 +1411,22 @@ func (s *Settings) buildForm() {
 			Value(&s.alsoAddCalendar),
 	).Title("Google account")
 
-	aiPanelSaveFields := func() []huh.Field {
-		if s.mode != SettingsModePanel {
-			return nil
-		}
-		return []huh.Field{
-			huh.NewConfirm().
-				Title("Save changes").
-				Affirmative("Save").
-				Negative("Cancel").
-				Value(&s.saveButton),
-		}
+	sharingGroup := huh.NewGroup(
+		huh.NewConfirm().Title("Allow AI data sharing?").DescriptionFunc(func() string {
+			return "Mail, contacts, calendar, attachments and prompts from all accounts and retained history may be sent to:\n" + s.sharingPreviewConfig().SharingRecipients() + "\nLocal hosts process locally; remote providers use their own policies. Save No to revoke future access; prior sharing cannot be recalled."
+		}, []any{&s.aiProvider, &s.ollamaHost, &s.openAIBaseURL, &s.embeddingProvider}).Affirmative("Allow").Negative("No").Value(&s.allowAISharing),
+	).Title("AI consent")
+
+	backgroundSharingGroup := huh.NewGroup(
+		huh.NewConfirm().Title("Allow background AI processing?").Description("Automatically send mail content and contact context to the AI/embedding destinations above for indexing, classification and enrichment, even when you are not using AI. Requires AI permission on the previous page.").Affirmative("Allow").Negative("No").Value(&s.allowBackgroundSharing),
+	).Title("Background consent")
+	mcpSharingFields := []huh.Field{
+		huh.NewConfirm().Title("Allow attached MCP clients access?").Description("Any MCP client you attach can read cached mail (including retained history), contacts, calendar and memories, and request supported mutations. Clients may forward results to their AI providers. Attach only clients you trust. Independent of Herald AI permission.").Affirmative("Allow").Negative("No").Value(&s.allowMCPSharing),
 	}
+	if s.mode == SettingsModePanel {
+		mcpSharingFields = append(mcpSharingFields, huh.NewConfirm().Title("Save changes").Affirmative("Save").Negative("Cancel").Value(&s.saveButton))
+	}
+	mcpSharingGroup := huh.NewGroup(mcpSharingFields...).Title("MCP consent")
 
 	s.refreshAISetupPresetFromRoles()
 
@@ -1437,7 +1444,6 @@ func (s *Settings) buildForm() {
 			Title("Ollama local default").
 			Description("Default chat: gemma3:4b.\nDefault embeddings: nomic-embed-text-v2-moe.\nBest with 16GB RAM; 8GB works but slower.\nUse custom Ollama to downgrade.\nAvoid llama3.x for translation-heavy work."),
 	}
-	ollamaDefaultFields = append(ollamaDefaultFields, aiPanelSaveFields()...)
 	ollamaDefaultGroup := huh.NewGroup(ollamaDefaultFields...).WithHideFunc(func() bool { return s.aiSetupPreset != aiSetupPresetOllamaDefault })
 
 	// Group 3a — Ollama settings (shown only when provider = custom Ollama)
@@ -1463,7 +1469,6 @@ func (s *Settings) buildForm() {
 			func() bool { return s.embedModelChoice != customModelChoice },
 		),
 	}
-	ollamaFields = append(ollamaFields, aiPanelSaveFields()...)
 	ollamaGroup := huh.NewGroup(ollamaFields...).WithHideFunc(func() bool {
 		if s.advancedAISetup() {
 			return configAIProvider(s.aiProvider) != "ollama"
@@ -1545,7 +1550,6 @@ func (s *Settings) buildForm() {
 			},
 		),
 	}
-	externalEmbeddingFields = append(externalEmbeddingFields, aiPanelSaveFields()...)
 	externalEmbeddingGroup := huh.NewGroup(externalEmbeddingFields...).Title("Embedding Role").WithHideFunc(func() bool {
 		return !s.advancedAISetup() && s.aiProvider != "claude" && s.aiProvider != "openai"
 	})
@@ -1555,7 +1559,6 @@ func (s *Settings) buildForm() {
 			Title("AI disabled").
 			Description("Chat, classification, semantic search, quick replies, and Compose assistance stay off until AI is re-enabled."),
 	}
-	disabledAIFields = append(disabledAIFields, aiPanelSaveFields()...)
 	disabledAIGroup := huh.NewGroup(disabledAIFields...).WithHideFunc(func() bool { return s.aiSetupPreset != aiSetupPresetDisabled })
 
 	advancedAIGroup := huh.NewGroup(
@@ -2283,6 +2286,9 @@ func (s *Settings) buildForm() {
 		openAIGroup,
 		externalEmbeddingGroup,
 		disabledAIGroup,
+		sharingGroup,
+		backgroundSharingGroup,
+		mcpSharingGroup,
 		wizardCacheGroup,
 		keyboardGroup,
 		wizardThemeGroup,
@@ -2327,6 +2333,9 @@ func (s *Settings) buildForm() {
 				openAIGroup,
 				externalEmbeddingGroup,
 				disabledAIGroup,
+				sharingGroup,
+				backgroundSharingGroup,
+				mcpSharingGroup,
 			}
 			if s.hasAIModelWarning() {
 				groups = append([]*huh.Group{ollamaWarningGroup}, groups...)
@@ -2407,6 +2416,9 @@ func (s *Settings) buildForm() {
 				openAIGroup,
 				externalEmbeddingGroup,
 				disabledAIGroup,
+				sharingGroup,
+				backgroundSharingGroup,
+				mcpSharingGroup,
 				wizardCacheGroup,
 				keyboardGroup,
 				wizardThemeGroup,
@@ -3632,6 +3644,17 @@ func (s *Settings) ResetForRetry() tea.Cmd {
 
 // Update implements tea.Model.
 func (s *Settings) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// Going back to change a recipient must not carry an earlier affirmative choice.
+	if _, ok := msg.(tea.KeyPressMsg); ok && s.cfg != nil {
+		before := s.sharingPreviewConfig().SharingFingerprint("ai")
+		defer func() {
+			if s.sharingPreviewConfig().SharingFingerprint("ai") != before {
+				s.allowAISharing = false
+				s.allowBackgroundSharing = false
+			}
+		}()
+	}
+
 	if s.done {
 		return s, nil
 	}
@@ -4084,6 +4107,7 @@ func (s *Settings) buildConfig() *config.Config {
 			accountProvider = "gmail-oauth"
 		}
 		cfg.Vendor = configVendorForProvider(accountProvider)
+		cfg.Gmail.TokenRef = ""
 		cfg.Gmail.AccessToken = ""
 		cfg.Gmail.RefreshToken = ""
 		cfg.Gmail.TokenExpiry = ""
@@ -4194,6 +4218,9 @@ func (s *Settings) buildConfig() *config.Config {
 	}
 
 	applyVendorPreset(&cfg)
+	if (s.mode == SettingsModePanel && s.panelSection == settingsPanelSectionAI) || (s.mode == SettingsModeWizard && !s.firstRunAccountOnly) {
+		cfg.GrantSharing(s.allowAISharing, s.allowBackgroundSharing, s.allowMCPSharing)
+	}
 	return &cfg
 }
 
@@ -5395,4 +5422,9 @@ func parsePort(s string) int {
 		return 0
 	}
 	return p
+}
+
+func (s *Settings) sharingPreviewConfig() *config.Config {
+	preview := *s
+	return preview.buildConfig()
 }

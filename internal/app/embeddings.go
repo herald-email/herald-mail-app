@@ -31,7 +31,7 @@ func (m *Model) backgroundSemanticEnabled() bool {
 		!m.demoMode &&
 		m.classifier != nil &&
 		m.cfg != nil &&
-		m.cfg.Semantic.Enabled
+		m.cfg.Semantic.Enabled && m.cfg.CheckSharing("ai") == nil && m.cfg.CheckSharing("background") == nil
 }
 
 func (m *Model) cancelBackgroundWork() {

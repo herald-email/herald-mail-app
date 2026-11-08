@@ -1005,3 +1005,10 @@ Integration tests and headless test harnesses ensure the app works correctly at 
 - [x] Local YAML theme install from Settings into `~/.herald/themes`
 - [x] Custom theme creation and semantic role editing from Settings without adding a global shortcut
 - [x] Theme gallery docs screenshots can be regenerated with `scripts/regenerate-theme-screenshots.sh` for Timeline and `HERALD_THEME_SCREENSHOT_VIEW=preview` for open preview captures
+
+## Google security and sharing controls
+
+These controls protect Google account credentials and make private-data sharing explicit across desktop and headless entry points.
+
+- [x] Protect desktop OAuth with PKCE and secure token persistence.
+- [x] Let users explicitly allow and revoke AI, background processing, and MCP sharing.

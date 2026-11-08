@@ -293,6 +293,9 @@ func Run(commandName string, args []string) error {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
+	if err := cfg.CheckSharing("mcp"); err != nil {
+		return err
+	}
 	cachePath, err := config.EnsureCacheDatabasePath(expanded, cfg)
 	if err != nil {
 		return fmt.Errorf("failed to resolve cache path: %w", err)
@@ -349,6 +352,14 @@ func newMCPServerWithConfig(c *cache.Cache, classifier ai.AIClient, cfg *config.
 		"herald",
 		buildversion.Version,
 		server.WithToolCapabilities(false),
+		server.WithToolHandlerMiddleware(func(next server.ToolHandlerFunc) server.ToolHandlerFunc {
+			return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+				if err := cfg.CheckSharing("mcp"); err != nil {
+					return mcp.NewToolResultError(err.Error()), nil
+				}
+				return next(ctx, req)
+			}
+		}),
 	)
 	addCalendarTools(s, c)
 

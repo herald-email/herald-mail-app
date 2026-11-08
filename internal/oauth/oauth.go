@@ -132,8 +132,9 @@ func NewGoogleConfigWithScopes(clientIDVal, clientSecretVal, redirectURL string,
 
 // Result is returned on the code channel from StartFlow.
 type Result struct {
-	Code string // authorization code, empty on error
-	Err  error
+	Verifier string
+	Code     string // authorization code, empty on error
+	Err      error
 }
 
 // StartFlow starts the OAuth2 authorization code flow.
@@ -169,7 +170,9 @@ func StartFlowForSources(ctx context.Context, email string, sources []config.Sou
 	}
 	state := hex.EncodeToString(stateBytes)
 
+	verifier := oauth2.GenerateVerifier()
 	authURLOpts := []oauth2.AuthCodeOption{
+		oauth2.S256ChallengeOption(verifier),
 		oauth2.AccessTypeOffline,
 		oauth2.SetAuthURLParam("prompt", "consent"),
 	}
@@ -209,7 +212,7 @@ func StartFlowForSources(ctx context.Context, email string, sources []config.Sou
 			return
 		}
 		fmt.Fprintln(w, "Authorization successful! You may close this tab and return to Herald.")
-		ch <- Result{Code: code}
+		ch <- Result{Code: code, Verifier: verifier}
 		go server.Shutdown(context.Background()) //nolint:errcheck
 	})
 
@@ -236,13 +239,16 @@ func StartFlowForSources(ctx context.Context, email string, sources []config.Sou
 }
 
 // ExchangeCode exchanges an authorization code for OAuth2 tokens.
-func ExchangeCode(ctx context.Context, code, redirectURI string) (*oauth2.Token, error) {
+func ExchangeCode(ctx context.Context, code, redirectURI, verifier string) (*oauth2.Token, error) {
+	if len(verifier) < 43 || len(verifier) > 128 {
+		return nil, fmt.Errorf("missing or invalid PKCE verifier")
+	}
 	clientID, clientSecret, err := credentials()
 	if err != nil {
 		return nil, err
 	}
 	cfg := NewGmailConfig(clientID, clientSecret, redirectURI)
-	token, err := cfg.Exchange(ctx, code)
+	token, err := cfg.Exchange(ctx, code, oauth2.VerifierOption(verifier))
 	if err != nil {
 		return nil, fmt.Errorf("failed to exchange authorization code: %w", err)
 	}

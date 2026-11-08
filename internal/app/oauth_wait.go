@@ -209,7 +209,7 @@ func (m *OAuthWaitModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
-		token, err := exchangeOAuthCodeFn(ctx, msg.result.Code, m.redirectURI)
+		token, err := exchangeOAuthCodeFn(ctx, msg.result.Code, m.redirectURI, msg.result.Verifier)
 		if err != nil {
 			m.err = err
 			return m, func() tea.Msg { return OAuthErrorMsg{Err: err, UserMessage: oauthFailureMessage(err)} }

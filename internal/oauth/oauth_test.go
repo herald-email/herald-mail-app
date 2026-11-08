@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -306,5 +307,67 @@ func TestStartFlow_CallbackStateValidation(t *testing.T) {
 		}
 	case <-time.After(3 * time.Second):
 		t.Error("timed out waiting for result from callback server")
+	}
+}
+
+func TestPKCEChallengeBoundToCallback(t *testing.T) {
+	t.Setenv("HERALD_GOOGLE_CLIENT_ID", "test-client-id")
+	t.Setenv("HERALD_GOOGLE_CLIENT_SECRET", "test-client-secret")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	auth, ch, err := StartFlow(ctx, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	u, _ := url.Parse(auth)
+	q := u.Query()
+	if q.Get("code_challenge_method") != "S256" || q.Get("code_challenge") == "" {
+		t.Fatal("missing S256 challenge")
+	}
+	callback := q.Get("redirect_uri") + "?state=" + url.QueryEscape(q.Get("state")) + "&code=test-code"
+	resp, err := http.Get(callback)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	result := <-ch
+	if result.Err != nil {
+		t.Fatal(result.Err)
+	}
+	if q.Get("code_challenge") != oauth2.S256ChallengeFromVerifier(result.Verifier) {
+		t.Fatal("callback verifier not bound to challenge")
+	}
+	auth2, _, err := StartFlow(ctx, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	u2, _ := url.Parse(auth2)
+	if u2.Query().Get("code_challenge") == q.Get("code_challenge") {
+		t.Fatal("verifier reused")
+	}
+	if _, err := ExchangeCode(ctx, "code", "http://localhost", ""); err == nil {
+		t.Fatal("missing verifier accepted")
+	}
+}
+
+type pkceRoundTripper func(*http.Request) (*http.Response, error)
+
+func (f pkceRoundTripper) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+func TestPKCEExchangeSendsVerifier(t *testing.T) {
+	t.Setenv("HERALD_GOOGLE_CLIENT_ID", "test-client-id")
+	t.Setenv("HERALD_GOOGLE_CLIENT_SECRET", "test-client-secret")
+	verifier := oauth2.GenerateVerifier()
+	client := &http.Client{Transport: pkceRoundTripper(func(r *http.Request) (*http.Response, error) {
+		if err := r.ParseForm(); err != nil {
+			t.Fatal(err)
+		}
+		if r.Form.Get("code_verifier") != verifier {
+			t.Fatal("exchange missing verifier")
+		}
+		return &http.Response{StatusCode: 200, Header: http.Header{"Content-Type": []string{"application/json"}}, Body: io.NopCloser(strings.NewReader(`{"access_token":"test","token_type":"Bearer"}`))}, nil
+	})}
+	ctx := context.WithValue(context.Background(), oauth2.HTTPClient, client)
+	if _, err := ExchangeCode(ctx, "code", "http://localhost/callback", verifier); err != nil {
+		t.Fatal(err)
 	}
 }

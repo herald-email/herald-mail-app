@@ -11,6 +11,7 @@ import (
 )
 
 func TestSettingsPreservesPasswordCommandUntilReplaced(t *testing.T) {
+	t.Setenv("HERALD_TOKEN_STORE_KEY", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
 	for _, explicit := range []bool{false, true} {
 		for _, replacement := range []string{"", "new-literal"} {
 			t.Run(fmt.Sprintf("explicit=%v/replacement=%v", explicit, replacement != ""), func(t *testing.T) {
