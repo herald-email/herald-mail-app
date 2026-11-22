@@ -457,20 +457,23 @@ func TestSettingsPanelOpensTopLevelCategoryMenu(t *testing.T) {
 }
 
 func TestSettingsPanelMemoriesCategoryShowsMemoryFieldsOnly(t *testing.T) {
+	t.Chdir(t.TempDir())
 	cfg := &config.Config{}
 	cfg.Memories = memory.DefaultSettings()
-	cfg.Memories.Directory = memory.DefaultDirectory
+	cfg.Memories.Directory = "memories"
 	cfg.Memories.Obsidian.VaultPath = "~/Library/Mobile Documents/iCloud~md~obsidian/Documents/Life organizer"
 
 	s := NewSettings(SettingsModePanel, cfg)
 	s = openSettingsPanelCategoryForTest(t, s, "Memories")
+	if s.memoryDirectory != cfg.Memories.Directory {
+		t.Fatal("settings did not retain configured memory directory")
+	}
 
 	rendered := renderSettingsViewForTest(t, s, 120, 42)
 	normalized := strings.Join(strings.Fields(rendered), " ")
 	for _, want := range []string{
 		"Herald Memories",
 		"Memory directory",
-		memory.DefaultDirectory,
 		"Source folders",
 		"Obsidian-friendly output",
 		"Memory tasks",

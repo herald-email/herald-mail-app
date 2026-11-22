@@ -15,6 +15,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/herald-email/herald-mail-app/internal/cache"
@@ -70,6 +71,12 @@ func (GmailAPISourcePlugin) Open(ctx context.Context, source config.SourceConfig
 }
 
 type GmailAPIMailSource struct {
+	// Serialize cursor reads and commits across foreground sync and polling.
+	syncMu       sync.Mutex
+	pollBaseline map[string]map[string]bool // guarded by syncMu
+	authMu       sync.Mutex
+	labelsMu     sync.Mutex
+
 	id         models.SourceID
 	accountID  models.AccountID
 	google     config.GoogleConfig
@@ -102,10 +109,13 @@ func (s *GmailAPIMailSource) Connect(ctx context.Context) error {
 	if s == nil {
 		return fmt.Errorf("Gmail API source unavailable")
 	}
-	if _, err := oauth.RefreshGoogleConfigIfNeeded(ctx, &s.google); err != nil {
+	s.authMu.Lock()
+	_, err := oauth.RefreshGoogleConfigIfNeeded(ctx, &s.google)
+	s.authMu.Unlock()
+	if err != nil {
 		return err
 	}
-	_, err := s.loadLabels(ctx)
+	_, err = s.loadLabels(ctx)
 	return err
 }
 
@@ -159,6 +169,12 @@ func (s *GmailAPIMailSource) GetFolderStatus(ctx context.Context, folders []stri
 }
 
 func (s *GmailAPIMailSource) ProcessEmailsIncremental(ctx context.Context, folder string) error {
+	s.syncMu.Lock()
+	defer s.syncMu.Unlock()
+	return s.processEmailsIncremental(ctx, folder, true)
+}
+
+func (s *GmailAPIMailSource) processEmailsIncremental(ctx context.Context, folder string, progress bool) error {
 	cursor, hasCursor, err := s.cache.GetMetadata(s.historyCursorKey(folder))
 	if err != nil {
 		return err
@@ -166,7 +182,7 @@ func (s *GmailAPIMailSource) ProcessEmailsIncremental(ctx context.Context, folde
 	if hasCursor && strings.TrimSpace(cursor) != "" {
 		updated, err := s.applyHistoryDelta(ctx, folder, cursor)
 		if err == nil {
-			if s.progressCh != nil {
+			if progress && s.progressCh != nil {
 				s.progressCh <- models.ProgressInfo{SourceID: s.id, AccountID: s.accountID, Phase: models.SyncPhaseRowsCached, Current: updated, Total: updated, ProcessedEmails: updated, Message: fmt.Sprintf("Applied %d Gmail API history updates", updated)}
 			}
 			return nil
@@ -187,7 +203,7 @@ func (s *GmailAPIMailSource) ProcessEmailsIncremental(ctx context.Context, folde
 			return err
 		}
 	}
-	if s.progressCh != nil {
+	if progress && s.progressCh != nil {
 		s.progressCh <- models.ProgressInfo{SourceID: s.id, AccountID: s.accountID, Phase: models.SyncPhaseRowsCached, Current: len(emails), Total: len(emails), ProcessedEmails: len(emails), Message: fmt.Sprintf("Cached %d Gmail API messages", len(emails))}
 	}
 	return nil
@@ -225,7 +241,13 @@ func (s *GmailAPIMailSource) StartBackgroundReconcile(ctx context.Context, folde
 			valid[email.MessageID] = true
 		}
 	}
-	validIDsCh <- valid
+	if ctx.Err() != nil {
+		return
+	}
+	select {
+	case validIDsCh <- valid:
+	case <-ctx.Done():
+	}
 }
 
 func (s *GmailAPIMailSource) GetFolderMessageIDs(ctx context.Context, folders []string) (map[string]map[string]bool, error) {
@@ -398,18 +420,44 @@ func (s *GmailAPIMailSource) StartIDLE(context.Context, string, chan<- models.Ne
 
 func (s *GmailAPIMailSource) StopIDLE() {}
 
-func (s *GmailAPIMailSource) PollForNewEmails(ctx context.Context, folder string, sinceDate time.Time) ([]*models.EmailData, error) {
-	emails, err := s.fetchEmails(ctx, folder, "")
+func (s *GmailAPIMailSource) PollForNewEmails(ctx context.Context, folder string, _ time.Time) ([]*models.EmailData, error) {
+	s.syncMu.Lock()
+	defer s.syncMu.Unlock()
+	before, err := s.cache.GetEmailsSortedByDate(folder)
 	if err != nil {
 		return nil, err
 	}
-	var out []*models.EmailData
-	for _, email := range emails {
-		if email.Date.After(sinceDate) {
-			out = append(out, email)
+	if s.pollBaseline == nil {
+		s.pollBaseline = make(map[string]map[string]bool)
+	}
+	known := s.pollBaseline[folder]
+	if known == nil {
+		known = make(map[string]bool, len(before))
+		for _, email := range before {
+			known[email.LocalID] = true
+		}
+		// Retain the baseline on failure: a partial delta may already have cached
+		// an arrival, which must still be delivered after the retry succeeds.
+		s.pollBaseline[folder] = known
+	}
+	// History tracks arrival, including delayed delivery and messages moved into
+	// this folder, independently of the sender's Date header. Bootstrap/expired
+	// cursors use the same bounded recovery path as foreground sync.
+	if err := s.processEmailsIncremental(ctx, folder, false); err != nil {
+		return nil, err
+	}
+	after, err := s.cache.GetEmailsSortedByDate(folder)
+	if err != nil {
+		return nil, err
+	}
+	var arrivals []*models.EmailData
+	for _, email := range after {
+		if !known[email.LocalID] {
+			arrivals = append(arrivals, email)
 		}
 	}
-	return out, nil
+	delete(s.pollBaseline, folder)
+	return arrivals, nil
 }
 
 func (s *GmailAPIMailSource) AppendDraft(ctx context.Context, raw []byte) (uint32, string, error) {
@@ -911,6 +959,8 @@ func (s *GmailAPIMailSource) emailDataFromMessage(folder string, payload gmailAP
 }
 
 func (s *GmailAPIMailSource) loadLabels(ctx context.Context) (map[string]gmailAPILabel, error) {
+	s.labelsMu.Lock()
+	defer s.labelsMu.Unlock()
 	if s.labels != nil {
 		return s.labels, nil
 	}
@@ -1015,7 +1065,9 @@ func (s *GmailAPIMailSource) newRequest(ctx context.Context, method, u string, b
 	if err != nil {
 		return nil, err
 	}
+	s.authMu.Lock()
 	token, err := oauth.RefreshGoogleConfigIfNeeded(ctx, &s.google)
+	s.authMu.Unlock()
 	if err != nil {
 		return nil, err
 	}

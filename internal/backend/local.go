@@ -47,6 +47,10 @@ type LocalBackend struct {
 	foldersMu        sync.RWMutex
 	cachedFolders    []string
 
+	reconcileMu          sync.Mutex
+	reconcileCancel      context.CancelFunc
+	latestLoadGeneration int64
+
 	// Background polling
 	newEmailsCh chan models.NewEmailsNotification
 	pollStop    chan struct{}
@@ -110,7 +114,49 @@ func (b *LocalBackend) setValidIDsForFolder(folder string, ids map[string]bool) 
 	b.validIDsByFolder[folder] = cloneValidIDSet(ids)
 }
 
+// cachedMessageIDs captures the membership before provider work. Only arrivals
+// absent from this snapshot can extend a previous reconciliation result.
+func (b *LocalBackend) cachedMessageIDs(folder string) (map[string]bool, error) {
+	emails, err := b.cache.GetEmailsSortedByDate(folder)
+	if err != nil {
+		return nil, err
+	}
+	ids := make(map[string]bool, len(emails))
+	for _, email := range emails {
+		ids[email.MessageID] = true
+	}
+	return ids, nil
+}
+
+func (b *LocalBackend) acceptCachedArrivals(folder string, before map[string]bool) {
+	if before == nil {
+		return
+	}
+	after, err := b.cachedMessageIDs(folder)
+	if err != nil {
+		logger.Warn("Could not refresh live membership: %v", err)
+		return
+	}
+	b.validIDsMu.Lock()
+	defer b.validIDsMu.Unlock()
+	if valid, ok := b.validIDsByFolder[folder]; ok {
+		if valid == nil {
+			valid = make(map[string]bool)
+			b.validIDsByFolder[folder] = valid
+		}
+		for id := range after {
+			if !before[id] {
+				valid[id] = true
+			}
+		}
+	}
+}
+
 func (b *LocalBackend) prepareValidIDsChannelForFolder(folder string) chan map[string]bool {
+	var before map[string]bool
+	if b.cache != nil {
+		before, _ = b.cachedMessageIDs(folder)
+	}
 	internalCh := make(chan map[string]bool, 1)
 	publicCh := make(chan map[string]bool, 1)
 
@@ -123,6 +169,20 @@ func (b *LocalBackend) prepareValidIDsChannelForFolder(folder string) chan map[s
 		ids, ok := <-internalCh
 		if !ok {
 			return
+		}
+		ids = cloneValidIDSet(ids)
+		if ids == nil {
+			ids = make(map[string]bool)
+		}
+		// A provider snapshot cannot invalidate mail cached after it started.
+		if before != nil {
+			if after, err := b.cachedMessageIDs(folder); err == nil {
+				for id := range after {
+					if !before[id] {
+						ids[id] = true
+					}
+				}
+			}
 		}
 		b.setValidIDsForFolder(folder, ids)
 		cloned := cloneValidIDSet(ids)
@@ -289,7 +349,13 @@ func NewLocal(cfg *config.Config, configPath string, classifier ai.AIClient) (*L
 // sync_started event so the UI can invalidate older work before the worker
 // reaches the IMAP lane.
 func (b *LocalBackend) Load(folder string) {
+	b.reconcileMu.Lock()
 	req := b.loadCoordinator.Submit(folder)
+	b.latestLoadGeneration = req.Generation
+	if b.reconcileCancel != nil {
+		b.reconcileCancel()
+	}
+	b.reconcileMu.Unlock()
 	b.tracef("Load requested: folder=%s generation=%d", req.Folder, req.Generation)
 	b.emitSyncEvent(models.FolderSyncEvent{
 		Folder:     req.Folder,
@@ -462,7 +528,7 @@ func (b *LocalBackend) runLoad(req folderLoadRequest) {
 
 	b.sendProgress(models.ProgressInfo{
 		Phase:   "connecting",
-		Message: "Connecting to IMAP server...",
+		Message: "Connecting to mail server...",
 	})
 	time.Sleep(200 * time.Millisecond)
 
@@ -498,6 +564,10 @@ func (b *LocalBackend) runLoad(req folderLoadRequest) {
 		b.tracef("folder cache primed: folder=%s generation=%d count=%d", req.Folder, req.Generation, len(folders))
 	}
 
+	beforeSync, snapshotErr := b.cachedMessageIDs(req.Folder)
+	if snapshotErr != nil {
+		logger.Warn("Could not snapshot cache membership: %v", snapshotErr)
+	}
 	b.tracef("starting ProcessEmailsIncremental: folder=%s generation=%d", req.Folder, req.Generation)
 	if err := b.mailSource.ProcessEmailsIncremental(ctx, req.Folder); err != nil {
 		logger.Error("Failed to process emails: %v", err)
@@ -514,6 +584,7 @@ func (b *LocalBackend) runLoad(req folderLoadRequest) {
 		})
 		return
 	}
+	b.acceptCachedArrivals(req.Folder, beforeSync)
 	b.tracef("ProcessEmailsIncremental completed: folder=%s generation=%d elapsed=%s", req.Folder, req.Generation, time.Since(start).Round(10*time.Millisecond))
 	b.refreshSentThreadContextFolders(ctx, req)
 
@@ -571,7 +642,20 @@ func (b *LocalBackend) runLoad(req folderLoadRequest) {
 		Phase:      models.SyncPhaseReconcileStarted,
 		Message:    fmt.Sprintf("Reconciling live %s state...", req.Folder),
 	})
-	b.mailSource.StartBackgroundReconcile(ctx, req.Folder, validIDsCh)
+	b.reconcileMu.Lock()
+	if b.closed.Load() || b.latestLoadGeneration > req.Generation {
+		b.reconcileMu.Unlock()
+		close(validIDsCh)
+		return
+	}
+	reconcileCtx, cancel := context.WithCancel(ctx)
+	b.reconcileCancel = cancel
+	b.reconcileMu.Unlock()
+	b.mailSource.StartBackgroundReconcile(reconcileCtx, req.Folder, validIDsCh)
+	b.reconcileMu.Lock()
+	b.reconcileCancel = nil
+	cancel()
+	b.reconcileMu.Unlock()
 }
 
 func senderStatisticsFromGroups(grouped map[string][]*models.EmailData) map[string]*models.SenderStats {
@@ -1181,6 +1265,11 @@ func (b *LocalBackend) SetAIClient(classifier ai.AIClient) {
 // Close shuts down the IMAP connection and the cache database.
 func (b *LocalBackend) Close() error {
 	b.closed.Store(true)
+	b.reconcileMu.Lock()
+	if b.reconcileCancel != nil {
+		b.reconcileCancel()
+	}
+	b.reconcileMu.Unlock()
 	b.StopIDLE()
 	b.StopPolling()
 	if b.progressCh != nil {
@@ -1546,19 +1635,33 @@ func (b *LocalBackend) StartPolling(folder string, interval int) {
 			case <-stop:
 				return
 			case <-ticker.C:
+				tickStart := time.Now()
+				logger.Debug("Polling tick: folder=%s", folder)
 				emails, err := b.mailSource.PollForNewEmails(context.Background(), folder, lastDate)
 				if err != nil {
 					logger.Warn("Polling error: %v", err)
 					continue
 				}
+				logger.Debug("Polling complete: folder=%s arrivals=%d elapsed=%s", folder, len(emails), time.Since(tickStart))
 				if len(emails) > 0 {
-					lastDate = time.Now()
+					lastDate = tickStart
 					// Cache the new emails
 					for _, e := range emails {
 						if err := b.cache.CacheEmail(e); err != nil {
 							logger.Warn("Failed to cache polled email: %v", err)
 						}
 					}
+					b.validIDsMu.Lock()
+					if valid, ok := b.validIDsByFolder[folder]; ok {
+						if valid == nil {
+							valid = make(map[string]bool)
+							b.validIDsByFolder[folder] = valid
+						}
+						for _, email := range emails {
+							valid[email.MessageID] = true
+						}
+					}
+					b.validIDsMu.Unlock()
 					select {
 					case b.newEmailsCh <- withDefaultNewEmailsScope(models.NewEmailsNotification{Emails: emails, Folder: folder}):
 					default:
