@@ -16,7 +16,7 @@ require (
 	github.com/emersion/go-imap-idle v0.0.0-20210907174914-db2568431445
 	github.com/fugue-labs/gollem v0.5.1
 	github.com/mark3labs/mcp-go v0.45.0
-	github.com/mattn/go-sqlite3 v1.14.18
+	github.com/mattn/go-sqlite3 v1.14.44
 	github.com/yuin/goldmark v1.5.4
 	golang.org/x/crypto v0.50.0
 	golang.org/x/net v0.52.0
