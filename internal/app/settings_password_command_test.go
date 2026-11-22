@@ -74,3 +74,27 @@ func TestSettingsNewAccountDoesNotInheritPasswordCommand(t *testing.T) {
 		t.Fatal("new account inherited existing command")
 	}
 }
+
+func TestSettingsSavesNewPasswordCommandWithoutExecuting(t *testing.T) {
+	marker := filepath.Join(t.TempDir(), "executed")
+	s := NewSettings(SettingsModePanel, nil)
+	s.accountEditMode = settingsAccountEditAddMail
+	s.password = "old password"
+	s.passwordCommand = "touch " + marker
+	credentials := s.mailCredentialsConfig()
+	if credentials.Password != "" || credentials.PasswordCommand == nil || credentials.PasswordCommand.Shell != s.passwordCommand {
+		t.Fatal("command did not replace literal password")
+	}
+	if _, err := os.Stat(marker); !os.IsNotExist(err) {
+		t.Fatal("settings executed credential command")
+	}
+}
+
+func TestLoadingAccountDiscardsUnsavedPasswordCommand(t *testing.T) {
+	s := accountTitleSettingsForTest(t)
+	s.passwordCommand = "unsaved-helper"
+	s.loadSelectedAccountFields()
+	if s.passwordCommand != "" {
+		t.Fatal("unsaved command survived account reload")
+	}
+}

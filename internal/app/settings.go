@@ -201,13 +201,14 @@ type Settings struct {
 	lastAIProvider                string
 
 	// form field backing variables — account
-	provider string
-	email    string
-	password string
-	imapHost string
-	imapPort string
-	smtpHost string
-	smtpPort string
+	provider        string
+	email           string
+	password        string
+	passwordCommand string
+	imapHost        string
+	imapPort        string
+	smtpHost        string
+	smtpPort        string
 
 	editGmailAdvanced bool
 
@@ -1215,7 +1216,7 @@ func (s *Settings) mailCredentialsChanged() bool {
 	if strings.TrimSpace(s.email) != strings.TrimSpace(sourceAddressForSettings(source)) {
 		return true
 	}
-	if s.provider != "gmail-oauth" && !settingsMailSourceUsesGoogleOAuth(source) && s.password != source.Credentials.Password {
+	if s.provider != "gmail-oauth" && !settingsMailSourceUsesGoogleOAuth(source) && (s.password != source.Credentials.Password || strings.TrimSpace(s.passwordCommand) != "") {
 		return true
 	}
 	return false
@@ -1317,6 +1318,7 @@ func (s *Settings) buildForm() {
 		credentialsIntro,
 		huh.NewInput().Title("Email address").Inline(true).Value(&s.email).Validate(s.validateSetupEmail),
 		huh.NewInput().Title("Password").Inline(true).EchoMode(huh.EchoModePassword).Value(&s.password),
+		s.passwordCommandField(),
 		huh.NewInput().Title("IMAP Host").Inline(true).Value(&s.imapHost).
 			PlaceholderFunc(func() string { return providerPresetPlaceholder(s.provider, "imap-host") }, &s.provider),
 		huh.NewInput().Title("IMAP Port").Inline(true).Value(&s.imapPort).
@@ -1354,6 +1356,7 @@ func (s *Settings) buildForm() {
 			Description("Fallback Gmail setup. Use your Gmail address and a Google App Password when OAuth is unavailable for your account."),
 		huh.NewInput().Title("Gmail address").Inline(true).Value(&s.email).Validate(s.validateSetupEmail),
 		huh.NewInput().Title("App Password").Inline(true).EchoMode(huh.EchoModePassword).Value(&s.password),
+		s.passwordCommandField(),
 		huh.NewConfirm().
 			Title("Edit advanced Gmail server settings").
 			Value(&s.editGmailAdvanced),
@@ -1411,22 +1414,17 @@ func (s *Settings) buildForm() {
 			Value(&s.alsoAddCalendar),
 	).Title("Google account")
 
-	sharingGroup := huh.NewGroup(
+	sharingFields := []huh.Field{
 		huh.NewConfirm().Title("Allow AI data sharing?").DescriptionFunc(func() string {
-			return "Mail, contacts, calendar, attachments and prompts from all accounts and retained history may be sent to:\n" + s.sharingPreviewConfig().SharingRecipients() + "\nLocal hosts process locally; remote providers use their own policies. Save No to revoke future access; prior sharing cannot be recalled."
+			return "Allow enables AI using mail, contacts, calendar, attachments and prompts, including retained history from all accounts. Sent to:\n" + s.sharingPreviewConfig().SharingRecipients() + "\nLocal hosts process locally; remote providers apply their policies. No keeps AI off. Revoking stops future sharing, not prior use."
 		}, []any{&s.aiProvider, &s.ollamaHost, &s.openAIBaseURL, &s.embeddingProvider}).Affirmative("Allow").Negative("No").Value(&s.allowAISharing),
-	).Title("AI consent")
-
-	backgroundSharingGroup := huh.NewGroup(
-		huh.NewConfirm().Title("Allow background AI processing?").Description("Automatically send mail content and contact context to the AI/embedding destinations above for indexing, classification and enrichment, even when you are not using AI. Requires AI permission on the previous page.").Affirmative("Allow").Negative("No").Value(&s.allowBackgroundSharing),
-	).Title("Background consent")
-	mcpSharingFields := []huh.Field{
-		huh.NewConfirm().Title("Allow attached MCP clients access?").Description("Any MCP client you attach can read cached mail (including retained history), contacts, calendar and memories, and request supported mutations. Clients may forward results to their AI providers. Attach only clients you trust. Independent of Herald AI permission.").Affirmative("Allow").Negative("No").Value(&s.allowMCPSharing),
+		huh.NewConfirm().Title("Allow background AI processing?").Description("Optional: index, classify and enrich mail and contacts automatically, even while you are not using AI. Uses destinations above; requires AI permission.").Affirmative("Allow").Negative("No").Value(&s.allowBackgroundSharing),
+		huh.NewConfirm().Title("Allow attached MCP clients access?").Description("Separate permission: attached clients can read cached mail/history, contacts, calendar and memories, request changes, and forward results to their AI providers. Only allow clients you trust.").Affirmative("Allow").Negative("No").Value(&s.allowMCPSharing),
 	}
 	if s.mode == SettingsModePanel {
-		mcpSharingFields = append(mcpSharingFields, huh.NewConfirm().Title("Save changes").Affirmative("Save").Negative("Cancel").Value(&s.saveButton))
+		sharingFields = append(sharingFields, huh.NewConfirm().Title(s.sharingSaveTitle()).TitleFunc(s.sharingSaveTitle, []any{&s.allowAISharing, &s.allowBackgroundSharing, &s.allowMCPSharing, &s.aiProvider}).Affirmative("Save").Negative("Cancel").Value(&s.saveButton))
 	}
-	mcpSharingGroup := huh.NewGroup(mcpSharingFields...).Title("MCP consent")
+	sharingGroup := huh.NewGroup(sharingFields...).Title("AI stays off until you allow access")
 
 	s.refreshAISetupPresetFromRoles()
 
@@ -2155,6 +2153,7 @@ func (s *Settings) buildForm() {
 				Value(&s.password),
 			func() bool { return !s.accountDetailShowsMail() || s.provider == "gmail-oauth" },
 		),
+		hideSettingsFieldWhen(s.passwordCommandField(), func() bool { return !s.accountDetailShowsMail() || s.provider == "gmail-oauth" }),
 		hideSettingsFieldWhen(
 			huh.NewInput().
 				Title("Google Calendar identity").
@@ -2206,6 +2205,7 @@ func (s *Settings) buildForm() {
 		credentialsIntro,
 		huh.NewInput().Title("Email address").Inline(true).Value(&s.email).Validate(s.validateSetupEmail),
 		huh.NewInput().Title("Password").Inline(true).EchoMode(huh.EchoModePassword).Value(&s.password),
+		s.passwordCommandField(),
 		huh.NewInput().Title("IMAP Host").Inline(true).Value(&s.imapHost).
 			PlaceholderFunc(func() string { return providerPresetPlaceholder(s.provider, "imap-host") }, &s.provider),
 		huh.NewInput().Title("IMAP Port").Inline(true).Value(&s.imapPort).
@@ -2225,6 +2225,7 @@ func (s *Settings) buildForm() {
 			Description("Fallback Gmail setup. Use your Gmail address and a Google App Password when OAuth is unavailable for your account."),
 		huh.NewInput().Title("Gmail address").Inline(true).Value(&s.email).Validate(s.validateSetupEmail),
 		huh.NewInput().Title("App Password").Inline(true).EchoMode(huh.EchoModePassword).Value(&s.password),
+		s.passwordCommandField(),
 		huh.NewConfirm().
 			Title("Edit advanced Gmail server settings").
 			Value(&s.editGmailAdvanced),
@@ -2287,8 +2288,6 @@ func (s *Settings) buildForm() {
 		externalEmbeddingGroup,
 		disabledAIGroup,
 		sharingGroup,
-		backgroundSharingGroup,
-		mcpSharingGroup,
 		wizardCacheGroup,
 		keyboardGroup,
 		wizardThemeGroup,
@@ -2334,8 +2333,6 @@ func (s *Settings) buildForm() {
 				externalEmbeddingGroup,
 				disabledAIGroup,
 				sharingGroup,
-				backgroundSharingGroup,
-				mcpSharingGroup,
 			}
 			if s.hasAIModelWarning() {
 				groups = append([]*huh.Group{ollamaWarningGroup}, groups...)
@@ -2417,8 +2414,6 @@ func (s *Settings) buildForm() {
 				externalEmbeddingGroup,
 				disabledAIGroup,
 				sharingGroup,
-				backgroundSharingGroup,
-				mcpSharingGroup,
 				wizardCacheGroup,
 				keyboardGroup,
 				wizardThemeGroup,
@@ -3204,6 +3199,7 @@ func (s *Settings) resetAddAccountFields() {
 	s.provider = "gmail-oauth"
 	s.email = ""
 	s.password = ""
+	s.passwordCommand = ""
 	s.imapHost = ""
 	s.imapPort = ""
 	s.smtpHost = ""
@@ -3251,6 +3247,7 @@ func (s *Settings) syncCalendarPairingForProviderChange(oldProvider, newProvider
 }
 
 func (s *Settings) loadSelectedAccountFields() {
+	s.passwordCommand = ""
 	group, ok := s.selectedAccountGroup()
 	if !ok {
 		return
@@ -3929,7 +3926,7 @@ func (s *Settings) renderPanelWithFormView(currentFormView string) string {
 	formView := s.panelFormViewFrom(currentFormView)
 	layout := s.panelLayout()
 	box := lipgloss.NewStyle().
-		Width(layout.formWidth).
+		Width(layout.panelWidth).
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(defaultTheme.Setup.Border.ForegroundColor()).
 		Padding(1, 2)
@@ -4371,6 +4368,11 @@ func editableSourcesForSettings(cfg config.Config) []config.SourceConfig {
 // it. Entering a literal explicitly replaces the command; new accounts inherit none.
 func (s *Settings) mailCredentialsConfig() config.CredentialsConfig {
 	credentials := config.CredentialsConfig{Username: strings.TrimSpace(s.email), Password: s.password}
+	if command := strings.TrimSpace(s.passwordCommand); command != "" {
+		credentials.Password = ""
+		credentials.PasswordCommand = &config.PasswordCommand{Shell: command}
+		return credentials
+	}
 	if s.password != "" {
 		return credentials
 	}
@@ -5427,4 +5429,27 @@ func parsePort(s string) int {
 func (s *Settings) sharingPreviewConfig() *config.Config {
 	preview := *s
 	return preview.buildConfig()
+}
+
+// Commands are masked because arguments can contain secrets. A blank field
+// preserves an existing command; entering a password replaces it.
+func (s *Settings) passwordCommandField() huh.Field {
+	return huh.NewInput().Title("Password command").Inline(true).Placeholder("Optional; stdout replaces password").EchoMode(huh.EchoModePassword).Value(&s.passwordCommand).Validate(func(v string) error {
+		if strings.TrimSpace(v) == "" {
+			return nil
+		}
+		c := config.CredentialsConfig{PasswordCommand: &config.PasswordCommand{Shell: strings.TrimSpace(v)}}
+		return c.ValidatePassword()
+	})
+}
+
+func (s *Settings) sharingSaveTitle() string {
+	state := func(enabled bool) string {
+		if enabled {
+			return "on"
+		}
+		return "off"
+	}
+	enabled := s.allowAISharing && configAIProvider(s.aiProvider) != "disabled"
+	return "Save changes: AI " + state(enabled) + " / Background " + state(enabled && s.allowBackgroundSharing) + " / MCP " + state(s.allowMCPSharing)
 }

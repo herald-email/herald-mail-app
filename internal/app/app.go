@@ -1322,7 +1322,9 @@ func aiRuntimeConfigChanged(previous, next *config.Config) bool {
 	if previous == nil || next == nil {
 		return previous != next
 	}
-	return previous.AI.Provider != next.AI.Provider ||
+	return previous.Sharing != next.Sharing ||
+		previous.SharingFingerprint("ai") != next.SharingFingerprint("ai") ||
+		previous.AI.Provider != next.AI.Provider ||
 		previous.AI.LocalMaxConcurrency != next.AI.LocalMaxConcurrency ||
 		previous.AI.ExternalMaxConcurrency != next.AI.ExternalMaxConcurrency ||
 		previous.AI.BackgroundQueueLimit != next.AI.BackgroundQueueLimit ||
@@ -1917,7 +1919,7 @@ func (m *Model) applySettingsSaved(msg SettingsSavedMsg) tea.Cmd {
 	if err := m.refreshAIClientForConfig(previousCfg, m.cfg); err != nil {
 		m.statusMessage = fmt.Sprintf("Settings saved, but AI reload failed: %v", err)
 	}
-	if previousEmbeddingIdentity != "" && previousEmbeddingIdentity != m.cfg.EffectiveEmbeddingIdentity() {
+	if !m.demoMode && previousEmbeddingIdentity != "" && previousEmbeddingIdentity != m.cfg.EffectiveEmbeddingIdentity() {
 		type embeddingModelEnsurer interface {
 			EnsureEmbeddingModel(string) (bool, error)
 		}
@@ -1929,7 +1931,7 @@ func (m *Model) applySettingsSaved(msg SettingsSavedMsg) tea.Cmd {
 				m.statusMessage = "Settings saved. Embeddings reset for the new model."
 			}
 		} else {
-			m.statusMessage = "Settings saved. Restart Herald to rebuild embeddings for the new model."
+			m.statusMessage = "AI settings applied. This backend does not support resetting cached embeddings."
 		}
 	}
 	if m.configPath != "" {
@@ -1937,6 +1939,11 @@ func (m *Model) applySettingsSaved(msg SettingsSavedMsg) tea.Cmd {
 			m.statusMessage = fmt.Sprintf("Settings saved (config write failed: %v)", err)
 		}
 	}
+	// Consent checks also read the saved file; install the agent after persisting grants.
+	// Keep the save/cache result visible when AI is intentionally left off.
+	savedStatus := m.statusMessage
+	m.applyChatAgentConfig(m.cfg)
+	m.statusMessage = savedStatus
 	if msg.RemovedAccountID != "" {
 		if err := purgeAccountCacheFromBackend(m.backend, msg.RemovedAccountID, msg.RemovedSourceIDs); err != nil {
 			m.statusMessage = fmt.Sprintf("Settings saved, but local account cache purge failed: %v", err)

@@ -2890,3 +2890,7 @@ These controls protect Google account credentials and make private-data sharing 
 - [x] AI sharing and background processing require separate affirmative consent; changing destinations or accounts invalidates consent.
 - [x] MCP refuses access without explicit consent; demo remains available.
 - [x] Consent controls render at 220×50, 80×24 and recover from 50×15.
+
+- [x] Settings > AI presents independent AI, background and MCP choices on one scrollable permission page, with no stray wrapped words at 80×24.
+- [x] Saving newly granted AI permission activates chat and classification immediately; revoking it blocks subsequent requests without restarting.
+- [x] Mail setup and account editing expose a masked Password command; saving preserves existing argv commands and never executes them.
