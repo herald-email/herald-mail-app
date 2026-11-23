@@ -2894,3 +2894,14 @@ These controls protect Google account credentials and make private-data sharing 
 - [x] Settings > AI presents independent AI, background and MCP choices on one scrollable permission page, with no stray wrapped words at 80×24.
 - [x] Saving newly granted AI permission activates chat and classification immediately; revoking it blocks subsequent requests without restarting.
 - [x] Mail setup and account editing expose a masked Password command; saving preserves existing argv commands and never executes them.
+
+### Issue #83 — Gmail arrivals and reconciliation
+
+Verify that Gmail history polling delivers new mail promptly and that reconciliation cannot hide a fresh arrival or hold up a user-requested load. Use deterministic provider fixtures for cursor and cancellation checks; demo captures only verify the surrounding TUI.
+
+- [ ] With Gmail polling active, complete another sync of the same folder before the interval elapses; the existing polling timer and listener continue without resetting.
+- [ ] Deliver mail with an older Date header; the next history poll adds it to Timeline, without listing/fetching the entire folder.
+- [ ] Expire the history cursor; polling recovers through a bounded fetch and delivers new arrivals once.
+- [ ] Cache new mail during sync or reconciliation; it remains visible immediately while previously identified stale rows stay hidden.
+- [ ] Request another folder load while Gmail reconciliation is pending; cancellation releases the load worker promptly.
+- [ ] Switch folders/accounts; polling follows the active folder/source.

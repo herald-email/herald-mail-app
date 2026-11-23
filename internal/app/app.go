@@ -892,6 +892,8 @@ type Model struct {
 	pendingUnsubscribeAction func() tea.Cmd
 
 	// IMAP IDLE / background sync
+	syncFolder     string
+	syncSourceID   models.SourceID
 	syncStatusMode string // "idle", "polling", "off"
 	syncCountdown  int    // seconds until next poll
 
@@ -1734,6 +1736,8 @@ func (m *Model) resetMailboxStateForFolder(folder string) {
 	if folder == "" {
 		folder = "INBOX"
 	}
+	m.syncStatusMode = ""
+	m.syncFolder = ""
 	m.syncGeneration = 0
 	m.syncSourceGenerations = make(map[models.SourceID]int64)
 	m.syncAccumulator.reset("", 0)
@@ -3222,8 +3226,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			cmds = append(cmds, m.loadFolderStatusCmd([]string{event.Folder}, 0))
 			if !isVirtualAllMailOnlyFolder(m.currentFolder) {
-				m.syncStatusMode = ""
-				cmds = append(cmds, m.loadFoldersCmd(0))
+				cmds = append(cmds, m.startSync(m.currentFolder), m.loadFoldersCmd(0))
 			}
 		}
 		if event.Phase == models.SyncPhaseError {

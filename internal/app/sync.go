@@ -57,6 +57,12 @@ func (m *Model) startPolling(interval int) tea.Cmd {
 
 // startSync tries IDLE first (if enabled in config), falling back to polling.
 func (m *Model) startSync(folder string) tea.Cmd {
+	// Keep the timer and listeners alive when only the folder snapshot changed.
+	if m.syncFolder == folder && m.syncSourceID == m.activeSourceID && m.syncStatusMode == "polling" {
+		return nil
+	}
+	m.syncFolder = folder
+	m.syncSourceID = m.activeSourceID
 	// Stop any running sync before starting a new one.
 	m.backend.StopIDLE()
 	m.backend.StopPolling()

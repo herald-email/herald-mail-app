@@ -1081,3 +1081,83 @@ func messageIDSet(emails []*models.EmailData) map[string]bool {
 	}
 	return out
 }
+
+func TestGmailPollingUsesHistoryAndFindsOlderDatedArrival(t *testing.T) {
+	fake := newFakeGmailAPIServer(t)
+	defer fake.Close()
+	c := newMemoryCache(t)
+	source := newTestGmailAPIMailSource(t, fake.URL(), c)
+	if err := source.ProcessEmailsIncremental(context.Background(), "INBOX"); err != nil {
+		t.Fatal(err)
+	}
+	fake.resetCalls()
+	fake.messagePayloads["msg-2"] = gmailMessagePayloadFor("msg-2", "<arrival@example.com>", []string{"INBOX"}, "102")
+	fake.historyResponse = map[string]any{"historyId": "102", "history": []map[string]any{{"messagesAdded": []map[string]any{{"message": map[string]string{"id": "msg-2"}}}}}}
+	emails, err := source.PollForNewEmails(context.Background(), "INBOX", time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(emails) != 1 || emails[0].MessageID != "<arrival@example.com>" {
+		t.Fatalf("new arrivals = %#v", emails)
+	}
+	if fake.sawPath("/gmail/v1/users/me/messages") || !fake.sawPath("/gmail/v1/users/me/history") {
+		t.Fatalf("poll should use history, calls=%#v", fake.calls)
+	}
+	fake.historyResponse = map[string]any{"historyId": "102"}
+	emails, err = source.PollForNewEmails(context.Background(), "INBOX", time.Now())
+	if err != nil || len(emails) != 0 {
+		t.Fatalf("idle poll = %v, %v", emails, err)
+	}
+}
+
+func TestGmailPollingExpiredCursorUsesBoundedRecovery(t *testing.T) {
+	fake := newFakeGmailAPIServer(t)
+	defer fake.Close()
+	c := newMemoryCache(t)
+	source := newTestGmailAPIMailSource(t, fake.URL(), c)
+	if err := source.ProcessEmailsIncremental(context.Background(), "INBOX"); err != nil {
+		t.Fatal(err)
+	}
+	fake.historyStatus = http.StatusNotFound
+	fake.listIDs = []string{"msg-2", "msg-1"}
+	fake.messagePayloads["msg-2"] = gmailMessagePayloadFor("msg-2", "<recovered@example.com>", []string{"INBOX"}, "102")
+	fake.resetCalls()
+	emails, err := source.PollForNewEmails(context.Background(), "INBOX", time.Now())
+	if err != nil || len(emails) != 1 || emails[0].MessageID != "<recovered@example.com>" {
+		t.Fatalf("recovered arrivals = %v, %v", emails, err)
+	}
+	for _, call := range fake.calls {
+		if call.Path == "/gmail/v1/users/me/messages" && call.Query.Get("maxResults") != "100" {
+			t.Fatalf("unbounded recovery request: %v", call.Query)
+		}
+	}
+}
+
+func TestGmailPollingRetainsArrivalAcrossFailedDelta(t *testing.T) {
+	fake := newFakeGmailAPIServer(t)
+	defer fake.Close()
+	c := newMemoryCache(t)
+	source := newTestGmailAPIMailSource(t, fake.URL(), c)
+	if err := source.ProcessEmailsIncremental(context.Background(), "INBOX"); err != nil {
+		t.Fatal(err)
+	}
+	fake.historyStatus = http.StatusUnauthorized
+	if _, err := source.PollForNewEmails(context.Background(), "INBOX", time.Now()); err == nil {
+		t.Fatal("expected failed history request")
+	}
+	// A failed multi-message delta may have cached some rows before its error.
+	payload := gmailAPIMessage{ID: "msg-2", HistoryID: "102", LabelIDs: []string{"INBOX"}}
+	email, err := source.emailDataFromMessage("INBOX", payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = c.CacheEmail(email); err != nil {
+		t.Fatal(err)
+	}
+	fake.historyStatus = 0
+	fake.historyResponse = map[string]any{"historyId": "102"}
+	emails, err := source.PollForNewEmails(context.Background(), "INBOX", time.Now())
+	if err != nil || len(emails) != 1 || emails[0].LocalID != email.LocalID {
+		t.Fatalf("arrival lost after retry: %v, %v", emails, err)
+	}
+}
