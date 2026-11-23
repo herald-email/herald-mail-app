@@ -5,6 +5,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/herald-email/herald-mail-app/internal/backend"
 	imapClient "github.com/herald-email/herald-mail-app/internal/imap"
 	"github.com/herald-email/herald-mail-app/internal/logger"
 	"github.com/herald-email/herald-mail-app/internal/models"
@@ -16,12 +17,16 @@ import (
 func (m *Model) listenForNewEmails() tea.Cmd {
 	ch := m.backend.NewEmailsCh()
 	return func() tea.Msg {
-		notif := <-ch
+		notif, ok := <-ch
+		if !ok {
+			return nil
+		}
 		return NewEmailsMsg{
-			SourceID:  models.NormalizeSourceID(notif.SourceID, models.DefaultMailSourceID),
-			AccountID: models.NormalizeAccountID(notif.AccountID),
-			Emails:    notif.Emails,
-			Folder:    notif.Folder,
+			subscription: ch,
+			SourceID:     models.NormalizeSourceID(notif.SourceID, models.DefaultMailSourceID),
+			AccountID:    models.NormalizeAccountID(notif.AccountID),
+			Emails:       notif.Emails,
+			Folder:       notif.Folder,
 		}
 	}
 }
@@ -55,8 +60,37 @@ func (m *Model) startPolling(interval int) tea.Cmd {
 	return tea.Batch(m.listenForNewEmails(), m.tickSyncCountdown())
 }
 
+// startMultiAccountPolling follows the visible folder without restarting the Inbox workers.
+func (m *Model) startMultiAccountPolling(folder string) tea.Cmd {
+	if !m.usesMultiAccountPolling() {
+		return nil
+	}
+	if isVirtualAllMailOnlyFolder(folder) {
+		folder = ""
+	}
+	interval := 60
+	if m.cfg != nil && m.cfg.Sync.Interval > 0 {
+		interval = m.cfg.Sync.Interval
+	}
+	m.backend.StartPolling(folder, interval)
+	m.syncStatusMode = "polling-accounts"
+	if m.multiPollingListening {
+		return nil
+	}
+	m.multiPollingListening = true
+	return m.listenForNewEmails()
+}
+
+func (m *Model) usesMultiAccountPolling() bool {
+	multi, ok := m.backend.(*backend.MultiBackend)
+	return ok && multi.HasMultipleAccounts() && !m.demoMode
+}
+
 // startSync tries IDLE first (if enabled in config), falling back to polling.
 func (m *Model) startSync(folder string) tea.Cmd {
+	if m.usesMultiAccountPolling() {
+		return m.startMultiAccountPolling(folder)
+	}
 	// Keep the timer and listeners alive when only the folder snapshot changed.
 	if m.syncFolder == folder && m.syncSourceID == m.activeSourceID && m.syncStatusMode == "polling" {
 		return nil

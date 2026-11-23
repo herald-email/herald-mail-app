@@ -167,6 +167,7 @@ func (m *Model) startLoading() tea.Cmd {
 		return loadCmd
 	}
 	return tea.Batch(
+		m.startMultiAccountPolling(folder),
 		loadCmd,
 		m.loadCachedStartupCmd(),
 		m.loadFolderStatusCmd([]string{folder}, 0),

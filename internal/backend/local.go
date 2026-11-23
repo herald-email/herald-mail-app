@@ -53,7 +53,7 @@ type LocalBackend struct {
 
 	// Background polling
 	newEmailsCh chan models.NewEmailsNotification
-	pollStop    chan struct{}
+	pollWorkers map[string]context.CancelFunc
 	pollMu      sync.Mutex
 
 	// validIDsByFolder is the live ground-truth set of message IDs known to exist
@@ -1619,31 +1619,58 @@ func (b *LocalBackend) StopIDLE() {
 }
 
 func (b *LocalBackend) StartPolling(folder string, interval int) {
+	b.startPollingFolder(folder, interval, 0)
+}
+
+func (b *LocalBackend) startPollingFolder(folder string, interval int, offset time.Duration) {
+	if interval <= 0 {
+		interval = 60
+	}
 	b.pollMu.Lock()
 	defer b.pollMu.Unlock()
-	if b.pollStop != nil {
+	if b.closed.Load() || b.pollWorkers[folder] != nil {
 		return // already running
 	}
-	b.pollStop = make(chan struct{})
-	stop := b.pollStop
+	if b.pollWorkers == nil {
+		b.pollWorkers = make(map[string]context.CancelFunc)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	b.pollWorkers[folder] = cancel
 	go func() {
+		lastDate := time.Now()
+		if offset > 0 {
+			delay := time.NewTimer(offset)
+			defer delay.Stop()
+			select {
+			case <-ctx.Done():
+				return
+			case <-delay.C:
+			}
+		}
 		ticker := time.NewTicker(time.Duration(interval) * time.Second)
 		defer ticker.Stop()
-		lastDate := time.Now()
 		for {
 			select {
-			case <-stop:
+			case <-ctx.Done():
 				return
 			case <-ticker.C:
+				if ctx.Err() != nil {
+					return
+				}
 				tickStart := time.Now()
 				logger.Debug("Polling tick: folder=%s", folder)
-				emails, err := b.mailSource.PollForNewEmails(context.Background(), folder, lastDate)
+				emails, err := b.mailSource.PollForNewEmails(ctx, folder, lastDate)
 				if err != nil {
 					logger.Warn("Polling error: %v", err)
 					continue
 				}
 				logger.Debug("Polling complete: folder=%s arrivals=%d elapsed=%s", folder, len(emails), time.Since(tickStart))
 				if len(emails) > 0 {
+					b.pollMu.Lock()
+					if ctx.Err() != nil || b.closed.Load() {
+						b.pollMu.Unlock()
+						return
+					}
 					lastDate = tickStart
 					// Cache the new emails
 					for _, e := range emails {
@@ -1666,18 +1693,28 @@ func (b *LocalBackend) StartPolling(folder string, interval int) {
 					case b.newEmailsCh <- withDefaultNewEmailsScope(models.NewEmailsNotification{Emails: emails, Folder: folder}):
 					default:
 					}
+					b.pollMu.Unlock()
 				}
 			}
 		}
 	}()
 }
 
+func (b *LocalBackend) stopPollingFolder(folder string) {
+	b.pollMu.Lock()
+	defer b.pollMu.Unlock()
+	if cancel := b.pollWorkers[folder]; cancel != nil {
+		cancel()
+		delete(b.pollWorkers, folder)
+	}
+}
+
 func (b *LocalBackend) StopPolling() {
 	b.pollMu.Lock()
 	defer b.pollMu.Unlock()
-	if b.pollStop != nil {
-		close(b.pollStop)
-		b.pollStop = nil
+	for folder, cancel := range b.pollWorkers {
+		cancel()
+		delete(b.pollWorkers, folder)
 	}
 }
 

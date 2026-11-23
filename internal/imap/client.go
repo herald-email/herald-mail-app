@@ -1417,21 +1417,47 @@ func (c *Client) PollForNewEmails(folder string, sinceDate time.Time) ([]*models
 	}
 
 	criteria := imap.NewSearchCriteria()
-	criteria.Since = sinceDate
-	seqNums, err := c.client.Search(criteria)
+	// IMAP SINCE compares dates without a time or zone. Overlap the prior
+	// calendar day and use cached UIDs to avoid announcing the overlap again.
+	if !sinceDate.IsZero() {
+		criteria.Since = sinceDate.AddDate(0, 0, -1)
+	}
+	uids, err := c.client.UidSearch(criteria)
 	if err != nil {
 		return nil, err
 	}
-	if len(seqNums) == 0 {
+	if len(uids) == 0 {
 		return nil, nil
 	}
 
+	if c.cache != nil {
+		validity, _, err := c.cache.GetFolderSyncState(folder)
+		if err != nil {
+			return nil, err
+		}
+		if validity == 0 || validity == mbox.UidValidity {
+			cached, err := c.cache.GetCachedUIDs(folder)
+			if err != nil {
+				return nil, err
+			}
+			pending := uids[:0]
+			for _, uid := range uids {
+				if !cached[uid] {
+					pending = append(pending, uid)
+				}
+			}
+			uids = pending
+		}
+	}
+	if len(uids) == 0 {
+		return nil, nil
+	}
 	seqset := new(imap.SeqSet)
-	seqset.AddNum(seqNums...)
+	seqset.AddNum(uids...)
 	messages := make(chan *imap.Message, 20)
 	done := make(chan error, 1)
 	go func() {
-		done <- c.client.Fetch(seqset, []imap.FetchItem{imap.FetchEnvelope, imap.FetchRFC822Size, imap.FetchUid}, messages)
+		done <- c.client.UidFetch(seqset, []imap.FetchItem{imap.FetchEnvelope, imap.FetchRFC822Size, imap.FetchUid, imap.FetchFlags, imap.FetchBodyStructure}, messages)
 	}()
 
 	var emails []*models.EmailData

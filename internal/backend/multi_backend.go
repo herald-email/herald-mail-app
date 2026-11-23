@@ -110,6 +110,11 @@ type MultiBackend struct {
 	closed    bool
 	groupBy   bool
 
+	pollingMu      sync.Mutex
+	pollingInboxes bool
+	pollingView    *LocalBackend
+	pollingFolder  string
+
 	memorySettings memory.Settings
 }
 
@@ -380,6 +385,59 @@ func (m *MultiBackend) ListAccountFolderSnapshots() ([]AccountFolderSnapshot, er
 func (m *MultiBackend) Progress() <-chan models.ProgressInfo { return m.progress }
 
 func (m *MultiBackend) SyncEvents() <-chan models.FolderSyncEvent { return m.syncs }
+
+// StartPolling keeps every real account's Inbox current regardless of the active view.
+func (m *MultiBackend) StartPolling(folder string, interval int) {
+	m.pollingMu.Lock()
+	defer m.pollingMu.Unlock()
+
+	m.mu.RLock()
+	if m.closed {
+		m.mu.RUnlock()
+		return
+	}
+	active, _ := m.Backend.(*LocalBackend)
+	m.mu.RUnlock()
+
+	slots := m.snapshotSlots()
+	if len(slots) == 1 {
+		slots[0].backend.StartPolling(folder, interval)
+		return
+	}
+	if !m.pollingInboxes {
+		for i, slot := range slots {
+			if local, ok := slot.backend.(*LocalBackend); ok {
+				offset := time.Duration(interval) * time.Second * time.Duration(i) / time.Duration(len(slots))
+				local.startPollingFolder("INBOX", interval, offset)
+			} else {
+				slot.backend.StartPolling("INBOX", interval)
+			}
+		}
+		m.pollingInboxes = true
+	}
+
+	// Keep the existing selected-folder poll in addition to the Inbox workers.
+	if strings.TrimSpace(folder) == "" || strings.EqualFold(folder, "INBOX") {
+		active = nil
+	}
+	if m.pollingView != nil && (m.pollingView != active || m.pollingFolder != folder) {
+		m.pollingView.stopPollingFolder(m.pollingFolder)
+	}
+	m.pollingView, m.pollingFolder = active, folder
+	if active != nil {
+		active.startPollingFolder(folder, interval, 0)
+	}
+}
+
+func (m *MultiBackend) StopPolling() {
+	m.pollingMu.Lock()
+	defer m.pollingMu.Unlock()
+	for _, slot := range m.snapshotSlots() {
+		slot.backend.StopPolling()
+	}
+	m.pollingInboxes = false
+	m.pollingView, m.pollingFolder = nil, ""
+}
 
 func (m *MultiBackend) NewEmailsCh() <-chan models.NewEmailsNotification { return m.newEmails }
 
@@ -1520,6 +1578,8 @@ func (m *MultiBackend) Close() error {
 		slots = append(slots, m.slots[id])
 	}
 	m.mu.Unlock()
+
+	m.StopPolling()
 
 	var firstErr error
 	for _, slot := range slots {

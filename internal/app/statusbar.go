@@ -339,6 +339,8 @@ func (m *Model) renderStatusBar() string {
 	switch m.syncStatusMode {
 	case "idle":
 		parts = append(parts, "↻ live")
+	case "polling-accounts":
+		parts = append(parts, "↻ inboxes")
 	case "polling":
 		if m.syncCountdown > 0 {
 			parts = append(parts, fmt.Sprintf("↻ %ds", m.syncCountdown))

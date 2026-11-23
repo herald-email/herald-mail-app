@@ -113,6 +113,8 @@ The current recovery target narrows that streaming model into two timing classes
 
 The folder-sync stream remains generation-tagged and latest-wins, but its role is intentionally narrow: it reports progress and triggers row hydration refreshes. `FolderSyncEvent` values such as `sync_started`, `snapshot_ready`, `rows_cached`, `counts_updated`, `reconcile_started`, `sync_complete`, and `sync_error` should never synthesize authoritative folder totals from the visible row slice. Live IMAP folder status is the only source of truth for sidebar, status-bar, and Timeline counts. Visible snapshot refreshes remain microbatched at `100` changes or `500ms` so the UI moves forward smoothly without repaint churn.
 
+Multi-account sessions keep a polling worker for each configured mailbox Inbox. Workers start at staggered times and run independently of the visible account. The visible real folder can have an additional worker, and account-scoped notifications flow into All Inboxes through the multi-account backend.
+
 The app therefore tracks the active folder explicitly as four pieces of state: current folder rows, current folder live counts, current folder sync phase, and whether the current folder bundle is settled. Cached rows can be shown early, but they are provisional until the live counts settle. Background reconcile, sender-stat refreshes, retries, or cache-hydration updates must not repaint the current folder with contradictory counts or a premature `synced` state.
 
 **Valid-ID ground truth**

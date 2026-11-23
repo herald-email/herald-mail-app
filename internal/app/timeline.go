@@ -3403,14 +3403,22 @@ func (m *Model) handleTimelineMsg(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		return m, m.performSearchWithToken(msg.Query, msg.Token), true
 
 	case NewEmailsMsg:
+		if msg.subscription != nil && msg.subscription != m.backend.NewEmailsCh() {
+			return m, nil, true
+		}
+		if !m.syncEventMatchesActive(msg.SourceID) {
+			return m, m.listenForNewEmails(), true
+		}
 		if msg.Folder == m.currentFolder {
 			existing := make(map[string]struct{}, len(m.timeline.emails))
 			for _, e := range m.timeline.emails {
-				existing[e.MessageID] = struct{}{}
+				existing[timelineSelectionKey(e)] = struct{}{}
 			}
 			var fresh []*models.EmailData
 			for _, e := range msg.Emails {
-				if _, dup := existing[e.MessageID]; !dup {
+				key := timelineSelectionKey(e)
+				if _, dup := existing[key]; !dup {
+					existing[key] = struct{}{}
 					fresh = append(fresh, e)
 				}
 			}

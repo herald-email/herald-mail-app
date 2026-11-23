@@ -386,10 +386,11 @@ type TimelineSearchDebounceMsg struct {
 
 // NewEmailsMsg signals new emails arrived via IDLE/polling
 type NewEmailsMsg struct {
-	SourceID  models.SourceID
-	AccountID models.AccountID
-	Emails    []*models.EmailData
-	Folder    string
+	subscription <-chan models.NewEmailsNotification
+	SourceID     models.SourceID
+	AccountID    models.AccountID
+	Emails       []*models.EmailData
+	Folder       string
 }
 
 // EmailExpungedMsg signals an email was deleted on the server
@@ -894,10 +895,11 @@ type Model struct {
 	pendingUnsubscribeAction func() tea.Cmd
 
 	// IMAP IDLE / background sync
-	syncFolder     string
-	syncSourceID   models.SourceID
-	syncStatusMode string // "idle", "polling", "off"
-	syncCountdown  int    // seconds until next poll
+	syncFolder            string
+	syncSourceID          models.SourceID
+	syncStatusMode        string // "idle", "polling", "off"
+	syncCountdown         int    // seconds until next poll
+	multiPollingListening bool
 
 	// Background embedding
 	embeddingDone            int
@@ -1647,6 +1649,7 @@ func (m *Model) applyValidatedAccountConfig(msg SettingsSavedMsg) tea.Cmd {
 		}
 	}
 	m.backend = nextBackend
+	m.multiPollingListening = false
 	m.accountStatusGenerations = nil
 	m.progressCh = nextBackend.Progress()
 	m.syncEventsCh = nextBackend.SyncEvents()
@@ -1902,6 +1905,7 @@ func (m *Model) Init() tea.Cmd {
 	notificationResponses := m.listenForNotificationResponses()
 	if !m.loading {
 		return tea.Batch(
+			m.startMultiAccountPolling(m.currentFolder),
 			initialDeepLink,
 			notificationResponses,
 			m.listenForRuleResult(),

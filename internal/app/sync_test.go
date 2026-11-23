@@ -3,6 +3,8 @@ package app
 import (
 	"testing"
 
+	"github.com/herald-email/herald-mail-app/internal/backend"
+
 	"github.com/herald-email/herald-mail-app/internal/config"
 	"github.com/herald-email/herald-mail-app/internal/models"
 )
@@ -98,5 +100,69 @@ func TestStartSyncRestartsIDLEAfterForegroundSync(t *testing.T) {
 	m.startSync("INBOX")
 	if b.startIDLECalls != 2 {
 		t.Fatal("foreground sync must retain IDLE recovery behavior")
+	}
+}
+
+func TestMultiAccountPollingStaysActiveWhenBrowsing(t *testing.T) {
+	first, second := &stubBackend{}, &stubBackend{}
+	multi, err := backend.NewMultiBackend([]backend.AccountBackend{
+		{Info: backend.AccountInfo{SourceID: "gmail"}, Backend: first},
+		{Info: backend.AccountInfo{SourceID: "imap"}, Backend: second},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = multi.Close() })
+	m := New(multi, nil, "", nil, false)
+	m.cfg = &config.Config{}
+	m.cfg.Sync.Idle = true
+	m.Init()
+	if m.syncStatusMode != "polling-accounts" || first.startPollingCalls == 0 || second.startPollingCalls == 0 {
+		t.Fatal("startup did not poll both accounts")
+	}
+	m.currentFolder = virtualFolderAllMailOnly
+	m.activateCurrentFolder()
+	if m.syncStatusMode != "polling-accounts" || first.stopPollingCalls != 0 || second.stopPollingCalls != 0 {
+		t.Fatal("diagnostic folder stopped account-wide polling")
+	}
+	if m.startSync("INBOX") != nil {
+		t.Fatal("view change installed a second mail listener")
+	}
+	if first.startPollingCalls != 1 || second.startPollingCalls != 1 {
+		t.Fatal("view changes restarted an Inbox worker")
+	}
+	if first.startIDLECalls != 0 || second.startIDLECalls != 0 {
+		t.Fatal("multi-account polling opened an IMAP IDLE session")
+	}
+}
+
+func TestAllInboxesKeepsSameMessageIDFromBothAccounts(t *testing.T) {
+	m := New(&stubBackend{}, nil, "", nil, false)
+	m.activeSourceID = backend.AllAccountsSourceID
+	m.currentFolder = "INBOX"
+	for _, source := range []models.SourceID{"first", "second"} {
+		m.Update(NewEmailsMsg{
+			SourceID: source,
+			Folder:   "INBOX",
+			Emails:   []*models.EmailData{{SourceID: source, Folder: "INBOX", MessageID: "<shared@example.test>"}},
+		})
+	}
+	if len(m.timeline.emails) != 2 {
+		t.Fatalf("All Inboxes has %d account copies, want 2", len(m.timeline.emails))
+	}
+}
+
+func TestOldPollingListenerDoesNotRearmAfterBackendReplacement(t *testing.T) {
+	old := &stubBackend{newEmailsCh: make(chan models.NewEmailsNotification, 1)}
+	previous := &Model{backend: old}
+	listen := previous.listenForNewEmails()
+	old.newEmailsCh <- models.NewEmailsNotification{
+		Folder: "INBOX",
+		Emails: []*models.EmailData{{MessageID: "old-backend", Folder: "INBOX"}},
+	}
+	m := New(&stubBackend{newEmailsCh: make(chan models.NewEmailsNotification, 1)}, nil, "", nil, false)
+	m.currentFolder = "INBOX"
+	if _, cmd := m.Update(listen()); cmd != nil || len(m.timeline.emails) != 0 {
+		t.Fatal("retired subscription updated the Timeline or started another listener")
 	}
 }

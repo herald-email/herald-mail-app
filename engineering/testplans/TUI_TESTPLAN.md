@@ -2928,3 +2928,10 @@ A Google token reference must never change another account's authentication meth
 
 - [x] With Gmail OAuth first and ProtonMail Bridge second, ProtonMail uses its Bridge credentials and does not report a missing Google refresh token.
 - [x] A second Google account retains its own token reference; account validation and settings/OAuth projection do not inherit the first account's reference.
+
+### Multi-account Inbox polling
+
+- [ ] Open a profile with Gmail and IMAP accounts. Deliver one message to each Inbox after startup and verify both appear in All Inboxes without a refresh.
+- [ ] Browse one account or the All Mail only diagnostic while mail arrives for another account. Return to All Inboxes and verify its new mail has already been cached.
+- [ ] Switch accounts and folders repeatedly. Confirm Inbox polling continues on its original schedule, with no duplicate workers or arrivals.
+- [ ] Simulate an error on one account and confirm the other account can still receive mail.

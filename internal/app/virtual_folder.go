@@ -54,6 +54,9 @@ func (m *Model) activateCurrentFolder() tea.Cmd {
 		m.cancelBackgroundWork()
 		m.loading = true
 		m.startTime = time.Now()
+		if m.usesMultiAccountPolling() {
+			return tea.Batch(m.startMultiAccountPolling(m.currentFolder), m.loadTimelineEmails())
+		}
 		m.backend.StopIDLE()
 		m.backend.StopPolling()
 		m.syncStatusMode = ""
