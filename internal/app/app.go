@@ -1006,6 +1006,7 @@ type Model struct {
 
 	// General status message (shown briefly after actions like settings save)
 	statusMessage string
+	quitDeadline  time.Time
 
 	pendingPreviewCacheReclaim  bool
 	previewCacheReclaimPolicy   string
@@ -2021,6 +2022,19 @@ func purgeAccountCacheFromBackend(b backend.Backend, accountID models.AccountID,
 
 // update handles app events; Update also schedules background image styling.
 func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if expired, ok := msg.(quitConfirmationExpiredMsg); ok {
+		if m.quitDeadline.Equal(expired.deadline) {
+			m.quitDeadline = time.Time{}
+		}
+		return m, nil
+	}
+	if key, ok := msg.(tea.KeyPressMsg); ok {
+		if shortcutKey(key) == "ctrl+c" {
+			return m, m.requestQuit(true)
+		}
+		m.quitDeadline = time.Time{}
+	}
+
 	var cmds []tea.Cmd
 
 	// Handle rule editor messages before forwarding, so we can close it cleanly.
@@ -3665,6 +3679,13 @@ func (m *Model) View() tea.View {
 }
 
 func (m *Model) buildView(content string) tea.View {
+	if m.quitConfirmationActive() && !strings.Contains(content, quitConfirmationText) {
+		lines := strings.Split(content, "\n")
+		if len(lines) > 0 {
+			lines[len(lines)-1] = m.renderQuitWarning()
+		}
+		content = strings.Join(lines, "\n")
+	}
 	content = m.renderDemoKeyOverlay(content)
 	content = m.renderTerminalLinkHover(content)
 	if m.theme.Text.Primary.Background != nil {
@@ -3683,6 +3704,11 @@ func (m *Model) shouldReleaseMouseForTerminalLinks(content string) bool {
 
 // handleKeyMsg handles keyboard input
 func (m *Model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	if shortcutKey(msg) == "ctrl+c" {
+		return m, m.requestQuit(true)
+	}
+	m.quitDeadline = time.Time{}
+
 	if m.mailMove != nil && msg.String() != "ctrl+c" {
 		return m.handleMailMoveKey(msg)
 	}
@@ -3849,8 +3875,7 @@ func (m *Model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, m.toggleChat()
 
 	case "q":
-		m.cleanup()
-		return m, tea.Quit
+		return m, m.requestQuit(false)
 
 	case "t":
 		if cmd := m.startClassificationIfNeeded(); cmd != nil {

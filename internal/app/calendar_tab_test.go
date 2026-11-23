@@ -4259,7 +4259,8 @@ func TestCalendarPlainQQuitsWithoutStealingComposeText(t *testing.T) {
 	m.activeTab = tabCalendar
 	m.calendarEvents = b.events
 
-	_, cmd := m.handleKeyMsg(keyRunes("q"))
+	_, _ = m.handleKeyMsg(keyRunes("q"))
+	_, cmd := m.handleKeyMsg(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
 	if !commandIsQuit(cmd) {
 		t.Fatal("expected q to quit from calendar")
 	}

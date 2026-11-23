@@ -39,8 +39,7 @@ func (m *Model) handleShortcutHelpKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, 
 		if m.helpSearchActive {
 			switch key {
 			case "ctrl+c":
-				m.cleanup()
-				return m, tea.Quit, true
+				return m, m.requestQuit(true), true
 			case "esc":
 				m.helpSearchActive = false
 				m.helpSearch = ""
@@ -65,8 +64,7 @@ func (m *Model) handleShortcutHelpKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, 
 		}
 		switch key {
 		case "ctrl+c":
-			m.cleanup()
-			return m, tea.Quit, true
+			return m, m.requestQuit(true), true
 		case "?", "esc", "q":
 			m.showHelp = false
 			m.helpScrollOffset = 0
@@ -623,7 +621,7 @@ func (m *Model) shortcutHelpSections() []shortcutHelpSection {
 		m.commandHelpEntry(keyboardScopeGlobal, CommandChatToggle, "toggle the AI chat panel"),
 		m.commandHelpEntry(keyboardScopeGlobal, CommandAppSettings, "open settings"),
 		m.commandHelpEntry(keyboardScopeGlobal, CommandAppRefresh, "refresh the current folder outside text-entry fields"),
-		m.commandHelpEntry(keyboardScopeGlobal, CommandAppQuit, "quit Herald"),
+		m.commandHelpEntry(keyboardScopeGlobal, CommandAppQuit, "request exit; Ctrl+C confirms"),
 	)
 	sections := []shortcutHelpSection{{
 		Title:   "Global",
@@ -645,7 +643,7 @@ func (m *Model) shortcutHelpSections() []shortcutHelpSection {
 		sections = append(sections, shortcutHelpSection{"Logs", []shortcutHelpEntry{
 			{"j/k or arrows", "scroll log output"},
 			{"L / Esc", "close logs"},
-			{"q", "quit when help is closed"},
+			{"q", "request exit when help is closed"},
 		}})
 	case m.focusedPanel == panelChat && m.showChat:
 		sections = append(sections, shortcutHelpSection{"Chat", []shortcutHelpEntry{

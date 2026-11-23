@@ -273,6 +273,10 @@ Check these states during every applicable lane:
 - The top sync strip uses stream language (`opening`, `syncing`, `reconciled`) rather than vague spinner-only wording.
 - The sidebar folder tree is present as soon as the server folder list is available; it must not remain stuck on only `INBOX` and diagnostic entries while the active folder sync continues.
 
+### TC-01a — Accidental exit protection
+
+Press Ctrl+C once in Timeline, Compose, Calendar, and an overlay; Herald stays open and shows a caution-colored status message asking for Ctrl+C again within 3 seconds. Press Ctrl+C again within that window to exit. Wait longer than 3 seconds or press another key to cancel confirmation; a later Ctrl+C must start a new window. Browse quit shortcuts (including q) request confirmation, while q in text fields remains text. Check 220×50, 80×24, and the 50×15 minimum-size screen.
+
 ### TC-02 — Tab switching and hint updates
 
 **Lane:** A, B

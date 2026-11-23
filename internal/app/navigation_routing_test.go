@@ -233,7 +233,8 @@ func TestBrowsePlainQStillQuits(t *testing.T) {
 	m := makeSizedModel(t, 120, 40)
 	m.activeTab = tabTimeline
 
-	_, cmd := m.handleKeyMsg(keyRunes("q"))
+	_, _ = m.handleKeyMsg(keyRunes("q"))
+	_, cmd := m.handleKeyMsg(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
 	if !commandIsQuit(cmd) {
 		t.Fatal("expected plain q to quit from browse context")
 	}
@@ -736,6 +737,7 @@ func TestTimelineSearchPlainQIsTextAndCtrlCQuits(t *testing.T) {
 		t.Fatalf("timeline search value=%q, want q", got)
 	}
 
+	_, _ = m.handleKeyMsg(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
 	_, cmd = m.handleKeyMsg(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
 	if !commandIsQuit(cmd) {
 		t.Fatal("expected ctrl+c to quit from timeline search")

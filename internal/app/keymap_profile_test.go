@@ -986,3 +986,22 @@ func TestComposeAltGlobalCommandsStayTextSafe(t *testing.T) {
 		t.Fatalf("compose body changed unexpectedly: %q", got)
 	}
 }
+
+func TestProfileQuitCommandRequiresCtrlCConfirmation(t *testing.T) {
+	m := makeSizedModel(t, 80, 24)
+	if command, ok := m.scopedCommand(keyboardScopeGlobal, "q"); !ok || command != CommandAppQuit {
+		t.Fatal("q must retain the stable app.quit command")
+	}
+	_, _, handled := m.handleBrowseGlobalProfileCommand(keyRunes("q"))
+	if !handled || !m.quitConfirmationActive() {
+		t.Fatal("profile quit must request confirmation")
+	}
+	_, _, _ = m.handleBrowseGlobalProfileCommand(keyRunes("q"))
+	if !m.quitConfirmationActive() {
+		t.Fatal("another q must not confirm exit")
+	}
+	_, cmd := m.handleKeyMsg(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
+	if !commandIsQuit(cmd) {
+		t.Fatal("Ctrl+C must confirm profile quit")
+	}
+}

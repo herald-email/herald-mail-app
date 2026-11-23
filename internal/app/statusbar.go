@@ -221,6 +221,9 @@ func (m *Model) renderTopSyncStrip() string {
 
 // renderStatusBar renders the persistent bottom status bar
 func (m *Model) renderStatusBar() string {
+	if m.quitConfirmationActive() {
+		return m.renderQuitWarning()
+	}
 	// Reply/forward Compose exit confirmation asks before creating or removing drafts.
 	if m.pendingComposeExitPrompt {
 		w := m.windowWidth

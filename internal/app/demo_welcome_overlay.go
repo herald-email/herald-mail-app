@@ -30,11 +30,9 @@ func (m *Model) handleDemoWelcomeKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, b
 
 	switch shortcutKey(msg) {
 	case "ctrl+c":
-		m.cleanup()
-		return m, tea.Quit, true
+		return m, m.requestQuit(shortcutKey(msg) == "ctrl+c"), true
 	case "q":
-		m.cleanup()
-		return m, tea.Quit, true
+		return m, m.requestQuit(shortcutKey(msg) == "ctrl+c"), true
 	case "esc", "enter", " ", "space":
 		m.showDemoWelcome = false
 		return m, nil, true

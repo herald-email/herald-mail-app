@@ -232,8 +232,7 @@ func (m *Model) handleLogsOverlayKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, b
 		m.showLogs = false
 		return m, nil, true
 	case key == "q":
-		m.cleanup()
-		return m, tea.Quit, true
+		return m, m.requestQuit(shortcutKey(msg) == "ctrl+c"), true
 	}
 	var cmd tea.Cmd
 	_, cmd = m.logViewer.Update(msg)
@@ -253,8 +252,7 @@ func (m *Model) handleGlobalCommandKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd,
 	}
 	switch shortcutKey(msg) {
 	case "ctrl+c":
-		m.cleanup()
-		return m, tea.Quit, true
+		return m, m.requestQuit(shortcutKey(msg) == "ctrl+c"), true
 	case "f1":
 		if m.canInteractWithVisibleData() && m.activeTab != tabTimeline {
 			return m, m.switchToTimeline(), true
@@ -310,8 +308,7 @@ func (m *Model) handleBrowseGlobalProfileCommand(msg tea.KeyPressMsg) (tea.Model
 	}
 	switch command {
 	case CommandAppQuit:
-		m.cleanup()
-		return m, tea.Quit, true
+		return m, m.requestQuit(shortcutKey(msg) == "ctrl+c"), true
 	case CommandAppRefresh:
 		return m, m.refreshCurrentFolder(), true
 	case CommandAppSettings:
