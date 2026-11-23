@@ -41,9 +41,24 @@ func (m *Model) syncAccountsFromBackendWithStatus(refreshStatuses bool) {
 	aware, ok := m.backend.(backend.AccountAwareBackend)
 	if !ok {
 		m.accounts = nil
-		m.accountStatuses = nil
+		if m.accountStatuses == nil {
+			m.accountStatuses = make(map[models.SourceID]backend.AccountStatus)
+		}
 		m.activeSourceID = ""
 		m.activeAccountID = ""
+		if m.cfg != nil {
+			for _, source := range m.cfg.NormalizedSources() {
+				if source.Kind != string(models.SourceKindMail) {
+					continue
+				}
+				address := source.Google.Email
+				if address == "" {
+					address = source.Credentials.Username
+				}
+				m.accounts = []backend.AccountInfo{{SourceID: settingsSourceIDForSource(source), AccountID: models.AccountID(source.AccountID), DisplayName: source.DisplayName, Provider: source.Provider, Address: address}}
+				break
+			}
+		}
 		return
 	}
 	m.accounts = aware.Accounts()
@@ -61,7 +76,17 @@ func (m *Model) syncAccountsFromBackendWithStatus(refreshStatuses bool) {
 		}
 	}
 	if refreshStatuses {
-		m.accountStatuses = aware.AccountStatuses()
+		statuses := aware.AccountStatuses()
+		if statuses == nil {
+			statuses = make(map[models.SourceID]backend.AccountStatus)
+		}
+		for id, previous := range m.accountStatuses {
+			if current := statuses[id]; previous.Error != "" && (current.Error == "" || (accountNeedsSignIn(previous) && !accountNeedsSignIn(current))) {
+				current.Error, current.State = previous.Error, previous.State
+				statuses[id] = current
+			}
+		}
+		m.accountStatuses = statuses
 	} else if m.accountStatuses == nil {
 		m.accountStatuses = make(map[models.SourceID]backend.AccountStatus)
 	}
@@ -196,7 +221,7 @@ func (m *Model) activeAccountLabel() string {
 }
 
 func (m *Model) accountSwitcherShortcutAvailable() bool {
-	if !m.hasMultipleAccounts() || m.showSettings || m.showRuleEditor || m.showPromptEditor || m.showCleanupMgr || m.showHelp {
+	if len(m.accounts) == 0 || m.showSettings || m.showRuleEditor || m.showPromptEditor || m.showCleanupMgr || m.showHelp {
 		return false
 	}
 	if m.activeTab == tabCompose {
@@ -214,6 +239,12 @@ func (m *Model) accountSwitcherShortcutAvailable() bool {
 func (m *Model) handleAccountSwitcherKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool) {
 	key := shortcutKey(msg)
 	if m.showAccountSwitcher {
+		if command, ok := m.keyboard.Resolve("accounts", keyboardModeNormal, key); ok && command == CommandAccountSignIn {
+			accounts := m.accountSwitcherAccounts()
+			if m.accountSwitcherCursor >= 0 && m.accountSwitcherCursor < len(accounts) {
+				return m, m.recoverAccount(accounts[m.accountSwitcherCursor]), true
+			}
+		}
 		switch key {
 		case "esc", "q":
 			m.showAccountSwitcher = false
@@ -315,7 +346,7 @@ func (m *Model) renderAccountSwitcherPanel() string {
 	contentW := width - 4
 	var lines []string
 	lines = append(lines, m.theme.Text.Primary.Style().Bold(true).Render("Accounts"))
-	lines = append(lines, m.theme.Text.Dim.Style().Render("Switch the visible mail source. Reads can span accounts; writes stay scoped to selected messages."))
+	lines = append(lines, m.theme.Text.Dim.Style().Render("Select an account to switch mail or sign in again."))
 	lines = append(lines, "")
 	accounts := m.accountSwitcherAccounts()
 	for i, account := range accounts {
@@ -328,7 +359,10 @@ func (m *Model) renderAccountSwitcherPanel() string {
 			state = "browse"
 		}
 		if status.Error != "" {
-			state = "auth"
+			state = "! error"
+			if accountNeedsSignIn(status) {
+				state = "🚨 sign in"
+			}
 		}
 		cursor := "  "
 		if i == m.accountSwitcherCursor {
@@ -344,7 +378,9 @@ func (m *Model) renderAccountSwitcherPanel() string {
 		}
 		line := fmt.Sprintf("%s%s %-18s %-8s%s", cursor, active, truncateSidebarLabel(formatAccountLabel(account), 18), state, counts)
 		line = safeChromeLine(line, contentW)
-		if i == m.accountSwitcherCursor {
+		if accountNeedsSignIn(status) {
+			line = m.theme.Severity.Destructive.Style().Bold(true).Underline(i == m.accountSwitcherCursor).Render(line)
+		} else if i == m.accountSwitcherCursor {
 			line = m.theme.Focus.SelectionActive.Style().Render(line)
 		}
 		lines = append(lines, line)
@@ -375,7 +411,11 @@ func (m *Model) renderAccountSwitcherPanel() string {
 		lines = append(lines, details...)
 	}
 	lines = append(lines, "")
-	lines = append(lines, m.theme.Text.Dim.Style().Render("up/down move  enter switch  esc close"))
+	hint := "up/down move  enter switch  esc close"
+	if selected.SourceID != "" && selected.SourceID != backend.AllAccountsSourceID {
+		hint += "  " + m.commandHelpKey("accounts", CommandAccountSignIn) + " sign in / credentials"
+	}
+	lines = append(lines, wrapLines(hint, contentW)...)
 	body := strings.Join(lines, "\n")
 	return m.baseStyle.
 		Width(width).

@@ -1318,3 +1318,62 @@ func memoryIDs(memories []memory.Memory) []string {
 	}
 	return ids
 }
+
+// Terminal sync results must reach account health chrome even off-screen.
+type accountHealthEventBackend struct {
+	*DemoBackend
+	events chan models.FolderSyncEvent
+}
+
+func (b *accountHealthEventBackend) SyncEvents() <-chan models.FolderSyncEvent { return b.events }
+func TestMultiBackendForwardsInactiveAccountHealth(t *testing.T) {
+	work := &accountHealthEventBackend{NewDemoBackend(), make(chan models.FolderSyncEvent, 2)}
+	home := NewDemoBackend()
+	mb, err := NewMultiBackend([]AccountBackend{
+		{Info: AccountInfo{SourceID: "home"}, Backend: home},
+		{Info: AccountInfo{SourceID: "work"}, Backend: work},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer mb.Close()
+	defer close(work.events)
+	for _, phase := range []string{models.SyncPhaseError, models.SyncPhaseComplete} {
+		work.events <- models.FolderSyncEvent{Phase: phase, Error: "invalid_grant"}
+		select {
+		case event := <-mb.SyncEvents():
+			if event.SourceID != "work" || event.Phase != phase {
+				t.Fatalf("wrong event: %+v", event)
+			}
+		case <-time.After(time.Second):
+			t.Fatal("inactive account health event dropped")
+		}
+	}
+}
+
+func TestConfigForMailSourceDoesNotInheritAnotherAccountsTokenReference(t *testing.T) {
+	profile := &config.Config{}
+	profile.Gmail.TokenRef = "primary-google-token"
+	profile.Gmail.RefreshToken = "primary-refresh"
+	for _, source := range []config.SourceConfig{
+		{ID: "proton", Kind: "mail", Provider: "protonmail", Credentials: config.CredentialsConfig{Username: "proton@example.test", Password: "bridge-password"}},
+		{ID: "imap", Kind: "mail", Provider: "imap"},
+		{ID: "google", Kind: "mail", Provider: "gmail", Google: config.GoogleConfig{TokenRef: "other-google-token", Email: "google@example.test"}},
+	} {
+		t.Run(source.ID, func(t *testing.T) {
+			child := configForMailSource(profile, "test.yaml", source)
+			if child.Gmail.TokenRef != source.Google.TokenRef {
+				t.Fatalf("inherited token reference %q, want %q", child.Gmail.TokenRef, source.Google.TokenRef)
+			}
+			if child.IsGmailOAuth() != (source.Google.TokenRef != "") {
+				t.Fatal("wrong authentication mechanism")
+			}
+			if child.Credentials != source.Credentials {
+				t.Fatal("password credentials changed")
+			}
+			if profile.Gmail.TokenRef != "primary-google-token" {
+				t.Fatal("parent configuration mutated")
+			}
+		})
+	}
+}

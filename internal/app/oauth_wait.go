@@ -37,6 +37,7 @@ type OAuthWaitModel struct {
 	returnToMenu               bool
 	reclaimOfflineCacheStorage bool
 	validateAccount            bool
+	validationSourceID         models.SourceID
 	validateCalendar           bool
 	calendarSourceIDs          []models.SourceID
 	sourceIDs                  []models.SourceID
@@ -48,6 +49,7 @@ type OAuthDoneMsg struct {
 	ReturnToMenu               bool
 	ReclaimOfflineCacheStorage bool
 	ValidateAccount            bool
+	ValidationSourceID         models.SourceID
 	ValidateCalendar           bool
 	CalendarSourceIDs          []models.SourceID
 }
@@ -67,6 +69,7 @@ type OAuthWaitOptions struct {
 	ReturnToMenu               bool
 	ReclaimOfflineCacheStorage bool
 	ValidateAccount            bool
+	ValidationSourceID         models.SourceID
 	ValidateCalendar           bool
 	CalendarSourceIDs          []models.SourceID
 	SourceIDs                  []models.SourceID
@@ -123,6 +126,7 @@ func NewOAuthWaitModelWithOptions(email string, cfg *config.Config, configPath s
 		returnToMenu:               opts.ReturnToMenu,
 		reclaimOfflineCacheStorage: opts.ReclaimOfflineCacheStorage,
 		validateAccount:            opts.ValidateAccount,
+		validationSourceID:         opts.ValidationSourceID,
 		validateCalendar:           opts.ValidateCalendar,
 		calendarSourceIDs:          append([]models.SourceID(nil), opts.CalendarSourceIDs...),
 		sourceIDs:                  append([]models.SourceID(nil), opts.SourceIDs...),
@@ -236,6 +240,7 @@ func (m *OAuthWaitModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				ReturnToMenu:               m.returnToMenu,
 				ReclaimOfflineCacheStorage: m.reclaimOfflineCacheStorage,
 				ValidateAccount:            m.validateAccount,
+				ValidationSourceID:         m.validationSourceID,
 				ValidateCalendar:           m.validateCalendar,
 				CalendarSourceIDs:          append([]models.SourceID(nil), m.calendarSourceIDs...),
 			}
@@ -407,6 +412,7 @@ func syncLegacyGmailFromFirstMailSource(cfg *config.Config) {
 		if strings.TrimSpace(source.Kind) != "" && strings.TrimSpace(source.Kind) != string(models.SourceKindMail) {
 			continue
 		}
+		cfg.Gmail.TokenRef = source.Google.TokenRef
 		cfg.Gmail.Email = source.Google.Email
 		cfg.Gmail.AccessToken = source.Google.AccessToken
 		cfg.Gmail.RefreshToken = source.Google.RefreshToken

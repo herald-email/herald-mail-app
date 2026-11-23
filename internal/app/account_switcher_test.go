@@ -723,3 +723,39 @@ func TestAccountSwitcherShortcutDoesNotStealEditorOverlays(t *testing.T) {
 		t.Fatal("rule editor should remain active after typing A")
 	}
 }
+
+func TestAccountAuthenticationFailureVisibleUntilSuccessfulSync(t *testing.T) {
+	b := newAccountAwareStubBackend([]backend.AccountInfo{{SourceID: "work", DisplayName: "Work"}, {SourceID: "home", DisplayName: "Home"}})
+	m := accountSwitcherTestModel(b)
+	m.activeSourceID = "home"
+	m.Update(SyncEventMsg{Event: models.FolderSyncEvent{SourceID: "work", Folder: "INBOX", Generation: 1, Phase: models.SyncPhaseError, Error: "oauth2: invalid_grant: Token has been expired or revoked"}})
+	if !strings.Contains(m.renderAccountSwitcherPanel(), "🚨 sign in") {
+		t.Fatal("missing sign-in marker")
+	}
+	if !strings.Contains(m.statusMessageForActiveTab(), "sign in") {
+		t.Fatal("missing persistent status warning")
+	}
+	m.syncAccountsFromBackend()
+	if !strings.Contains(m.renderAccountSwitcherPanel(), "🚨 sign in") {
+		t.Fatal("cached folder success cleared authentication failure")
+	}
+	m.Update(SyncEventMsg{Event: models.FolderSyncEvent{SourceID: "work", Folder: "INBOX", Generation: 2, Phase: models.SyncPhaseComplete}})
+	if strings.Contains(m.renderAccountSwitcherPanel(), "🚨 sign in") {
+		t.Fatal("successful sync did not clear warning")
+	}
+}
+
+func TestAccountNetworkFailureIsNotAuthenticationFailure(t *testing.T) {
+	b := newAccountAwareStubBackend([]backend.AccountInfo{{SourceID: "work", DisplayName: "Work"}})
+	b.statuses["work"] = backend.AccountStatus{Error: "dial tcp: connection refused", State: "error"}
+	m := accountSwitcherTestModel(b)
+	if strings.Contains(m.renderAccountSwitcherPanel(), " auth") {
+		t.Fatal("network error labeled auth")
+	}
+	if !strings.Contains(m.renderAccountSwitcherPanel(), "! error") {
+		t.Fatal("missing generic error marker")
+	}
+	if !m.accountSwitcherShortcutAvailable() {
+		t.Fatal("single account cannot open recovery")
+	}
+}

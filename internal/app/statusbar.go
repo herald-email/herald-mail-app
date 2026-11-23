@@ -283,6 +283,9 @@ func (m *Model) renderStatusBar() string {
 	folderParts := strings.Split(displayFolderName(m.currentFolder), "/")
 	breadcrumb := strings.Join(folderParts, " › ")
 	statusRole := m.theme.Chrome.StatusBar
+	if m.accountSignInWarning() != "" {
+		statusRole = m.theme.Severity.Destructive
+	}
 
 	var parts []string
 	if hover := m.terminalLinkHoverStatus(); hover != "" {
@@ -376,7 +379,7 @@ func (m *Model) renderStatusBar() string {
 	}
 
 	line := filterPrefix + strings.Join(parts, "  │  ")
-	return m.theme.Chrome.StatusBar.Style().
+	return statusRole.Style().
 		Width(w).
 		Padding(0, 1).
 		Render(truncateVisual(line, w-2))
@@ -473,6 +476,9 @@ func renderChromeLines(lines []string, width int, role ThemeStyle) string {
 }
 
 func (m *Model) statusMessageForActiveTab() string {
+	if warning := m.accountSignInWarning(); warning != "" {
+		return warning
+	}
 	if m.activeTab == tabContacts && strings.TrimSpace(m.contactStatusMessage) != "" {
 		return m.contactStatusMessage
 	}
@@ -515,7 +521,7 @@ func (m *Model) keyHintRows(width int, chrome ChromeState) []string {
 		return wrapChromeSegments(m.shortcutHelpHintBarText(), width-2, 2)
 	}
 	if m.showAccountSwitcher {
-		return wrapChromeSegments("up/down: move  │  enter: switch account  │  esc: close", width-2, 2)
+		return wrapChromeSegments("up/down: move  │  enter: switch account  │  "+m.commandHelpKey("accounts", CommandAccountSignIn)+": sign in / credentials  │  esc: close", width-2, 2)
 	}
 	hints := m.rawKeyHintsForWidth(width, chrome)
 	if m.shouldAdvertiseShortcutHelp() {

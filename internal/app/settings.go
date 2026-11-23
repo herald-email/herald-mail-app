@@ -127,6 +127,7 @@ type SettingsSavedMsg struct {
 	ReturnToMenu               bool
 	ReclaimOfflineCacheStorage bool
 	ValidateAccount            bool
+	ValidationSourceID         models.SourceID
 	ValidateCalendar           bool
 	CalendarSourceIDs          []models.SourceID
 	ValidateOllamaModels       bool
@@ -151,6 +152,7 @@ type OAuthRequiredMsg struct {
 	ReturnToMenu               bool
 	ReclaimOfflineCacheStorage bool
 	ValidateAccount            bool
+	ValidationSourceID         models.SourceID
 	ValidateCalendar           bool
 	CalendarSourceIDs          []models.SourceID
 	SourceIDs                  []models.SourceID
@@ -4564,6 +4566,7 @@ func syncLegacyMailFieldsForSettings(cfg *config.Config) {
 		cfg.Credentials = source.Credentials
 		cfg.Server = source.IMAP
 		cfg.SMTP = source.SMTP
+		cfg.Gmail.TokenRef = source.Google.TokenRef
 		cfg.Gmail.AccessToken = source.Google.AccessToken
 		cfg.Gmail.RefreshToken = source.Google.RefreshToken
 		cfg.Gmail.TokenExpiry = source.Google.TokenExpiry

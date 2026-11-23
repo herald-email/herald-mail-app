@@ -613,8 +613,8 @@ func (m *Model) shortcutHelpSections() []shortcutHelpSection {
 		m.commandHelpEntry(keyboardScopeGlobal, CommandHelpSearch, "search this help overlay while it is open"),
 		{m.primaryTabHelpKey(), m.primaryTabHelpDescription()},
 	}
-	if m.hasMultipleAccounts() {
-		globalEntries = append(globalEntries, m.commandHelpEntry(keyboardScopeGlobal, CommandAccountSwitcher, "open account switcher"))
+	if len(m.accounts) > 0 {
+		globalEntries = append(globalEntries, m.commandHelpEntry(keyboardScopeGlobal, CommandAccountSwitcher, "open accounts ("+m.commandHelpKey("accounts", CommandAccountSignIn)+": sign in / credentials)"))
 	}
 	globalEntries = append(globalEntries,
 		shortcutHelpEntry{m.commandHelpKey(keyboardScopeGlobal, CommandSidebarToggle) + " / " + m.commandHelpKey(keyboardScopeGlobal, CommandLogsToggle), "toggle sidebar or logs"},

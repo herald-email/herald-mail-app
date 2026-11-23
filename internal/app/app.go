@@ -543,6 +543,7 @@ type AISubjectMsg struct {
 
 // AccountValidationMsg carries setup/account-settings connection validation.
 type AccountValidationMsg struct {
+	ValidationSourceID         models.SourceID
 	Config                     *config.Config
 	ReturnToMenu               bool
 	ReclaimOfflineCacheStorage bool
@@ -869,13 +870,14 @@ type Model struct {
 
 	// Multi-account chrome. These fields are populated only when the backend
 	// implements backend.AccountAwareBackend; single-account sessions hide them.
-	accounts               []backend.AccountInfo
-	accountStatuses        map[models.SourceID]backend.AccountStatus
-	activeSourceID         models.SourceID
-	activeAccountID        models.AccountID
-	accountSelectedFolders map[models.SourceID]string
-	showAccountSwitcher    bool
-	accountSwitcherCursor  int
+	accounts                 []backend.AccountInfo
+	accountStatuses          map[models.SourceID]backend.AccountStatus
+	accountStatusGenerations map[models.SourceID]int64
+	activeSourceID           models.SourceID
+	activeAccountID          models.AccountID
+	accountSelectedFolders   map[models.SourceID]string
+	showAccountSwitcher      bool
+	accountSwitcherCursor    int
 
 	// Folder move picker
 	mailMove *mailMovePicker
@@ -1268,12 +1270,29 @@ func (m *Model) SetConfig(cfg *config.Config) {
 	m.applyThemeConfig(cfg)
 	m.applyCalendarConfig(cfg)
 	m.applyChatAgentConfig(cfg)
+	m.syncAccountIdentityFromBackend()
 }
 
 func validateAccountSettingsCmd(msg SettingsSavedMsg, configPath string) tea.Cmd {
 	return func() tea.Msg {
-		result := validateAccountConfig(context.Background(), msg.Config, configPath)
+		validationConfig := msg.Config
+		if msg.ValidationSourceID != "" && msg.Config != nil {
+			scoped := *msg.Config
+			for _, source := range msg.Config.NormalizedSources() {
+				if settingsSourceIDForSource(source) == msg.ValidationSourceID {
+					scoped.Sources = []config.SourceConfig{source}
+					scoped.Credentials, scoped.Server, scoped.SMTP = source.Credentials, source.IMAP, source.SMTP
+					scoped.Vendor = source.Provider
+					scoped.Gmail.TokenRef = source.Google.TokenRef
+					scoped.Gmail.Email, scoped.Gmail.AccessToken, scoped.Gmail.RefreshToken, scoped.Gmail.TokenExpiry = source.Google.Email, source.Google.AccessToken, source.Google.RefreshToken, source.Google.TokenExpiry
+					validationConfig = &scoped
+					break
+				}
+			}
+		}
+		result := validateAccountConfig(context.Background(), validationConfig, configPath)
 		return AccountValidationMsg{
+			ValidationSourceID:         msg.ValidationSourceID,
 			Config:                     msg.Config,
 			ReturnToMenu:               msg.ReturnToMenu,
 			ReclaimOfflineCacheStorage: msg.ReclaimOfflineCacheStorage,
@@ -1464,6 +1483,7 @@ func (m *Model) finishAccountValidation(msg AccountValidationMsg) tea.Cmd {
 		})
 	}
 	return m.applyValidatedAccountConfig(SettingsSavedMsg{
+		ValidationSourceID:         msg.ValidationSourceID,
 		Config:                     msg.Config,
 		ReturnToMenu:               msg.ReturnToMenu,
 		ReclaimOfflineCacheStorage: msg.ReclaimOfflineCacheStorage,
@@ -1619,7 +1639,15 @@ func (m *Model) applyValidatedAccountConfig(msg SettingsSavedMsg) tea.Cmd {
 			logger.Error("Account cache purge failed after account removal: %v", err)
 		}
 	}
+	if aware, ok := nextBackend.(backend.AccountAwareBackend); ok && msg.ValidationSourceID != "" {
+		if err := aware.SwitchAccount(msg.ValidationSourceID); err != nil {
+			_ = nextBackend.Close()
+			m.accountValidation.Message = "Could not reopen the signed-in account: " + err.Error()
+			return nil
+		}
+	}
 	m.backend = nextBackend
+	m.accountStatusGenerations = nil
 	m.progressCh = nextBackend.Progress()
 	m.syncEventsCh = nextBackend.SyncEvents()
 	m.syncAccountIdentityFromBackend()
@@ -2220,6 +2248,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			ReturnToMenu:               msg.ReturnToMenu,
 			ReclaimOfflineCacheStorage: msg.ReclaimOfflineCacheStorage,
 			ValidateAccount:            msg.ValidateAccount,
+			ValidationSourceID:         msg.ValidationSourceID,
 			ValidateCalendar:           msg.ValidateCalendar,
 			CalendarSourceIDs:          msg.CalendarSourceIDs,
 			SourceIDs:                  msg.SourceIDs,
@@ -2240,6 +2269,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case OAuthDoneMsg:
 		if msg.ValidateAccount {
 			return m, m.beginAccountValidation(SettingsSavedMsg{
+				ValidationSourceID:         msg.ValidationSourceID,
 				Config:                     msg.Config,
 				ReturnToMenu:               msg.ReturnToMenu,
 				ReclaimOfflineCacheStorage: msg.ReclaimOfflineCacheStorage,
@@ -3171,6 +3201,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case SyncEventMsg:
 		event := msg.Event
+		m.recordAccountSyncStatus(event)
 		logger.Debug("SyncEventMsg: folder=%s generation=%d phase=%s current=%d total=%d delta=%d message=%q", event.Folder, event.Generation, event.Phase, event.Current, event.Total, event.EventCount, strings.TrimSpace(event.Message))
 		if !m.syncEventMatchesActive(event.SourceID) {
 			logger.Debug("SyncEventMsg: ignoring stale source=%s active=%s", event.SourceID, m.activeSourceID)

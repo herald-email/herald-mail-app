@@ -191,7 +191,7 @@ func (m *MultiBackend) startFanIn(slot *accountSlot) {
 				if event.CollectionID == "" {
 					event.CollectionID = event.Folder
 				}
-				if m.isActive(slot.info.SourceID) {
+				if m.isActive(slot.info.SourceID) || event.Phase == models.SyncPhaseError || event.Phase == models.SyncPhaseComplete {
 					m.sendSyncEvent(event)
 				}
 			}
@@ -1753,6 +1753,7 @@ func configForMailSource(profile *config.Config, configPath string, source confi
 	child.Credentials = source.Credentials
 	child.Server = source.IMAP
 	child.SMTP = source.SMTP
+	child.Gmail.TokenRef = source.Google.TokenRef
 	child.Gmail.AccessToken = source.Google.AccessToken
 	child.Gmail.RefreshToken = source.Google.RefreshToken
 	child.Gmail.TokenExpiry = source.Google.TokenExpiry

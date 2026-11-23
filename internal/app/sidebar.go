@@ -36,15 +36,16 @@ const (
 
 // sidebarItem is a flattened entry used for navigation
 type sidebarItem struct {
-	node         *folderNode
-	depth        int
-	kind         sidebarItemKind
-	account      models.SourceID
-	label        string
-	fullPath     string
-	status       *models.FolderStatus
-	syntheticKey string
-	aggregate    string
+	node            *folderNode
+	depth           int
+	kind            sidebarItemKind
+	account         models.SourceID
+	label           string
+	fullPath        string
+	status          *models.FolderStatus
+	syntheticKey    string
+	aggregate       string
+	accountIdentity bool // Favorites entries that name an account rather than a folder
 }
 
 // commonFolderPriority defines the sort order for well-known top-level folders
@@ -264,7 +265,9 @@ func (m *Model) favoriteAccountFolderItems(role string) []sidebarItem {
 			continue
 		}
 		label := formatAccountLabel(snapshot.Account)
-		children = append(children, m.accountFolderSidebarItem(snapshot, label, path, 1))
+		item := m.accountFolderSidebarItem(snapshot, label, path, 1)
+		item.accountIdentity = true
+		children = append(children, item)
 	}
 	return children
 }
@@ -684,13 +687,21 @@ func (m *Model) renderSidebarItemLine(index int, item sidebarItem) string {
 		}
 	}
 
+	needsSignIn := (item.accountIdentity || (item.kind == sidebarItemGroup && strings.HasPrefix(item.syntheticKey, "account:"))) && accountNeedsSignIn(m.accountStatuses[item.account])
+	if needsSignIn {
+		if m.sidebarItemExpandable(item) {
+			icon += "🚨 "
+		} else {
+			icon = "🚨 "
+		}
+	}
 	countSuffix := m.sidebarCountSuffix(item)
 	selectionMarker := " "
-	if index == m.sidebarCursor && m.focusedPanel != panelSidebar {
+	if index == m.sidebarCursor && (m.focusedPanel != panelSidebar || needsSignIn) {
 		selectionMarker = "›"
 	}
 
-	prefixLen := len([]rune(indent)) + 3 // selection marker (1) + icon (2)
+	prefixLen := ansi.StringWidth(indent) + 1 + ansi.StringWidth(icon) // marker and icon widths in terminal cells
 	available := sidebarContentWidth - prefixLen - len([]rune(countSuffix))
 	if available < 1 {
 		available = 1
@@ -699,6 +710,9 @@ func (m *Model) renderSidebarItemLine(index int, item sidebarItem) string {
 	name := m.sidebarItemLabel(item)
 	name = truncateSidebarLabel(name, available)
 	line := fmt.Sprintf("%s%s%s%-*s%s", indent, selectionMarker, icon, available, name, countSuffix)
+	if needsSignIn {
+		return m.theme.Severity.Destructive.Style().Bold(true).Underline(index == m.sidebarCursor).Render(line)
+	}
 
 	if index == m.sidebarCursor {
 		if m.focusedPanel == panelSidebar {
@@ -762,7 +776,10 @@ func (m *Model) renderSidebarAccountLine(index int, sourceID models.SourceID) st
 		countSuffix = fmt.Sprintf(" %d/%d", status.Unread, status.Total)
 	}
 	if status.Error != "" {
-		countSuffix = " auth"
+		countSuffix = " ! error"
+		if accountNeedsSignIn(status) {
+			countSuffix = " sign in"
+		}
 	}
 	selectionMarker := " "
 	if index == m.sidebarCursor && m.focusedPanel != panelSidebar {
@@ -772,14 +789,25 @@ func (m *Model) renderSidebarAccountLine(index int, sourceID models.SourceID) st
 	if sourceID == m.activeSourceID {
 		activeMarker = ">"
 	}
-	prefixLen := 3
+	alarm := ""
+	needsSignIn := accountNeedsSignIn(status)
+	if needsSignIn {
+		alarm = "🚨 "
+		if index == m.sidebarCursor {
+			selectionMarker = "›"
+		}
+	}
+	prefixLen := 3 + ansi.StringWidth(alarm)
 	available := sidebarContentWidth - prefixLen - len([]rune(countSuffix))
 	if available < 1 {
 		available = 1
 	}
 	label := accountName
 	label = truncateSidebarLabel(label, available)
-	line := fmt.Sprintf("%s%s %-*s%s", selectionMarker, activeMarker, available, label, countSuffix)
+	line := fmt.Sprintf("%s%s %s%-*s%s", selectionMarker, activeMarker, alarm, available, label, countSuffix)
+	if needsSignIn {
+		return m.theme.Severity.Destructive.Style().Bold(true).Underline(index == m.sidebarCursor).Render(line)
+	}
 	if index == m.sidebarCursor {
 		if m.focusedPanel == panelSidebar {
 			line = m.theme.Focus.SelectionActive.Style().Render(line)

@@ -621,3 +621,10 @@ These controls protect Google account credentials and make private-data sharing 
 - [x] Persist OAuth tokens through a secure store, leaving only references in configuration.
 - [x] Bind AI consent to configured recipients and accounts, enforce it at client boundaries, and gate background work separately.
 - [x] Require MCP consent before opening private data.
+
+## Account authentication recovery
+
+The TUI tracks per-source sync failures separately from cached mailbox availability. Terminal sync outcomes from inactive accounts reach the UI without replacing the active mailbox.
+
+- [x] Account warnings survive successful cached-folder reads and clear after a successful provider sync.
+- [x] Accounts routes sign-in to existing OAuth validation/backend replacement, or selected-account credential settings, preserving source IDs and cached mail.

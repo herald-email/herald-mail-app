@@ -62,6 +62,7 @@ const (
 	CommandLogsToggle      = "logs.toggle"
 	CommandChatToggle      = "chat.toggle"
 	CommandAccountSwitcher = "account.switcher"
+	CommandAccountSignIn   = "account.sign_in"
 
 	CommandSidebarToggle = "sidebar.toggle"
 
@@ -136,6 +137,7 @@ var commandCatalog = map[string]struct{}{
 	CommandLogsToggle:      {},
 	CommandChatToggle:      {},
 	CommandAccountSwitcher: {},
+	CommandAccountSignIn:   {},
 
 	CommandSidebarToggle: {},
 
@@ -358,6 +360,7 @@ func builtInKeyboardProfile(profile string) (keyboardBindingMap, keyboardCommand
 	add(keyboardScopeGlobal, keyboardModeNormal, "ctrl+i", CommandPaneNext)
 	add(keyboardScopeGlobal, keyboardModeNormal, "shift+tab", CommandPanePrev)
 	add(keyboardScopeGlobal, keyboardModeNormal, "alt+A", CommandAccountSwitcher)
+	add("accounts", keyboardModeNormal, "r", CommandAccountSignIn)
 
 	add("timeline", keyboardModeNormal, "h", CommandPaneLeft)
 	add("timeline", keyboardModeNormal, "j", CommandPaneDown)

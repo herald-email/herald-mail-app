@@ -1012,3 +1012,9 @@ These controls protect Google account credentials and make private-data sharing 
 
 - [x] Protect desktop OAuth with PKCE and secure token persistence.
 - [x] Let users explicitly allow and revoke AI, background processing, and MCP sharing.
+
+## Account session recovery
+
+Account authentication failures should be visible without hiding cached mail. Recovery should use the existing account identity and authorization flow.
+
+- [x] Show persistent account sign-in warnings and allow selected-account reauthentication from Accounts.

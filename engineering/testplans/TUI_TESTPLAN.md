@@ -2909,3 +2909,22 @@ Verify that Gmail history polling delivers new mail promptly and that reconcilia
 - [ ] Cache new mail during sync or reconciliation; it remains visible immediately while previously identified stale rows stay hidden.
 - [ ] Request another folder load while Gmail reconciliation is pending; cancellation releases the load worker promptly.
 - [ ] Switch folders/accounts; polling follows the active folder/source.
+
+## TC-Account-Reauthentication — expired sessions
+
+Expired credentials must remain visible while cached mail and other accounts stay usable. Recovery must target only the selected account.
+
+- [x] A sync authentication failure marks the affected account `🚨 sign in` in the sidebar and account switcher, including failures from an inactive account.
+- [x] A persistent status warning directs the user to Accounts; network errors show `! error` instead of claiming a login expired.
+- [x] Open Accounts, select the affected account, and use the displayed sign-in shortcut; Google opens the existing browser authorization flow and password accounts open their own settings.
+- [x] Cancellation preserves credentials and the warning; successful sync clears the warning. Single-account setups can also open Accounts.
+- [x] Verify at 220×50, 80×24 and 50×15; other accounts, cached mail, and keyboard profiles remain usable.
+
+- [x] Expired-account alarms use contrasting text on the theme alarm background in Favorites account rows, account headers, the Accounts overlay, and the status bar; selected rows retain the alarm and a cursor marker, and healthy rows/counts keep their normal appearance.
+
+## TC-Account-Auth-Isolation — mixed Google and password accounts
+
+A Google token reference must never change another account's authentication method. Recovery and settings saves must preserve each source's own credential identity.
+
+- [x] With Gmail OAuth first and ProtonMail Bridge second, ProtonMail uses its Bridge credentials and does not report a missing Google refresh token.
+- [x] A second Google account retains its own token reference; account validation and settings/OAuth projection do not inherit the first account's reference.
