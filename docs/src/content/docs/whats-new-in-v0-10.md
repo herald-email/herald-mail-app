@@ -42,3 +42,7 @@ herald --version
 ## Previous Release
 
 The v0.9 line introduced external mailbox password commands and reliable account-title updates. See [What's New in v0.9](/whats-new-in-v0-9/) for that release history.
+
+## Next Release
+
+The v0.11 line adds account sign-in recovery and polling across all accounts. See [What's New in v0.11](/whats-new-in-v0-11/) for the latest changes.
