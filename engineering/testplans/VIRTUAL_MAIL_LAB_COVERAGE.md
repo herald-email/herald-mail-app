@@ -19,6 +19,7 @@ Every committed scenario is loaded through the virtual IMAP path and validated b
 | `remote-html-images` | Sanitized Buttondown-style HTML with linked remote images | Direct scenario seed and backend body-fetch coverage | Direct split/full-screen placeholder and reveal-hint coverage | Not direct | Not direct | tmux evidence for demo-backed reveal; ttyd remains demo-backed |
 | `long-link-tracking` | HTML with long safe links and tracking-like noise | Direct scenario seed and backend body-fetch coverage | Direct preview and size coverage, including sanitized OSC 8 targets | Direct SSH resize and raw tracker-param leak checks | Not direct | Not direct |
 | `unsubscribe-headers` | One-click, mailto, and absent unsubscribe headers | Direct scenario seed and backend header/body coverage | Direct Timeline and Cleanup hint coverage | Not direct | Lab helper for daemon/MCP execution with dynamic local one-click URL | Not direct |
+| `prompt-injection` | Forged `Re:` with body instructions, hidden HTML instruction, subject-line tag override | Direct scenario seed and backend body-fetch coverage | Not direct | Not direct | Not direct; intended seed for chat-agent and MCP read tests | Not direct |
 
 ## Focused Commands
 

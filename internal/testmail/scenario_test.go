@@ -12,6 +12,7 @@ func TestLoadScenarioParsesFixtureMetadata(t *testing.T) {
 		ScenarioInlineCIDImage,
 		ScenarioLongLinkTracking,
 		ScenarioUnsubscribeHeaders,
+		ScenarioPromptInjection,
 	}
 
 	for _, name := range names {
