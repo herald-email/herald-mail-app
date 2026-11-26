@@ -58,9 +58,9 @@ configure AI, and save the generated config.
 
 Nightly builds are available as short-lived GitHub Actions artifacts for testers who want the latest successful `main` build before the next beta tag. See [Nightly Builds](/nightly-builds/) for download steps and channel rules.
 
-## New in v0.11
+## New in v0.12
 
-`v0.11.0-beta.1` adds account sign-in recovery and polling across all configured accounts, improves Gmail arrivals, and protects against accidental exits. It also fixes consent settings, exposes password commands, and updates SQLite for Fedora builds. See [What's New in v0.11](/whats-new-in-v0-11/) for the release details.
+Herald picks up changes made in Google Calendar while your session is open. See [What's New in v0.12](/whats-new-in-v0-12/) for timing and upgrade instructions.
 
 ![Chat panel open beside Timeline](/screenshots/chat-panel-open.png)
 

@@ -43,3 +43,7 @@ herald --demo
 ## Previous Release
 
 The v0.10 line introduced secure Google OAuth token storage, sharing consent, subject rules, and local image styles. See [What's New in v0.10](/whats-new-in-v0-10/) for upgrade requirements.
+
+## Next Release
+
+The next minor release refreshes calendar events during an open session. See [What's New in v0.12](/whats-new-in-v0-12/).

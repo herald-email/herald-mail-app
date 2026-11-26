@@ -59,7 +59,7 @@ export default defineConfig({
           label: 'Getting Started',
           items: [
             { label: 'Overview', slug: '' },
-            { label: "What's New", slug: 'whats-new-in-v0-11' },
+            { label: "What's New", slug: 'whats-new-in-v0-12' },
             { label: 'Install and run', slug: 'getting-started' },
             { label: 'First 5 Minutes', slug: 'first-5-minutes' },
             { label: 'Nightly Builds', slug: 'nightly-builds' },
@@ -128,6 +128,7 @@ export default defineConfig({
         {
           label: 'Release Archive',
           items: [
+            { label: "What's New in v0.12", slug: 'whats-new-in-v0-12' },
             { label: "What's New in v0.11", slug: 'whats-new-in-v0-11' },
             { label: "What's New in v0.10", slug: 'whats-new-in-v0-10' },
             { label: "What's New in v0.9", slug: 'whats-new-in-v0-9' },
