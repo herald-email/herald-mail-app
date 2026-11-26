@@ -2003,6 +2003,17 @@ Press Ctrl+C once in Timeline, Compose, Calendar, and an overlay; Herald stays o
 - Timeline, Contacts, Compose, account switching, chat, settings, SSH, and MCP behavior remain unchanged.
 - At `50x15`, the minimum-size guard appears instead of clipped calendar chrome, and resizing larger restores the agenda or detail state cleanly.
 
+### TC-38D-SYNC — External calendar edits during a running session
+
+Verify that periodic calendar reads update an already-open session without disrupting navigation or unsaved edits. Use the virtual Google Calendar lab for deterministic provider/cache checks; a live Google test requires a disposable event.
+
+- [ ] Open Calendar, select a test event, and change its title and start time through another provider client. After the existing five-minute provider sync interval plus up to one minute for the UI tick, verify the updated agenda and open detail without restarting or pressing refresh.
+- [ ] Repeat in Agenda, Day, Week, and 3-Day; retain the selected event when it remains visible after reordering, plus the current range and calendar visibility filters.
+- [ ] Leave Timeline open and verify calendar sync continues without switching the active tab.
+- [ ] Keep an event edit or delete confirmation open across a tick; preserve the draft/confirmation and resume refresh after it closes.
+- [ ] Verify failed refreshes retain cached events and retry on subsequent ticks; a late cache-first result must not overwrite a completed provider load or permanently block polling.
+- [ ] Exercise Calendar at `220x50`, `80x24`, and `50x15`, including resize recovery, plus demo SSH Calendar and MCP calendar reads.
+
 ### TC-38E — Calendar day agenda drawer
 
 **Lane:** A, B when calendar cache rows are available

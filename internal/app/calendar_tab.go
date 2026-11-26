@@ -159,6 +159,7 @@ var calendarEditFields = []calendarEditField{
 }
 
 func (m *Model) refreshCalendarAvailability() {
+	m.invalidateCalendarBackgroundRefresh()
 	agenda, ok := m.backend.(backend.CalendarAgendaBackend)
 	m.calendarAvailable = ok && agenda.CalendarAgendaAvailable()
 	if !m.calendarAvailable {
@@ -290,6 +291,8 @@ func (m *Model) calendarAISummaryBackend() (backend.CalendarAISummaryBackend, bo
 }
 
 func (m *Model) loadCalendarAgenda() tea.Cmd {
+	m.invalidateCalendarBackgroundRefresh()
+	m.calendarLoading = true
 	agenda, ok := m.calendarAgendaBackend()
 	if !ok {
 		return func() tea.Msg {
@@ -1562,6 +1565,7 @@ func (m *Model) saveCalendarRSVPStatus(status string) tea.Cmd {
 		return nil
 	}
 	ref := event.Ref.WithDefaults()
+	m.calendarRSVPSaving = true
 	m.calendarStatus = "Saving RSVP " + normalized + "..."
 	return func() tea.Msg {
 		saved, err := mutation.RespondCalendarEvent(ref, normalized)

@@ -1022,6 +1022,10 @@ type Model struct {
 
 	// Calendar tab. Calendar is additive and appears only when the backend
 	// advertises a cache-backed read-only agenda surface.
+	calendarBackgroundRefreshing bool
+	calendarRefreshGeneration    uint64
+	calendarRSVPSaving           bool
+
 	calendarAvailable           bool
 	calendarLoading             bool
 	calendarCollections         []models.CalendarCollection
@@ -2600,7 +2604,15 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case calendarBackgroundRefreshedMsg:
+		return m, m.applyCalendarBackgroundRefresh(msg)
+
 	case CalendarAgendaLoadedMsg:
+		// Cache and provider reads run concurrently. A late cache response must
+		// not replace fresh data or leave periodic refresh blocked as loading.
+		if msg.Cached && !m.calendarLoading {
+			return m, nil
+		}
 		if msg.Err != nil {
 			m.calendarLoading = msg.Cached && msg.Refreshing
 			if len(m.calendarEvents) > 0 {
@@ -2815,6 +2827,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.Event != nil {
 			m.applySavedCalendarEvent(*msg.Event)
 		}
+		m.invalidateCalendarBackgroundRefresh()
 		m.calendarEdit = calendarEventEditState{}
 		m.calendarDetailOpen = true
 		m.calendarDetailLoading = false
@@ -2831,6 +2844,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.calendarStatus = m.calendarDelete.Error
 			return m, nil
 		}
+		m.invalidateCalendarBackgroundRefresh()
 		m.applyDeletedCalendarEvent(msg.Ref)
 		m.calendarDelete = calendarEventDeleteState{}
 		m.calendarEdit = calendarEventEditState{}
@@ -2838,6 +2852,8 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case CalendarEventRSVPMsg:
+		m.calendarRSVPSaving = false
+		m.invalidateCalendarBackgroundRefresh()
 		selected := m.calendarDetail
 		if selected == nil {
 			selected = m.selectedCalendarEvent()
@@ -3485,7 +3501,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.calendarNow = msg.Now.Local()
 		}
-		return m, m.calendarClockTick()
+		return m, tea.Batch(m.calendarClockTick(), m.startCalendarBackgroundRefresh())
 
 	case previewPrewarmMsg:
 		return m, m.handlePreviewPrewarmMsg(msg)
