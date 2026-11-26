@@ -47,6 +47,7 @@ Current scenarios cover:
 - inline CID image
 - long safe link
 - unsubscribe headers, including one-click, mailto, and absent-header variants
+- prompt injection aimed at AI surfaces: a forged `Re:` with instructions in the body, hidden `display:none` HTML that disagrees with the plain part, and a subject line written to override the tagger
 
 ## Sanitizing Real Repros
 

@@ -27,6 +27,7 @@ const (
 	ScenarioRemoteHTMLImages   ScenarioName = "remote-html-images"
 	ScenarioLongLinkTracking   ScenarioName = "long-link-tracking"
 	ScenarioUnsubscribeHeaders ScenarioName = "unsubscribe-headers"
+	ScenarioPromptInjection    ScenarioName = "prompt-injection"
 )
 
 // Scenario is a named set of fixture placements ready to seed into a Lab.

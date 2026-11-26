@@ -280,6 +280,7 @@ func TestLocalBackendFetchesVirtualMailScenarios(t *testing.T) {
 		testmail.ScenarioInlineCIDImage,
 		testmail.ScenarioLongLinkTracking,
 		testmail.ScenarioUnsubscribeHeaders,
+		testmail.ScenarioPromptInjection,
 	}
 
 	for _, name := range names {
